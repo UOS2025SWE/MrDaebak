@@ -1,0 +1,41 @@
+@startuml
+title "주문 (Order) 객체 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "접수 대기\n(Received / Pending)" as Received
+state "처리 중\n(Preparing / Cooking)" as Preparing
+state "배달 중\n(Delivering)" as Delivering
+state "배달 완료\n(Completed / Delivered)" as Completed
+state "주문 취소\n(Canceled)" as Canceled
+state "결제 실패\n(Failed)" as Failed
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' 고객의 주문(결제) 시도는 성공 또는 실패로 나뉨
+[*] --> Received : 고객이 '결제하기' 클릭 [결제 성공]
+[*] --> Failed : 결제 시스템이 '결제 실패' 신호 반환
+
+' "접수 대기" 상태에서 가능한 전이
+Received --> Preparing : 직원이 '주문 접수' 클릭
+Received --> Canceled : 직원이 '주문 취소' 클릭
+
+' "처리 중" 상태에서 가능한 전이
+Preparing --> Delivering : 직원이 '배달 시작' 클릭
+
+' "배달 중" 상태에서 가능한 전이
+Delivering --> Completed : 직원이 '배달 완료' 클릭
+
+' 최종 상태 (End States)
+Completed --> [*]
+Canceled --> [*]
+Failed --> [*]
+
+@enduml

@@ -1,0 +1,26 @@
+{
+  "valentine": {
+    "name": "발렌타인 디너",
+    "description": "작은 하트 모양과 큐피드가 장식된 접시에 냅킨과 함께 와인과 프리미엄 스테이크가 제공되는 로맨틱 디너",
+    "image_url": "/images/valentine-dinner.jpg",
+    "available_styles": ["simple", "grand", "deluxe"]
+  },
+  "french": {
+    "name": "프렌치 디너", 
+    "description": "커피 한잔, 와인 한잔, 신선한 샐러드, 프리미엄 스테이크로 구성된 정통 프렌치 코스",
+    "image_url": "/images/french-dinner.jpg",
+    "available_styles": ["simple", "grand", "deluxe"]
+  },
+  "english": {
+    "name": "잉글리시 디너",
+    "description": "에그 스크램블, 베이컨, 빵, 프리미엄 스테이크가 제공되는 심플하면서도 완벽한 영국식 정통 코스",
+    "image_url": "/images/english-dinner.jpg",
+    "available_styles": ["simple", "grand", "deluxe"]
+  },
+  "champagne": {
+    "name": "샴페인 축제 디너",
+    "description": "2인 식사로 샴페인 1병, 바게트빵 4개, 커피 1포트, 와인, 프리미엄 스테이크가 제공되는 항상 인기인 축제 디너",
+    "image_url": "/images/champagne-dinner.jpg",
+    "available_styles": ["grand", "deluxe"]
+  }
+}

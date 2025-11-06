@@ -1,0 +1,28 @@
+@startuml
+title "사용자 세션 (UserSession) 객체 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "로그아웃됨\n(Logged Out)" as LoggedOut
+state "로그인됨\n(Logged In / Authenticated)" as LoggedIn
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' 모든 세션은 "로그아웃됨" 상태에서 시작
+[*] --> LoggedOut
+
+' "로그아웃됨" 상태에서 가능한 전이
+LoggedOut --> LoggedIn : 고객이 '로그인' 성공
+
+' "로그인됨" 상태에서 가능한 전이
+LoggedIn --> LoggedOut : 고객이 '로그아웃' 클릭
+LoggedIn --> LoggedOut : 세션 만료 (자동 로그아웃)
+
+@enduml

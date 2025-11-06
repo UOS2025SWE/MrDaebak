@@ -1,0 +1,42 @@
+@startuml
+title "챗봇 주문 의도 (ChatbotOrderIntent) 객체 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "대기 중\n(Idle)" as Idle
+state "의도 분석 중\n(Analyzing Intent)" as Analyzing
+state "메뉴 확인 중\n(Confirming Menu)" as ConfirmMenu
+state "주문 확정 중\n(Confirming Order)" as ConfirmOrder
+state "완료됨\n(Completed)" as Completed
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' 챗봇 아이콘 클릭 시 '대기 중' 상태
+[*] --> Idle : 챗봇 활성화
+
+' "대기 중" 상태에서 "의도 분석 중" 상태로
+Idle --> Analyzing : 고객이 '음성/텍스트' 입력
+
+' "의도 분석 중" 상태에서의 분기
+Analyzing --> ConfirmOrder : LLM이 '명확한 응답' 반환
+
+' "메뉴 확인 중" 상태
+' 고객이 추가 정보를 입력하면 다시 분석
+ConfirmMenu --> Analyzing : 고객이 '음성/텍스트' 입력 (정보 추가)
+
+' "주문 확정 중" 상태
+ConfirmOrder --> Completed : 고객이 '확인' 클릭
+ConfirmOrder --> Idle : 고객이 '취소' 클릭 (추정)
+
+' "완료됨" 상태 (최종 상태)
+' 주문이 시스템으로 전달된 후 다시 대기 상태로
+Completed --> Idle
+
+@enduml

@@ -1,0 +1,95 @@
+@startuml
+title "Next.js 15 App (Admin) Subsystem - Class Diagram"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+
+' --- External API Interface ---
+interface "IApiGateway" {
+  + adminLogin(id, password)
+  + getPendingOrdersSocket()
+  + acceptOrder(orderId)
+  + rejectOrder(orderId, reason)
+  + updateOrderStatus(orderId, status)
+  + getInventory()
+  + updateStock(itemId, change)
+  + createPromotion(promoData)
+  + updatePromotion(promoId, promoData)
+}
+
+' --- Data Models ---
+class "AdminUser" {
+  + userId: string
+  + username: string
+  + role: "Staff" | "Manager"
+}
+
+class "Order" {
+  + orderId: string
+  + status: string
+  + items: OrderItem[]
+  + customDecorationRequest: string
+}
+
+' --- Hooks (State & Logic) ---
+class "useAdminAuth" <<hook>> {
+  + user: AdminUser
+  + jwt: string
+  + login(id, password)
+  + logout()
+}
+useAdminAuth ..> "IApiGateway" : "인증 요청"
+useAdminAuth o-- "AdminUser"
+
+class "useOrderSocket" <<hook>> {
+  + pendingOrders: Order[]
+  + connect()
+}
+useOrderSocket ..> "IApiGateway" : "WebSocket 연결"
+useOrderSocket o-- "Order"
+
+' --- Components / Modules ---
+class "AdminAuthModule" {
+  + renderLoginPage()
+}
+AdminAuthModule ..> "useAdminAuth" : "사용"
+
+class "OrderDashboard" {
+  + displayOrders()
+  + handleAccept(orderId)
+  + handleReject(orderId)
+}
+OrderDashboard ..> "useOrderSocket" : "실시간 주문 조회"
+OrderDashboard ..> "IApiGateway" : "접수/거절 요청"
+
+class "OrderManagementModule" {
+  + order: Order
+  + displayOrderDetails()
+  + updateStatus(newStatus)
+}
+OrderManagementModule ..> "IApiGateway" : "상태 변경 요청"
+OrderManagementModule o-- "Order"
+
+class "InventoryControl" <<Manager Only>> {
+  + displayInventory()
+  + handleStockUpdate(itemId, change)
+}
+InventoryControl ..> "IApiGateway" : "재고 조회/업데이트"
+
+class "PromotionEditor" <<Manager Only>> {
+  + displayPromotions()
+  + handleCreatePromotion(data)
+}
+PromotionEditor ..> "IApiGateway" : "프로모션 관리"
+
+' --- RBAC Logic ---
+class "RBACWrapper" {
+  + requiredRole: "Manager"
+  + checkRole()
+}
+RBACWrapper ..> "useAdminAuth" : "역할(role) 조회"
+RBACWrapper o-- "InventoryControl"
+RBACWrapper o-- "PromotionEditor"
+
+@enduml

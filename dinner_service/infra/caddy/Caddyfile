@@ -1,0 +1,23 @@
+{
+    email {$ACME_EMAIL}
+    # Set default to always attempt HTTPS. For local testing without a real domain,
+    # run Caddy with `tls internal` or disable this profile.
+}
+
+http://{$DOMAIN} {
+    redir https://{$DOMAIN}{uri}
+}
+
+{$DOMAIN} {
+    encode gzip zstd
+
+    @api path /api* /docs* /redoc* /openapi.json
+    handle @api {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        reverse_proxy frontend:3000
+    }
+}
+

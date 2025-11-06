@@ -1,0 +1,88 @@
+[
+  {
+    "id": 1,
+    "name": "직원1",
+    "type": "cook",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 2,
+    "name": "직원2",
+    "type": "cook",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 3,
+    "name": "직원3",
+    "type": "cook",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 4,
+    "name": "직원4",
+    "type": "cook",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 5,
+    "name": "직원5",
+    "type": "cook",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 6,
+    "name": "직원1",
+    "type": "delivery",
+    "status": "busy",
+    "currentTask": "서울시 강남구 테헤란로 배달중 (ORD-2025-012)",
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 7,
+    "name": "직원2",
+    "type": "delivery",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 8,
+    "name": "직원3",
+    "type": "delivery",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 9,
+    "name": "직원4",
+    "type": "delivery",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": 10,
+    "name": "직원5",
+    "type": "delivery",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-09-07T23:34:10.929821"
+  },
+  {
+    "id": "010d7337-d154-4943-a6af-eb17bd40a5cd",
+    "status": "free",
+    "currentTask": null,
+    "updatedAt": "2025-10-05T18:24:55.308857"
+  }
+]

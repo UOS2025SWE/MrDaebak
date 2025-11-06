@@ -1,0 +1,30 @@
+@startuml
+title "프로모션 (Promotion) 객체 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "예약됨\n(Scheduled)" as Scheduled
+state "진행 중\n(Active / In Progress)" as Active
+state "종료됨\n(Terminated / Ended)" as Terminated
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' 생성 시점에 따라 '예약됨' 또는 '진행 중' 상태가 됨
+
+' "예약됨" 상태에서 가능한 전이
+Scheduled --> Active : 설정된 '시작 기간' 도래
+
+' "진행 중" 상태에서 가능한 전이
+Active --> Terminated : 설정된 '종료 기간' 도래
+
+' 최종 상태 (End State)
+Terminated --> [*]
+
+@enduml

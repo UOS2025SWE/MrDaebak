@@ -1,0 +1,76 @@
+@startuml
+title Staff Order Processing Activity Diagram
+
+|Staff|
+start
+:Log In to System;
+|System|
+:Authenticate Login;
+if (Authentication Successful?) then ([Yes])
+    |Staff|
+    :Access Order Dashboard;
+    if (Ingredient Delivery Arrived?) then ([Yes])
+        :Open Inventory Intake Form;
+        |System|
+        :Switch inventory module to intake mode;
+        |Staff|
+        :Record meat crates quantity;
+        :Record vegetable bins quantity;
+        :Record beverage stock (와인/샴페인/커피);
+        :Record 바게트빵 bundles;
+        :Record egg trays;
+        |System|
+        :Apply stock increments atomically;
+        :Generate intake report for manager;
+    endif
+    |Staff|
+    :Wait for New Order;
+    |System|
+    :New Order Notification;
+    |Staff|
+    :Click/Confirm New Order;
+    :Check Order Details (Menu, Address, Requests);
+    if (Can Accept Order?) then ([Yes])
+        :Process Order Acceptance;
+        |System|
+        :Change Order Status: 'Order Received';
+        :Send 'Order Received' Notification to Customer;
+        :Lock reserved inventory for scheduled orders;
+        |Staff|
+        :Start Cooking and Packing;
+        |System|
+        :Change Order Status: 'Cooking';
+        :Deduct inventory for menu items (바게트, 샴페인 등);
+        |Staff|
+        :Preparation Complete for Delivery;
+        :Hand over to Driver / Start Delivery;
+        |System|
+        :Change Order Status: 'Out for Delivery';
+        :Send 'Out for Delivery' Notification to Customer;
+        |Staff|
+        :(After Delivery)
+        :Process Delivery Completion;
+        |System|
+        :Change Order Status: 'Delivered';
+        :Send 'Delivered' Notification to Customer;
+        :Release any remaining reserved inventory;
+        |Staff|
+        :Wait for Next Order;
+        -> :Wait for New Order;
+    else ([No - Out of Stock/Undeliverable])
+        :Process Order Cancellation;
+        :Enter Reason for Cancellation;
+        |System|
+        :Change Order Status: 'Order Canceled';
+        :Send 'Order Canceled' Notification to Customer;
+        :Process Refund;
+        :Return reserved inventory to stock;
+        |Staff|
+        :Wait for Next Order;
+        -> :Wait for New Order;
+    endif
+else ([No])
+    :Login Failed Message;
+    stop
+endif
+@enduml

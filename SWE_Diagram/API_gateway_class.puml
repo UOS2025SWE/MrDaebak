@@ -1,0 +1,60 @@
+@startuml
+title "API Gateway 서브시스템 - 클래스 다이어그램"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+
+' --- Backend Microservice Interfaces (Destinations) ---
+' The Gateway routes requests TO these interfaces.
+interface "IUserService" {
+  + /auth/*
+  + /users/*
+}
+interface "IOrderService" {
+  + /orders/*
+  + /ws/status/{order_id}
+}
+interface "IMenuInventoryService" {
+  + /menu/*
+  + /inventory/*
+}
+interface "IPaymentService" {
+  + /payments/*
+}
+interface "ICrmService" {
+  + /crm/*
+  + /promotions/*
+}
+
+' --- API Gateway and its internal components ---
+class "ApiGateway (FastAPI App)" {
+  + handleRequest(request)
+}
+
+class "AuthenticationMiddleware" {
+  + validateJwt(request)
+}
+
+class "PolicyMiddleware" {
+  + applyCORS(response)
+  + applyRateLimit(request)
+}
+
+class "Router" {
+  + route(path, request)
+}
+
+' --- Relationships ---
+' The Gateway is composed of its middleware and router
+ApiGateway *-- "AuthenticationMiddleware" : "1. 인증 처리"
+ApiGateway *-- "PolicyMiddleware" : "2. 공통 정책 적용"
+ApiGateway *-- "Router" : "3. 라우팅"
+
+' The Router depends on (delegates to) the backend services
+Router ..> IUserService : "delegates /auth, /users"
+Router ..> IOrderService : "delegates /orders, /ws"
+Router ..> IMenuInventoryService : "delegates /menu, /inventory"
+Router ..> IPaymentService : "delegates /payments"
+Router ..> ICrmService : "delegates /crm, /promotions"
+@enduml

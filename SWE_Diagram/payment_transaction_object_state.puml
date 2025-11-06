@@ -1,0 +1,37 @@
+@startuml
+title "결제 (PaymentTransaction) 객체 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "대기 중\n(Pending)" as Pending
+state "결제 완료\n(Paid / Success)" as Paid
+state "결제 실패\n(Failed)" as Failed
+state "환불됨\n(Refunded)" as Refunded
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' Order Service의 요청으로 '대기 중' 상태가 됨
+[*] --> Pending : Order Service가 '결제 처리' 요청
+
+' "대기 중" 상태에서 가능한 전이
+' PG(결제 게이트웨이)의 비동기 응답(웹훅)
+Pending --> Paid : PG가 '웹훅(Webhook)' 발송 [성공]
+Pending --> Failed : PG가 '웹훅(Webhook)' 발송 [실패]
+
+' "결제 완료" 상태에서 가능한 전이
+Paid --> Refunded : Order Service가 '환불' 요청
+
+' 최종 상태 (End States)
+' 결제 완료 상태는 환불되지 않으면 그 자체로 최종 상태임
+Paid --> [*]
+Failed --> [*]
+Refunded --> [*]
+
+@enduml

@@ -1,0 +1,245 @@
+{
+  "valentine": {
+    "name": "발렌타인 디너",
+    "description": "로맨틱한 분위기의 특별한 디너",
+    "keywords": ["로맨틱", "특별한 날", "기념일", "발렌타인", "연인", "데이트"],
+
+    "situations": {
+      "romantic_date": 1.0,
+      "family_gathering": 0.2,
+      "business_meeting": 0.1,
+      "celebration": 0.9,
+      "casual_meal": 0.3,
+      "party": 0.4
+    },
+
+    "recommended_people": {
+      "min": 1,
+      "max": 2,
+      "ideal": 2,
+      "note": "커플 또는 1인 로맨틱 디너에 최적"
+    },
+
+    "mood_tags": ["로맨틱", "우아한", "특별한", "기념일"],
+
+    "strengths": [
+      "기념일과 특별한 날에 완벽한 분위기",
+      "세심한 하트 모양 플레이팅과 큐피드 장식",
+      "로맨틱한 와인과 프리미엄 스테이크 조합",
+      "프러포즈나 발렌타인데이에 이상적"
+    ],
+
+    "when_to_recommend": [
+      "커플 데이트, 기념일, 발렌타인데이",
+      "프러포즈나 특별한 고백",
+      "연인과의 로맨틱한 저녁",
+      "결혼기념일이나 생일 축하"
+    ],
+
+    "styles_detail": {
+      "simple": {
+        "cooking_time": 25,
+        "price": 30000,
+        "best_for": "가볍게 로맨틱한 분위기를 즐기고 싶을 때",
+        "features": ["기본 코스", "빠른 준비", "합리적 가격"]
+      },
+      "grand": {
+        "cooking_time": 35,
+        "price": 35000,
+        "best_for": "특별하지만 부담 없는 가격으로 즐기고 싶을 때",
+        "features": ["풍성한 구성", "균형잡힌 가격", "인기 옵션"]
+      },
+      "deluxe": {
+        "cooking_time": 45,
+        "price": 40000,
+        "best_for": "최고의 로맨틱 경험을 원할 때",
+        "features": ["프리미엄 재료", "화려한 플레이팅", "최고급 코스"]
+      }
+    },
+
+    "base_price": 30000
+  },
+
+  "french": {
+    "name": "프렌치 디너",
+    "description": "정통 프랑스 요리의 정수",
+    "keywords": ["프랑스", "고급", "프렌치", "와인", "정통", "우아한"],
+
+    "situations": {
+      "romantic_date": 0.7,
+      "family_gathering": 0.6,
+      "business_meeting": 0.8,
+      "celebration": 0.7,
+      "casual_meal": 0.5,
+      "party": 0.5
+    },
+
+    "recommended_people": {
+      "min": 1,
+      "max": 4,
+      "ideal": 2,
+      "note": "1-4인 모두 적합, 비즈니스 미팅에도 좋음"
+    },
+
+    "mood_tags": ["우아한", "고급스러운", "정통", "세련된"],
+
+    "strengths": [
+      "정통 프렌치 코스의 완벽한 구성",
+      "커피, 와인, 샐러드, 스테이크의 조화",
+      "비즈니스 미팅이나 격식있는 자리에 적합",
+      "프랑스 요리 애호가에게 이상적"
+    ],
+
+    "when_to_recommend": [
+      "비즈니스 미팅이나 접대",
+      "격식있는 식사 자리",
+      "프렌치 요리를 좋아하는 분",
+      "와인과 함께 즐기는 정찬"
+    ],
+
+    "styles_detail": {
+      "simple": {
+        "cooking_time": 20,
+        "price": 40000,
+        "best_for": "프렌치 요리를 부담없이 즐기고 싶을 때",
+        "features": ["빠른 준비", "기본 코스", "가성비 좋음"]
+      },
+      "grand": {
+        "cooking_time": 30,
+        "price": 45000,
+        "best_for": "정통 프렌치 코스를 제대로 즐기고 싶을 때",
+        "features": ["풍성한 구성", "균형잡힌 코스", "추천 옵션"]
+      },
+      "deluxe": {
+        "cooking_time": 40,
+        "price": 50000,
+        "best_for": "최고급 프렌치 경험을 원할 때",
+        "features": ["프리미엄 재료", "완벽한 코스", "최상급"]
+      }
+    },
+
+    "base_price": 40000
+  },
+
+  "english": {
+    "name": "잉글리시 디너",
+    "description": "영국 스타일의 클래식 디너",
+    "keywords": ["영국", "잉글리시", "클래식", "브런치", "아침", "심플"],
+
+    "situations": {
+      "romantic_date": 0.5,
+      "family_gathering": 0.8,
+      "business_meeting": 0.6,
+      "celebration": 0.5,
+      "casual_meal": 0.9,
+      "party": 0.6
+    },
+
+    "recommended_people": {
+      "min": 1,
+      "max": 4,
+      "ideal": 2,
+      "note": "가족 모임이나 일상적인 식사에 적합"
+    },
+
+    "mood_tags": ["클래식", "편안한", "실속있는", "푸짐한"],
+
+    "strengths": [
+      "에그 스크램블, 베이컨, 빵으로 구성된 실속 메뉴",
+      "가장 빠른 조리시간 (심플 15분)",
+      "가족 모임이나 평범한 날에도 부담없이",
+      "푸짐하고 든든한 영국식 정통 코스"
+    ],
+
+    "when_to_recommend": [
+      "빨리 먹고 싶을 때 (15-35분)",
+      "가족과 함께하는 식사",
+      "편안하고 부담없는 모임",
+      "브런치나 이른 저녁 식사"
+    ],
+
+    "styles_detail": {
+      "simple": {
+        "cooking_time": 15,
+        "price": 45000,
+        "best_for": "가장 빠르게 식사하고 싶을 때",
+        "features": ["최단 조리시간", "기본 구성", "실속형"]
+      },
+      "grand": {
+        "cooking_time": 25,
+        "price": 50000,
+        "best_for": "푸짐하게 즐기고 싶을 때",
+        "features": ["풍성한 구성", "빠른 준비", "가성비"]
+      },
+      "deluxe": {
+        "cooking_time": 35,
+        "price": 55000,
+        "best_for": "클래식 영국식을 제대로 즐기고 싶을 때",
+        "features": ["프리미엄 재료", "완벽한 코스", "고급형"]
+      }
+    },
+
+    "base_price": 45000
+  },
+
+  "champagne": {
+    "name": "샴페인 축제 디너",
+    "description": "샴페인과 함께하는 화려한 축제",
+    "keywords": ["샴페인", "축제", "파티", "축하", "기념", "화려"],
+
+    "situations": {
+      "romantic_date": 0.6,
+      "family_gathering": 0.9,
+      "business_meeting": 0.5,
+      "celebration": 1.0,
+      "casual_meal": 0.3,
+      "party": 1.0
+    },
+
+    "recommended_people": {
+      "min": 2,
+      "max": 6,
+      "ideal": 4,
+      "note": "2인 이상 추천, 파티나 축하 행사에 완벽"
+    },
+
+    "mood_tags": ["화려한", "축제", "파티", "샴페인", "풍성한"],
+
+    "strengths": [
+      "샴페인 1병 포함으로 특별한 분위기",
+      "바게트빵 4개, 커피 1포트로 여러 명이 즐기기 좋음",
+      "축하 행사나 파티에 완벽한 구성",
+      "항상 인기 있는 시그니처 메뉴"
+    ],
+
+    "when_to_recommend": [
+      "파티나 축하 행사",
+      "여러 명이 함께하는 모임 (4-6명 이상)",
+      "기념일이나 축하할 일이 있을 때",
+      "샴페인과 함께 화려하게 즐기고 싶을 때"
+    ],
+
+    "styles_detail": {
+      "grand": {
+        "cooking_time": 40,
+        "price": 55000,
+        "best_for": "샴페인과 함께 축제 분위기를 즐기고 싶을 때",
+        "features": ["샴페인 1병", "풍성한 구성", "기본 추천"]
+      },
+      "deluxe": {
+        "cooking_time": 50,
+        "price": 60000,
+        "best_for": "최고급 샴페인 축제를 원할 때",
+        "features": ["프리미엄 샴페인", "화려한 구성", "최상급"]
+      }
+    },
+
+    "special_notes": [
+      "⚠️ 심플 스타일 없음 - 그랜드와 디럭스만 제공",
+      "2인 식사 기준으로 구성되어 있음",
+      "샴페인 포함으로 가격 대비 가치가 높음"
+    ],
+
+    "base_price": 55000
+  }
+}

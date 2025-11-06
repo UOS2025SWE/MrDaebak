@@ -1,0 +1,100 @@
+@startuml
+title "MRD-STF-UC1: 직원 주문 처리 (Staff: Process Order) 교류도"
+
+actor "직원 (Staff)" as Staff
+participant "Admin App\n(Next.js)" as AdminApp
+participant "API Gateway\n(FastAPI)" as GW
+participant "Order Service\n(FastAPI)" as OrderSvc
+database "OrderDB\n(Order Schema)" as ODB
+participant "Client App\n(Next.js)" as ClientApp
+participant "Payment Service\n(FastAPI)" as PaySvc
+
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+' --- 1. 선행 작업: 신규 주문 알림 (유즈케이스 전제) ---
+group (선행) 신규 주문 알림
+    OrderSvc -> AdminApp: (WebSocket) '신규 주문' 푸시 알림 [cite: 92, 145]
+    activate AdminApp
+    AdminApp --> Staff: '신규 주문' 대시보드에 표시
+    deactivate AdminApp
+end
+
+' --- 2. 주문 처리 (주 흐름 / 부 흐름) ---
+Staff -> AdminApp: (2) '신규 주문' 클릭 (내역 확인) [cite: 40, 93]
+activate AdminApp
+
+alt (주 흐름) 주문 접수 및 처리
+    Staff -> AdminApp: (4) '주문 접수' 버튼 클릭 [cite: 41]
+    AdminApp -> GW: PUT /orders/status/{id} (Body: "PREPARING") [cite: 147, 161]
+    activate GW
+    GW -> OrderSvc: (라우팅) update_status() [cite: 162]
+    activate OrderSvc
+    OrderSvc -> ODB: (SQL) (OrderRepository) UPDATE status='PREPARING' [cite: 162]
+    OrderSvc -> ClientApp: (WebSocket) (사후) '주문 접수/조리 중' 알림 [cite: 40, 94, 163]
+    OrderSvc --> GW: (Success)
+    deactivate OrderSvc
+    GW --> AdminApp: (Success)
+    deactivate GW
+    AdminApp --> Staff: (주문이 '조리 중'으로 변경됨)
+
+    ... (조리 및 포장 시간 경과) ...
+
+    Staff -> AdminApp: (7) '배달 시작' 버튼 클릭 [cite: 41]
+    AdminApp -> GW: PUT /orders/status/{id} (Body: "DELIVERING") [cite: 147, 161]
+    activate GW
+    GW -> OrderSvc: (라우팅) update_status() [cite: 162]
+    activate OrderSvc
+    OrderSvc -> ODB: (SQL) (OrderRepository) UPDATE status='DELIVERING' [cite: 162]
+    OrderSvc -> ClientApp: (WebSocket) (사후) '배달 중' 알림 [cite: 40, 97, 163]
+    OrderSvc --> GW: (Success)
+    deactivate OrderSvc
+    GW --> AdminApp: (Success)
+    deactivate GW
+
+    ... (배달 시간 경과) ...
+
+    Staff -> AdminApp: (10) '배달 완료' 버튼 클릭 [cite: 42]
+    AdminApp -> GW: PUT /orders/status/{id} (Body: "COMPLETED") [cite: 147, 161]
+    activate GW
+    GW -> OrderSvc: (라우팅) update_status() [cite: 162]
+    activate OrderSvc
+    OrderSvc -> ODB: (SQL) (OrderRepository) UPDATE status='COMPLETED' [cite: 162]
+    OrderSvc -> ClientApp: (WebSocket) (사후) '배달 완료' 알림 [cite: 40, 98, 163]
+    OrderSvc --> GW: (Success)
+    deactivate OrderSvc
+    GW --> AdminApp: (Success)
+    deactivate GW
+    AdminApp --> Staff: (주문이 '배달 완료'로 변경됨)
+
+else (부 흐름 4a) 주문 접수 불가 (취소)
+    Staff -> AdminApp: (4) '주문 취소' 버튼 클릭 [cite: 43]
+    AdminApp --> Staff: (5) 취소 사유 선택 팝업 표시 [cite: 44]
+    Staff -> AdminApp: (6) 사유("재료 소진") 선택 및 확인 [cite: 44]
+    AdminApp -> GW: PUT /orders/status/{id} (Body: "CANCELED", reason: "...")
+    activate GW
+    GW -> OrderSvc: (라우팅) update_status() (or cancel_order())
+    activate OrderSvc
+    OrderSvc -> ODB: (SQL) (OrderRepository) (7) UPDATE status='CANCELED' [cite: 45]
+
+    ' (환불 요청)
+    OrderSvc -> GW: (7) POST /payments/refund [cite: 45]
+    activate GW
+    GW -> PaySvc: (라우팅) process_refund() [cite: 172]
+    activate PaySvc
+    PaySvc -> PaySvc: (External PG에 환불 요청)
+    PaySvc --> GW: (Success)
+    deactivate PaySvc
+    GW --> OrderSvc: (Success)
+    deactivate GW
+
+    ' (고객에게 알림)
+    OrderSvc -> ClientApp: (WebSocket) (8) '주문 취소' 알림 (사유 포함) [cite: 45]
+    OrderSvc --> GW: (Success)
+    deactivate OrderSvc
+    GW --> AdminApp: (Success)
+    deactivate GW
+    AdminApp --> Staff: (주문이 '취소'됨)
+end
+deactivate AdminApp
+@enduml

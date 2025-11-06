@@ -1,0 +1,35 @@
+{
+  "cooking_times": {
+    "valentine": {
+      "simple": 25,
+      "grand": 35,
+      "deluxe": 45
+    },
+    "french": {
+      "simple": 20,
+      "grand": 30,
+      "deluxe": 40
+    },
+    "english": {
+      "simple": 15,
+      "grand": 25,
+      "deluxe": 35
+    },
+    "champagne": {
+      "grand": 40,
+      "deluxe": 50
+    }
+  },
+  "delivery_config": {
+    "base_time": 20
+  },
+  "capacity_limits": {
+    "max_cooking": 5,
+    "max_delivery": 5
+  },
+  "style_pricing": {
+    "simple": 0,
+    "grand": 5000,
+    "deluxe": 10000
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "translations": {
+    "premium_steak": "프리미엄 스테이크",
+    "fresh_shrimp": "신선한 새우",
+    "truffle": "트러플",
+    "herbs": "허브",
+    "vegetables": "야채",
+    "olive_oil": "올리브오일",
+    "cheese": "치즈",
+    "champagne": "샴페인",
+    "heart_plate": "하트 접시",
+    "cupid_decoration": "큐피드 장식",
+    "napkin": "냅킨",
+    "wine": "와인",
+    "coffee": "커피",
+    "fresh_salad": "신선한 샐러드",
+    "scrambled_eggs": "스크램블 에그",
+    "bacon": "베이컨",
+    "bread": "빵",
+    "champagne_bottle": "샴페인 병",
+    "baguette": "바게트",
+    "coffee_pot": "커피포트"
+  },
+  "categories": {
+    "alcohol": {
+      "name": "주류",
+      "description": "매일 추가 가능한 주류",
+      "restock_frequency": "daily",
+      "items": ["champagne", "wine", "champagne_bottle"]
+    },
+    "ingredients": {
+      "name": "재료",
+      "description": "일주일에 2번 추가 가능한 일반 재료",
+      "restock_frequency": "twice_weekly", 
+      "items": ["premium_steak", "fresh_shrimp", "truffle", "herbs", "vegetables", "olive_oil", "cheese", "fresh_salad", "scrambled_eggs", "bacon", "bread", "baguette"]
+    },
+    "supplies": {
+      "name": "용품",
+      "description": "식기류 및 장식품",
+      "restock_frequency": "as_needed",
+      "items": ["heart_plate", "cupid_decoration", "napkin", "coffee", "coffee_pot"]
+    }
+  },
+  "units": {
+    "piece": "개",
+    "g": "g",
+    "bunch": "묶음",
+    "kg": "kg",
+    "bottle": "병",
+    "cup": "잔",
+    "bowl": "그릇",
+    "portion": "인분",
+    "strip": "줄",
+    "pot": "포트"
+  }
+}

@@ -1,0 +1,159 @@
+@startuml
+' 미스터 대박 시스템을 위한 서비스 지향 ER 다이어그램
+' Service-Oriented ER Diagram for Mr. Daebak System
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam linetype ortho
+skinparam roundcorner 10
+skinparam entity {
+    backgroundColor #LightGoldenRodYellow
+    borderColor #555
+}
+skinparam note {
+    backgroundColor #EFEFEF
+    borderColor #555
+}
+
+' --- 1. User Schema (소유: User Service) ---
+' 사용자 인증(Auth)과 프로필(Profile)을 분리
+' --------------------------------------------
+entity "users" as users {
+  *user_id : UUID <<PK>>
+  --
+  *email : VARCHAR <<UNIQUE>>
+  *password_hash : VARCHAR
+  *role : ENUM ('CUSTOMER', 'STAFF', 'MANAGER')
+  created_at : TIMESTAMP
+}
+note left of users
+  **User Schema**
+  (Owner: User Service)
+  ---
+  인증 및 권한 관리
+end note
+
+entity "user_profiles" as user_profiles {
+  *user_id : UUID <<PK, FK>>
+  --
+  *name : VARCHAR
+  *phone_number : VARCHAR
+  address : VARCHAR
+}
+
+' --- 2. Order Schema (소유: Order Service) ---
+' 주문 트랜잭션 및 관련 상세 정보
+' --------------------------------------------
+entity "orders" as orders {
+  *order_id : UUID <<PK>>
+  --
+  *customer_id : UUID <<FK>>
+  *total_price : DECIMAL
+  *order_status : ENUM ('RECEIVED', 'PREPARING', 'DELIVERING', 'COMPLETED')
+  payment_status : ENUM ('PENDING', 'PAID', 'FAILED')
+  delivery_address : VARCHAR
+  requests : TEXT
+  created_at : TIMESTAMP
+}
+note right of orders
+  **Order Schema**
+  (Owner: Order Service)
+  ---
+  주문 및 결제 흐름 관리
+end note
+
+entity "order_items" as order_items {
+  *order_item_id : UUID <<PK>>
+  --
+  *order_id : UUID <<FK>>
+  *product_id : UUID <<FK>>
+  *quantity : INT
+  *price_at_time : DECIMAL
+}
+
+entity "custom_decorations" as custom_decorations {
+  *decoration_id : UUID <<PK>>
+  --
+  *order_item_id : UUID <<FK>>
+  request_text : TEXT
+  image_url : VARCHAR
+}
+
+' --- 3. Product Schema (소유: Menu & Inventory Service) ---
+' 메뉴 카탈로그 및 재고
+' ---------------------------------------------------------
+entity "products" as products {
+  *product_id : UUID <<PK>>
+  --
+  category_id : UUID <<FK>>
+  *name : VARCHAR
+  description : TEXT
+  *price : DECIMAL
+  image_url : VARCHAR
+  is_available : BOOLEAN
+}
+note left of products
+  **Product Schema**
+  (Owner: Menu & Inventory)
+  ---
+  상품 카탈로그 및 재고
+end note
+
+entity "categories" as categories {
+  *category_id : UUID <<PK>>
+  --
+  *name : VARCHAR
+}
+
+entity "inventory" as inventory {
+  *product_id : UUID <<PK, FK>>
+  --
+  *quantity_on_hand : INT
+  threshold : INT
+}
+
+' --- 4. CRM Schema (소유: CRM & Discount Service) ---
+' 할인, 프로모션, 고객 등급
+' ------------------------------------------------------
+entity "promotions" as promotions {
+  *promotion_id : UUID <<PK>>
+  --
+  *name : VARCHAR
+  *type : ENUM ('PERCENT', 'FIXED_AMOUNT')
+  *value : DECIMAL
+  start_date : TIMESTAMP
+  end_date : TIMESTAMP
+  conditions : JSON
+}
+note right of promotions
+  **CRM Schema**
+  (Owner: CRM & Discount)
+  ---
+  프로모션 및 고객 등급
+end note
+
+entity "user_loyalty" as user_loyalty {
+  *user_id : UUID <<PK, FK>>
+  --
+  *tier : VARCHAR ('BRONZE', 'SILVER', 'GOLD')
+  points : INT
+}
+
+
+' --- 관계 정의 (Relationships) ---
+
+' User Schema
+users "1" --|| "1" user_profiles : " (프로필)"
+users "1" --o{ "N" orders : " (고객)"
+users "1" --|| "1" user_loyalty : " (고객 등급)"
+
+' Order Schema
+orders "1" --|{ "N" order_items : " 포함"
+order_items "1" --o{ "0..1" custom_decorations : " 장식"
+
+' Product Schema
+categories "1" --o{ "N" products : " 분류"
+products "1" --|| "1" inventory : " 재고"
+products "1" --o{ "N" order_items : " 주문됨"
+
+@enduml

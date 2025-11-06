@@ -1,0 +1,81 @@
+@startuml
+title "Order Service 서브시스템 - 클래스 다이어그램"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+
+
+' --- External Dependencies (Interfaces) ---
+interface "IApiGateway" {
+  + Request
+}
+interface "IMenuInventoryService" {
+  + check_stock(items)
+}
+interface "ICrmService" {
+  + calculate_discount(user, items)
+}
+interface "IPaymentService" {
+  + process_payment(amount, order_id)
+}
+interface "IGeminiApi" {
+  + generate_image(prompt)
+}
+interface "IFileStorage" {
+  + get_upload_url()
+}
+
+
+' --- Order Service and its internal components ---
+class "OrderService (FastAPI App)" {
+  + handleRequest(request)
+}
+
+class "OrderRouter" {
+  + create_order(data)
+  + get_history()
+  + update_status(order_id, data)
+  + create_chatbot_order(data)
+}
+
+class "OrderOrchestratorService" {
+  + create_order_transaction(data)
+}
+
+class "OrderRepository" {
+  + create_order_in_db(data)
+  + get_orders_by_user_id(user_id)
+  + update_order_status_in_db(order_id, status)
+}
+
+class "WebSocketManager" {
+  + broadcast_status_update(order_id, status)
+}
+
+' --- Relationships ---
+IApiGateway -> "OrderService (FastAPI App)" : "HTTP Request"
+"OrderService (FastAPI App)" *-- "OrderRouter" : "1. 라우팅"
+
+' Router delegates tasks to the appropriate service/manager
+OrderRouter ..> OrderOrchestratorService : "주문 생성 요청"
+OrderRouter ..> OrderRepository : "주문 내역 조회"
+OrderRouter ..> WebSocketManager : "상태 변경 브로드캐스트"
+
+' The Orchestrator calls all other services and the repository
+OrderOrchestratorService ..> IMenuInventoryService : "1. 재고 확인"
+OrderOrchestratorService ..> ICrmService : "2. 할인 계산"
+OrderOrchestratorService ..> IPaymentService : "3. 결제 처리"
+OrderOrchestratorService ..> IGeminiApi : "(선택) GenAI 요청"
+OrderOrchestratorService ..> IFileStorage : "(선택) S3 URL 요청"
+OrderOrchestratorService ..> OrderRepository : "4. DB에 주문 생성"
+
+' Repository and WebSocket Manager
+OrderRepository ..> OrderDB : "SQL Query"
+
+
+' --- Notes for endpoint mapping ---
+note "POST /orders/create\nPOST /orders/chatbot\nGET /orders/history\nPUT /orders/status/{order_id}" as Endpoints
+OrderRouter .. Endpoints
+
+@enduml

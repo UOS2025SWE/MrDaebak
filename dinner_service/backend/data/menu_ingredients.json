@@ -1,0 +1,81 @@
+{
+  "valentine": {
+    "simple": {
+      "premium_steak": 1,
+      "fresh_shrimp": 3,
+      "truffle": 5,
+      "herbs": 1,
+      "vegetables": 1
+    },
+    "grand": {
+      "premium_steak": 1,
+      "fresh_shrimp": 3,
+      "truffle": 6,
+      "herbs": 1,
+      "vegetables": 1
+    },
+    "deluxe": {
+      "premium_steak": 1,
+      "fresh_shrimp": 3,
+      "truffle": 8,
+      "herbs": 1,
+      "vegetables": 1
+    }
+  },
+  "french": {
+    "simple": {
+      "premium_steak": 1,
+      "truffle": 3,
+      "herbs": 1,
+      "olive_oil": 1,
+      "cheese": 1
+    },
+    "grand": {
+      "premium_steak": 1,
+      "truffle": 4,
+      "herbs": 1,
+      "olive_oil": 1,
+      "cheese": 1
+    },
+    "deluxe": {
+      "premium_steak": 1,
+      "truffle": 5,
+      "herbs": 1,
+      "olive_oil": 1,
+      "cheese": 1
+    }
+  },
+  "english": {
+    "simple": {
+      "premium_steak": 1,
+      "herbs": 1,
+      "vegetables": 2
+    },
+    "grand": {
+      "premium_steak": 1,
+      "herbs": 1,
+      "vegetables": 2
+    },
+    "deluxe": {
+      "premium_steak": 1,
+      "herbs": 1,
+      "vegetables": 2
+    }
+  },
+  "champagne": {
+    "grand": {
+      "premium_steak": 1,
+      "fresh_shrimp": 4,
+      "truffle": 10,
+      "champagne": 1,
+      "cheese": 1
+    },
+    "deluxe": {
+      "premium_steak": 1,
+      "fresh_shrimp": 4,
+      "truffle": 12,
+      "champagne": 1,
+      "cheese": 1
+    }
+  }
+}
