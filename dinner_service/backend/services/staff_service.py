@@ -406,10 +406,10 @@ class StaffService:
             for row in db_staff:
                 staff_id = row[0]
                 name = row[1]
-                position = row[2]  # 'COOK' or 'RIDER'
+                position = row[2]  # 'COOK' or 'DELIVERY'
 
                 # position을 type으로 매핑
-                staff_type = 'cook' if position == 'COOK' else 'delivery' if position == 'RIDER' else 'cook'
+                staff_type = 'cook' if position == 'COOK' else 'delivery' if position == 'DELIVERY' else 'cook'
 
                 staff_info = {
                     'id': staff_id,

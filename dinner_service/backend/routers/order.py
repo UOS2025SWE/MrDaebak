@@ -569,3 +569,113 @@ async def update_order_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"주문 상태 업데이트 중 오류가 발생했습니다: {str(e)}"
         )
+
+
+@router.post("/{order_id}/cancel")
+async def cancel_order(
+    order_id: str,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    db: Annotated[Session, Depends(get_db)]
+) -> dict[str, Any]:
+    """고객 주문 취소 (RECEIVED 상태에서만 가능, 조리 수락 전)"""
+    try:
+        logger = logging.getLogger(__name__)
+
+        # JWT 토큰 검증
+        token = credentials.credentials
+        payload = LoginService.verify_token(token)
+
+        if payload is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="유효하지 않은 토큰입니다",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # 주문 존재 및 상태 확인
+        check_query = text("""
+            SELECT order_id, order_number, order_status, customer_id, payment_status
+            FROM orders
+            WHERE order_id = CAST(:order_id AS uuid)
+        """)
+        order = db.execute(check_query, {"order_id": order_id}).fetchone()
+
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="주문을 찾을 수 없습니다"
+            )
+
+        # 고객 본인 주문인지 확인
+        user_id = payload.get("user_id")
+        if str(order.customer_id) != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="본인의 주문만 취소할 수 있습니다"
+            )
+
+        # RECEIVED 상태에서만 취소 가능
+        if order.order_status != 'RECEIVED':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="조리 수락 전 주문만 취소할 수 있습니다"
+            )
+
+        # 주문 취소 처리
+        cancel_query = text("""
+            UPDATE orders
+            SET order_status = 'CANCELLED',
+                payment_status = 'REFUNDED'
+            WHERE order_id = CAST(:order_id AS uuid)
+            RETURNING order_id, order_number, order_status
+        """)
+        result = db.execute(cancel_query, {"order_id": order_id}).fetchone()
+        db.commit()
+
+        logger.info(f"고객 주문 취소: order_id={order_id}, order_number={order.order_number}")
+
+        # WebSocket 브로드캐스트
+        try:
+            import asyncio
+            from datetime import datetime
+
+            message_data = {
+                "type": "ORDER_STATUS_CHANGED",
+                "data": {
+                    "id": str(result.order_id),
+                    "order_number": result.order_number,
+                    "old_status": order.order_status,
+                    "new_status": result.order_status
+                },
+                "message": f"주문 {result.order_number}이(가) 취소되었습니다",
+                "timestamp": datetime.now().isoformat()
+            }
+
+            # 직원에게 알림
+            asyncio.create_task(ws_manager.broadcast_to_staff(message_data))
+            # 고객에게도 알림
+            asyncio.create_task(ws_manager.send_to_user(user_id, message_data))
+
+            logger.info(f"WebSocket 브로드캐스트 전송: ORDER_CANCELLED - {result.order_number}")
+        except Exception as ws_error:
+            logger.warning(f"WebSocket 브로드캐스트 실패 (취소는 성공): {ws_error}")
+
+        return {
+            "success": True,
+            "order": {
+                "id": str(result.order_id),
+                "order_number": result.order_number,
+                "status": result.order_status
+            },
+            "message": "주문이 취소되었습니다. 환불 처리가 완료되었습니다."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"주문 취소 실패: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"주문 취소 중 오류가 발생했습니다: {str(e)}"
+        )

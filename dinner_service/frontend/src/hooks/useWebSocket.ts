@@ -133,7 +133,7 @@ export function useWebSocket({
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket 오류:', error);
+        console.error('WebSocket 오류:', error instanceof Error ? error.message : 'Unknown error');
         setStatus('error');
       };
 

@@ -43,7 +43,6 @@ class StaffRegisterRequest(BaseModel):
     name: Annotated[str, Field(min_length=1)]
     phone_number: Annotated[str, Field(min_length=1)]
     address: Annotated[str, Field(min_length=1)]
-    job_type: Annotated[str, Field(pattern="^(COOK|RIDER)$")]  # 직종: COOK 또는 RIDER
     store_id: str | None = None  # UUID 문자열
 
 # 비밀번호 변경 요청 모델
@@ -144,7 +143,7 @@ async def register_staff(
 ) -> dict[str, Any]:
     """직원 회원가입"""
     try:
-        # 직원 회원가입 처리
+        # 직원 회원가입 처리 (포지션은 매니저가 나중에 할당)
         result = register_staff_user(
             db,
             request.email,
@@ -152,7 +151,7 @@ async def register_staff(
             request.name,
             request.phone_number,
             request.address,
-            request.job_type,
+            None,  # job_type 제거
             request.store_id
         )
 

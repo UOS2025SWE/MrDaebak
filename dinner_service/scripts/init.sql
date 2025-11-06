@@ -42,14 +42,6 @@ CREATE TABLE IF NOT EXISTS serving_styles (
     price_modifier NUMERIC(10, 2) DEFAULT 0
 );
 
-CREATE TABLE customer_loyalty (
-    customer_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
-    order_count INT DEFAULT 0,
-    total_spent NUMERIC(12,2) DEFAULT 0,
-    membership_tier TEXT DEFAULT 'BRONZE',
-    last_order_at TIMESTAMP
-);
-
 INSERT INTO serving_styles (name, description, price_modifier) VALUES
     ('simple', '기본 플라스틱/심플 셋업', 0),
     ('grand', '업그레이드된 도자기/린넨 셋업', 5000),
@@ -274,7 +266,8 @@ ON CONFLICT DO NOTHING;
 INSERT INTO users (email, password_hash, name, phone_number, address, user_type)
 VALUES
     ('customer@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Customer', '010-1000-2000', 'Seoul', 'CUSTOMER'),
-    ('staff@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Staff', '010-3000-4000', 'Seoul', 'STAFF')
+    ('staff@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Staff', '010-3000-4000', 'Seoul', 'STAFF'),
+    ('manager@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Manager', '010-5000-6000', 'Seoul', 'MANAGER')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO staff_details (staff_id, store_id, position, salary, permissions)

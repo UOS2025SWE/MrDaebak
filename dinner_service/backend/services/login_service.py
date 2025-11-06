@@ -96,7 +96,7 @@ def authenticate_user(db: Session, email: str, password: str) -> dict[str, Any]:
 
         # user_type 가져오기
         user_type = result[3]  # 'CUSTOMER', 'STAFF', 'MANAGER'
-        position = result[5]  # 'COOK', 'RIDER', 'STAFF' (STAFF 타입인 경우만)
+        position = result[5]  # 'COOK', 'DELIVERY', NULL (STAFF 타입인 경우만)
 
         # user_type을 role로 변환 (하위 호환성)
         if user_type == 'MANAGER':
@@ -172,7 +172,7 @@ def create_login_response(user_data: dict[str, Any]) -> dict[str, Any]:
             "is_admin": user_data.get("is_admin", False),
             "role": user_data.get("role", "customer"),  # 하위 호환성을 위해 유지
             "name": user_data["name"],
-            "position": user_data.get("position")  # STAFF인 경우 position 정보 (COOK, RIDER)
+            "position": user_data.get("position")  # STAFF인 경우 position 정보 (COOK, DELIVERY)
         },
         "show_admin_button": show_admin_button,
         "message": "로그인 성공"
@@ -250,31 +250,18 @@ def register_staff_user(
     name: str,
     phone_number: str,
     address: str,
-    job_type: str,  # "COOK" 또는 "RIDER"
+    job_type: str = None,  # 더 이상 사용하지 않음, 매니저가 나중에 할당
     store_id: str = None
 ) -> dict[str, Any]:
     """직원 회원가입 처리 (users + staff_details 테이블)
-
-    job_type에 따라 position, permissions, salary 자동 설정:
-    - COOK: 요리사 (조리 권한, 급여 3,500,000원)
-    - RIDER: 배달원 (배달 권한, 급여 2,800,000원)
+    
+    포지션은 매니저가 나중에 할당하므로, 초기에는 position을 NULL로 설정
     """
     try:
-        # job_type에 따라 position, permissions, salary 설정
-        if job_type == "COOK":
-            position = "COOK"
-            permissions = {"cook": True, "cooking_start": True, "cooking_complete": True}
-            salary = 3500000  # 요리사 급여: 350만원
-        elif job_type == "RIDER":
-            position = "RIDER"
-            permissions = {"delivery": True, "delivery_start": True, "delivery_complete": True}
-            salary = 2800000  # 배달원 급여: 280만원
-        else:
-            return {
-                "success": False,
-                "error": f"잘못된 직종입니다: {job_type}",
-                "user": None
-            }
+        # 포지션 미정으로 초기화 (매니저가 나중에 할당)
+        position = None
+        permissions = {}
+        salary = None
 
         # 이메일 중복 체크
         existing_user_query = text("""

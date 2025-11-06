@@ -23,11 +23,6 @@ export default function StaffLoginPage() {
     if (error) setError('');
   };
 
-  const handleTestAccountClick = (email: string, password: string) => {
-    setFormData({ email, password });
-    setError('');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -76,31 +71,6 @@ export default function StaffLoginPage() {
 
             {/* Form */}
             <div className="px-8 py-8">
-              {/* Test Account Info */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-                <p className="text-sm font-semibold text-amber-800 mb-2">💡 테스트 계정 (클릭하여 자동 입력)</p>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => handleTestAccountClick('admin@mrdaebak.com', 'admin123')}
-                    className="w-full text-left px-3 py-2 bg-white rounded-lg hover:bg-amber-100 transition-colors border border-amber-200"
-                  >
-                    <p className="text-xs text-amber-700">
-                      <span className="font-medium">관리자:</span> admin@mrdaebak.com / admin123
-                    </p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleTestAccountClick('staff@mrdaebak.com', 'staff123')}
-                    className="w-full text-left px-3 py-2 bg-white rounded-lg hover:bg-amber-100 transition-colors border border-amber-200"
-                  >
-                    <p className="text-xs text-amber-700">
-                      <span className="font-medium">직원:</span> staff@mrdaebak.com / staff123
-                    </p>
-                  </button>
-                </div>
-              </div>
-
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Email Field */}
                 <div>

@@ -236,6 +236,18 @@ export default function OrderPage() {
     fetchIngredientPricing()
   }, [])
 
+  const customizationCostPerSet = useMemo(() => {
+    if (!orderData) return 0
+    const baseForStyle = baseIngredients[orderData.styleCode] || {}
+    return calculateCustomizationCostPerSet(baseForStyle, orderData.ingredients, ingredientPrices)
+  }, [orderData, baseIngredients, ingredientPrices])
+
+  const customizationCost = orderData ? customizationCostPerSet * orderData.quantity : 0
+  const basePriceWithoutCustomization = orderData ? orderData.stylePrice * orderData.quantity : 0
+  const originalPrice = basePriceWithoutCustomization + customizationCost
+  const discountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
+  const finalPrice = Math.max(0, originalPrice - discountAmount)
+
   if (!orderData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -281,18 +293,6 @@ export default function OrderPage() {
       quantity: newQuantity
     })
   }
-
-  const customizationCostPerSet = useMemo(() => {
-    if (!orderData) return 0
-    const baseForStyle = baseIngredients[orderData.styleCode] || {}
-    return calculateCustomizationCostPerSet(baseForStyle, orderData.ingredients, ingredientPrices)
-  }, [orderData, baseIngredients, ingredientPrices])
-
-  const customizationCost = orderData ? customizationCostPerSet * orderData.quantity : 0
-  const basePriceWithoutCustomization = orderData ? orderData.stylePrice * orderData.quantity : 0
-  const originalPrice = basePriceWithoutCustomization + customizationCost
-  const discountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
-  const finalPrice = Math.max(0, originalPrice - discountAmount)
 
   // 결제하기 핸들러 - checkout 페이지로 이동
   const handlePayment = () => {

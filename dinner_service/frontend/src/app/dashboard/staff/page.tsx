@@ -116,7 +116,7 @@ function OrderCard({
   isCookingCompleted: boolean;
   onStatusChange: (orderId: string, newStatus: string) => void;
   onCookingComplete: (orderId: string) => void;
-  userPosition?: 'COOK' | 'RIDER' | 'STAFF';
+  userPosition?: 'COOK' | 'DELIVERY' | 'STAFF';
 }) {
   const getStatusDisplay = (status: string, cookingCompleted: boolean) => {
     switch (status) {
@@ -133,31 +133,31 @@ function OrderCard({
     }
   };
 
-  const getNextAction = (status: string, cookingCompleted: boolean, position?: 'COOK' | 'RIDER' | 'STAFF') => {
+  const getNextAction = (status: string, cookingCompleted: boolean, position?: 'COOK' | 'DELIVERY' | 'STAFF') => {
     switch (status) {
       case 'RECEIVED':
-        // 조리 시작: COOK만 가능
-        if (position === 'COOK' || position === 'STAFF') {
-          return { label: '조리 시작', nextStatus: 'PREPARING', color: 'blue', isLocal: false };
+        // 조리 수락: COOK만 가능
+        if (position === 'COOK') {
+          return { label: '조리 수락', nextStatus: 'PREPARING', color: 'blue', isLocal: false };
         }
         return null;
       case 'PREPARING':
         if (cookingCompleted) {
-          // 조리 완료 후 배달 시작: RIDER만 가능
-          if (position === 'RIDER' || position === 'STAFF') {
+          // 조리 완료 후 배달 시작: DELIVERY만 가능
+          if (position === 'DELIVERY') {
             return { label: '배달 시작', nextStatus: 'DELIVERING', color: 'green', isLocal: false };
           }
           return null;
         } else {
           // 조리 완료: COOK만 가능
-          if (position === 'COOK' || position === 'STAFF') {
+          if (position === 'COOK') {
             return { label: '조리 완료', nextStatus: '', color: 'amber', isLocal: true };
           }
           return null;
         }
       case 'DELIVERING':
-        // 배달 완료: RIDER만 가능
-        if (position === 'RIDER' || position === 'STAFF') {
+        // 배달 완료: DELIVERY만 가능
+        if (position === 'DELIVERY') {
           return { label: '배달 완료', nextStatus: 'COMPLETED', color: 'green', isLocal: false };
         }
         return null;
@@ -495,8 +495,8 @@ function StaffDashboardContent() {
                 <div className="text-right">
                   <p className="text-xs text-gray-500">
                     {user?.position === 'COOK' ? '요리사' :
-                     user?.position === 'RIDER' ? '배달원' :
-                     '직원'}
+                     user?.position === 'DELIVERY' ? '배달원' :
+                     user?.position ? '직원' : '포지션 미정'}
                   </p>
                   <p className="text-sm font-semibold text-gray-800">{user?.name || user?.email}</p>
                 </div>
@@ -627,9 +627,9 @@ function StaffDashboardContent() {
             </div>
           </div>
 
-          {/* Main Content - 조리/배달 두 컬럼 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 조리 컬럼 */}
+          {/* Main Content - 역할별 컬럼 표시 */}
+          {user?.position === 'COOK' ? (
+            /* COOK: 조리 컬럼만 표시 */
             <div>
               <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-t-xl p-4 shadow-md">
                 <div className="flex items-center gap-3">
@@ -663,8 +663,8 @@ function StaffDashboardContent() {
                 )}
               </div>
             </div>
-
-            {/* 배달 컬럼 */}
+          ) : user?.position === 'DELIVERY' ? (
+            /* DELIVERY: 배달 컬럼만 표시 */
             <div>
               <div className="bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-xl p-4 shadow-md">
                 <div className="flex items-center gap-3">
@@ -700,7 +700,82 @@ function StaffDashboardContent() {
                 )}
               </div>
             </div>
-          </div>
+          ) : (
+            /* 포지션 미정 또는 기타: 두 컬럼 모두 표시 */
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 조리 컬럼 */}
+              <div>
+                <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-t-xl p-4 shadow-md">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h2 className="text-xl font-bold">조리 ({cookingOrders.length})</h2>
+                  </div>
+                </div>
+                <div className="bg-white rounded-b-xl shadow-lg p-4 min-h-[500px] max-h-[800px] overflow-y-auto">
+                  {cookingOrders.length === 0 ? (
+                    <div className="text-center py-16">
+                      <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      <p className="text-gray-500">조리할 주문이 없습니다</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {cookingOrders.map(order => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          isCookingCompleted={cookingCompletedOrders.has(order.id)}
+                          onStatusChange={handleStatusChange}
+                          onCookingComplete={handleCookingComplete}
+                          userPosition={user?.position}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 배달 컬럼 */}
+              <div>
+                <div className="bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-xl p-4 shadow-md">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                    </svg>
+                    <h2 className="text-xl font-bold">배달 ({deliveringOrders.length})</h2>
+                  </div>
+                </div>
+                <div className="bg-white rounded-b-xl shadow-lg p-4 min-h-[500px] max-h-[800px] overflow-y-auto">
+                  {deliveringOrders.length === 0 ? (
+                    <div className="text-center py-16">
+                      <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                      </svg>
+                      <p className="text-gray-500">배달할 주문이 없습니다</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {deliveringOrders.map(order => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          isCookingCompleted={cookingCompletedOrders.has(order.id)}
+                          onStatusChange={handleStatusChange}
+                          onCookingComplete={handleCookingComplete}
+                          userPosition={user?.position}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

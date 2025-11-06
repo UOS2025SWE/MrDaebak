@@ -202,6 +202,45 @@ export default function OrdersPage() {
     router.push(`/checkout?${params.toString()}`)
   }
 
+  // 주문 취소 핸들러
+  const handleCancelOrder = async (order: Order) => {
+    if (!confirm('정말 주문을 취소하시겠습니까?')) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        alert('로그인이 필요합니다.')
+        router.push('/login')
+        return
+      }
+
+      const response = await fetch(`/api/orders/${order.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setSuccessMessage(data.message || '주문이 취소되었습니다. 환불 처리가 완료되었습니다.')
+        setError(null)
+        await fetchOrders() // 주문 목록 새로고침
+      } else {
+        setError(data.detail || data.message || '주문 취소에 실패했습니다.')
+        setSuccessMessage(null)
+      }
+    } catch (err) {
+      console.error('주문 취소 실패:', err)
+      setError('주문 취소 중 오류가 발생했습니다.')
+      setSuccessMessage(null)
+    }
+  }
+
   // AuthContext 로딩 중이거나 주문 내역 로딩 중일 때
   if (authLoading || loading) {
     return (
@@ -310,8 +349,11 @@ export default function OrdersPage() {
                           >
                             주문 상세
                           </button>
-                          {(order.status === 'RECEIVED' || order.status === 'PREPARING') && (
-                            <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-lg transition-colors">
+                          {order.status === 'RECEIVED' && (
+                            <button
+                              onClick={() => handleCancelOrder(order)}
+                              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-lg transition-colors"
+                            >
                               주문 취소
                             </button>
                           )}

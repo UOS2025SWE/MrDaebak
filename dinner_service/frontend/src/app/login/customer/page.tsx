@@ -23,11 +23,6 @@ export default function CustomerLoginPage() {
     if (error) setError('');
   };
 
-  const handleTestAccountClick = (email: string, password: string) => {
-    setFormData({ email, password });
-    setError('');
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -76,20 +71,6 @@ export default function CustomerLoginPage() {
 
             {/* Form */}
             <div className="px-8 py-8">
-              {/* Test Account Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-                <p className="text-sm font-semibold text-blue-800 mb-2">💡 테스트 계정 (클릭하여 자동 입력)</p>
-                <button
-                  type="button"
-                  onClick={() => handleTestAccountClick('test@test.com', 'testtest')}
-                  className="w-full text-left px-3 py-2 bg-white rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
-                >
-                  <p className="text-xs text-blue-700">
-                    <span className="font-medium">테스트 고객:</span> test@test.com / testtest
-                  </p>
-                </button>
-              </div>
-
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Email Field */}
                 <div>

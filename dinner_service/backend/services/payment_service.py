@@ -50,11 +50,15 @@ class PaymentService:
         Returns:
             유효 여부
         """
-        # 하이픈 제거
-        card_clean = card_number.replace("-", "").replace(" ", "")
+        if not card_number:
+            return False
+        
+        # 하이픈, 공백, 모든 비숫자 제거
+        card_clean = ''.join(c for c in card_number if c.isdigit())
 
         # 16자리 숫자인지 확인
-        if len(card_clean) != 16 or not card_clean.isdigit():
+        if len(card_clean) != 16:
+            logger.warning(f"카드 번호 길이 오류: 입력={card_number}, 정제 후={card_clean}, 길이={len(card_clean)}")
             return False
 
         return True

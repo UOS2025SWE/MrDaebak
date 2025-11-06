@@ -146,13 +146,14 @@ async def process_checkout(
             # 결제 실패 시 주문도 취소 처리
             cancel_query = text("""
                 UPDATE orders
-                SET order_status = 'COMPLETED',
+                SET order_status = 'CANCELLED',
                     payment_status = 'FAILED'
                 WHERE order_id = :order_id
             """)
             db.execute(cancel_query, {"order_id": order_id})
             db.commit()
 
+            logger.error(f"결제 실패로 주문 취소: order_id={order_id}, reason={payment_result.get('message', '결제 처리 실패')}")
             raise HTTPException(
                 status_code=400,
                 detail=payment_result.get("message", "결제 처리 실패")

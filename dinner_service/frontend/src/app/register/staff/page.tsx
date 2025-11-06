@@ -13,8 +13,7 @@ export default function StaffRegisterPage() {
     confirmPassword: '',
     name: '',
     phoneNumber: '',
-    address: '',
-    jobType: 'COOK'  // 기본값: 요리사
+    address: ''
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +29,7 @@ export default function StaffRegisterPage() {
     e.preventDefault();
 
     // 필수 필드 검증
-    if (!formData.email || !formData.password || !formData.name || !formData.phoneNumber || !formData.address || !formData.jobType) {
+    if (!formData.email || !formData.password || !formData.name || !formData.phoneNumber || !formData.address) {
       setError('모든 필드를 입력해주세요.');
       return;
     }
@@ -60,8 +59,7 @@ export default function StaffRegisterPage() {
           password: formData.password,
           name: formData.name,
           phone_number: formData.phoneNumber,
-          address: formData.address,
-          job_type: formData.jobType
+          address: formData.address
         }),
       });
 
@@ -103,6 +101,13 @@ export default function StaffRegisterPage() {
 
             {/* Form */}
             <div className="px-8 py-8">
+              {/* 안내 메시지 */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <p className="text-sm text-blue-800">
+                  💡 직원 포지션(요리사/배달원)은 가입 후 매니저가 할당해드립니다.
+                </p>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Email Field */}
                 <div>
@@ -119,24 +124,6 @@ export default function StaffRegisterPage() {
                     placeholder="이메일을 입력하세요"
                     required
                   />
-                </div>
-
-                {/* Job Type Field */}
-                <div>
-                  <label htmlFor="jobType" className="block text-sm font-medium text-stone-700 mb-2">
-                    직종 *
-                  </label>
-                  <select
-                    id="jobType"
-                    name="jobType"
-                    value={formData.jobType}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-stone-200 focus:border-gray-500 focus:outline-none transition-all duration-300 bg-white"
-                    required
-                  >
-                    <option value="COOK">요리사 (주방)</option>
-                    <option value="RIDER">배달원</option>
-                  </select>
                 </div>
 
                 {/* Name Field */}

@@ -65,8 +65,8 @@ async def get_menu_detail(
 
 @router.get("/base-ingredients")
 async def get_base_ingredients(
-    menu_code: str | None = Query(default=None),
-    db: Annotated[Session, Depends(get_db)]
+    db: Annotated[Session, Depends(get_db)],
+    menu_code: str | None = Query(default=None)
 ) -> dict[str, Any]:
     """메뉴별 기본 재료 구성 조회"""
     data = MenuService.get_base_ingredient_data(db, menu_code)

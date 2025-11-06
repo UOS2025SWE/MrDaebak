@@ -35,6 +35,14 @@ function AdminDashboardContent() {
 
   // 직원 관리 데이터
   const [staffList, setStaffList] = useState<Staff[]>([])
+  const [pendingStaff, setPendingStaff] = useState<Array<{
+    staff_id: string
+    email: string
+    name: string
+    phone_number: string
+    created_at: string | null
+    position: string | null
+  }>>([])
   const [orderSummary, setOrderSummary] = useState<{
     cooking_orders: number
     delivering_orders: number
@@ -70,6 +78,7 @@ function AdminDashboardContent() {
         fetchAccountingStats()
       } else if (activeTab === 'staff') {
         fetchStaffData()
+        fetchPendingStaff()
       } else if (activeTab === 'inventory') {
         fetchCategorizedIngredientsData()
       }
@@ -120,6 +129,51 @@ function AdminDashboardContent() {
       console.error('직원 데이터 조회 실패:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchPendingStaff = async () => {
+    try {
+      const response = await fetch('/api/staff/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setPendingStaff(data.staff || [])
+        }
+      }
+    } catch (error) {
+      console.error('포지션 미정 직원 조회 실패:', error)
+    }
+  }
+
+  const handleAssignPosition = async (staffId: string, position: 'COOK' | 'DELIVERY') => {
+    try {
+      const response = await fetch(`/api/staff/${staffId}/assign-position`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ position })
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        alert(data.message || '포지션이 할당되었습니다')
+        await fetchPendingStaff()
+        await fetchStaffData()
+      } else {
+        alert(data.error || data.detail || '포지션 할당에 실패했습니다')
+      }
+    } catch (error) {
+      console.error('포지션 할당 실패:', error)
+      alert('포지션 할당 중 오류가 발생했습니다')
     }
   }
 
@@ -369,6 +423,43 @@ function AdminDashboardContent() {
 
           {!loading && activeTab === 'staff' && (
             <div className="space-y-6">
+              {/* 포지션 미정 직원 할당 */}
+              {pendingStaff.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg p-6 border border-yellow-200">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-2xl">⚠️</span>
+                    <h2 className="text-xl font-bold text-gray-800">포지션 미정 직원 ({pendingStaff.length}명)</h2>
+                  </div>
+                  <div className="space-y-3">
+                    {pendingStaff.map((staff) => (
+                      <div key={staff.staff_id} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h3 className="font-bold text-gray-900">{staff.name}</h3>
+                            <p className="text-sm text-gray-600">{staff.email}</p>
+                            <p className="text-xs text-gray-500">{staff.phone_number}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAssignPosition(staff.staff_id, 'COOK')}
+                              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition-colors"
+                            >
+                              요리사로 할당
+                            </button>
+                            <button
+                              onClick={() => handleAssignPosition(staff.staff_id, 'DELIVERY')}
+                              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+                            >
+                              배달원으로 할당
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 주문 현황 요약 */}
               {orderSummary && (
                 <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
