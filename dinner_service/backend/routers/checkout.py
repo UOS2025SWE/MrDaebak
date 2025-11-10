@@ -143,20 +143,21 @@ async def process_checkout(
         )
 
         if not payment_result.get("success"):
-            # 결제 실패 시 주문도 취소 처리
+            # 결제 실패 시 주문 상태를 결제실패로 기록
             cancel_query = text("""
                 UPDATE orders
-                SET order_status = 'CANCELLED',
+                SET order_status = 'PAYMENT_FAILED',
                     payment_status = 'FAILED'
                 WHERE order_id = :order_id
             """)
             db.execute(cancel_query, {"order_id": order_id})
             db.commit()
 
-            logger.error(f"결제 실패로 주문 취소: order_id={order_id}, reason={payment_result.get('message', '결제 처리 실패')}")
+            error_message = payment_result.get("message", "유효하지 않은 카드 번호입니다")
+            logger.error(f"결제 실패: order_id={order_id}, reason={error_message}")
             raise HTTPException(
                 status_code=400,
-                detail=payment_result.get("message", "결제 처리 실패")
+                detail=error_message
             )
 
         # 3. 배송지 기본값 저장 (선택적)

@@ -115,8 +115,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
       
-      const errorData = await response.json();
-      console.error('Login failed:', errorData.detail || 'Unknown error');
+      let errorMessage = 'Unknown error';
+      try {
+        const errorText = await response.text();
+        if (errorText) {
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.detail || errorData.error || errorMessage;
+          } catch {
+            errorMessage = errorText;
+          }
+        }
+      } catch (parseError) {
+        console.error('Failed to parse login error response:', parseError);
+      }
+      console.error('Login failed:', errorMessage);
       return false;
     } catch (error) {
       console.error('Login error:', error);

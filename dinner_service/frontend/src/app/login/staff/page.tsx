@@ -71,6 +71,19 @@ export default function StaffLoginPage() {
 
             {/* Form */}
             <div className="px-8 py-8">
+              {/* 매니저 계정 안내 */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">👔</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-yellow-900 mb-1">매니저 계정 정보</p>
+                    <p className="text-xs text-yellow-800 mb-2">
+                      매니저는 동일한 직원 로그인 페이지에서 접속할 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Email Field */}
                 <div>

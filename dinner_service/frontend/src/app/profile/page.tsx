@@ -18,6 +18,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const isStaffAccount = user?.user_type === 'STAFF'
 
   // 인증되지 않은 사용자는 로그인 페이지로 리다이렉트
   useEffect(() => {
@@ -71,36 +72,38 @@ export default function ProfilePage() {
         console.error('프로필 조회 실패:', profileResponse.statusText)
       }
 
-      // 2. 최근 주문 정보 조회 (orders 페이지와 같은 방식)
-      const orderResponse = await fetch(`/api/orders/user/${user?.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      // 2. 최근 주문 정보 조회 (직원 계정은 제외)
+      if (!isStaffAccount) {
+        const orderResponse = await fetch(`/api/orders/user/${user?.id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
 
-      if (orderResponse.ok) {
-        const orderData = await orderResponse.json()
-        if (orderData.success && orderData.orders && orderData.orders.length > 0) {
-          // 가장 최근 주문만 사용
-          const mostRecentOrder = orderData.orders[0]
-          setRecentOrder({
-            id: mostRecentOrder.id,
-            order_number: mostRecentOrder.order_number,
-            status: mostRecentOrder.status,
-            menu_name: mostRecentOrder.menu_name,
-            style: mostRecentOrder.style,
-            quantity: mostRecentOrder.quantity,
-            total_price: mostRecentOrder.total_price,
-            delivery_address: mostRecentOrder.delivery_address,
-            order_date: mostRecentOrder.order_date || mostRecentOrder.created_at
-          })
-
+        if (orderResponse.ok) {
+          const orderData = await orderResponse.json()
+          if (orderData.success && orderData.orders && orderData.orders.length > 0) {
+            const mostRecentOrder = orderData.orders[0]
+            setRecentOrder({
+              id: mostRecentOrder.id,
+              order_number: mostRecentOrder.order_number,
+              status: mostRecentOrder.status,
+              menu_name: mostRecentOrder.menu_name,
+              style: mostRecentOrder.style,
+              quantity: mostRecentOrder.quantity,
+              total_price: mostRecentOrder.total_price,
+              delivery_address: mostRecentOrder.delivery_address,
+              order_date: mostRecentOrder.order_date || mostRecentOrder.created_at
+            })
+          } else {
+            setRecentOrder(null)
+          }
         } else {
+          console.error('최근 주문 조회 실패:', orderResponse.statusText)
           setRecentOrder(null)
         }
       } else {
-        console.error('최근 주문 조회 실패:', orderResponse.statusText)
         setRecentOrder(null)
       }
 
@@ -262,7 +265,7 @@ export default function ProfilePage() {
               회원 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800">정보</span>
             </h1>
             <p className="text-xl text-stone-600">
-              내 계정 정보와 최근 주문 내역
+              {isStaffAccount ? '내 계정 정보를 확인하세요' : '내 계정 정보와 최근 주문 내역'}
             </p>
           </div>
 
@@ -360,7 +363,8 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* 최근 주문 정보 카드 (두 번째 그리드 아이템) */}
+            {/* 최근 주문 정보 카드 (직원 계정 제외) */}
+            {!isStaffAccount && (
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-amber-100">
               <h2 className="text-2xl font-bold text-stone-900 mb-6 flex items-center gap-3">
                 <span>🍽️</span>
@@ -404,6 +408,7 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
+            )}
           </div>
           
           {/* 액션 버튼들 */}

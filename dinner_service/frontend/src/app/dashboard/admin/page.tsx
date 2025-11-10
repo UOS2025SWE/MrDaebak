@@ -24,6 +24,23 @@ interface AccountingStats {
   }>
 }
 
+type IntakeHistoryItem = {
+  intake_id: string
+  staff_id: string | null
+  staff_name: string | null
+  staff_email: string | null
+  intake_items: Array<{
+    ingredient_code?: string
+    quantity?: number
+    unit?: string
+  }>
+  note: string | null
+  status: string
+  created_at: string | null
+  approved_at: string | null
+  approved_by: string | null
+}
+
 function AdminDashboardContent() {
   const { user, token } = useAuth()
   const router = useRouter()
@@ -51,6 +68,50 @@ function AdminDashboardContent() {
 
   // 재고 관리 데이터
   const [categorizedIngredients, setCategorizedIngredients] = useState<{[key: string]: IngredientCategory}>({})
+  
+  // 입고 승인 대기 목록
+  const [pendingIntakes, setPendingIntakes] = useState<Array<{
+    intake_id: string
+    staff_id: string
+    staff_name: string
+    intake_items: any
+    note: string | null
+    created_at: string | null
+    status: string
+  }>>([])
+  const [intakeHistory, setIntakeHistory] = useState<IntakeHistoryItem[]>([])
+
+  const fetchIntakeHistory = useCallback(async () => {
+    if (!token) return
+
+    try {
+      const response = await fetch(`/api/ingredients/intake/history?limit=25`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setIntakeHistory((data.history || []).map((item: any) => ({
+            intake_id: item.intake_id,
+            staff_id: item.staff_id ?? null,
+            staff_name: item.staff_name ?? null,
+            staff_email: item.staff_email ?? null,
+            intake_items: Array.isArray(item.intake_items) ? item.intake_items : [],
+            note: item.note ?? null,
+            status: item.status,
+            created_at: item.created_at ?? null,
+            approved_at: item.approved_at ?? null,
+            approved_by: item.approved_by ?? null
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('입고 기록 조회 실패:', error)
+    }
+  }, [token])
 
   // WebSocket 메시지 핸들러
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
@@ -81,9 +142,11 @@ function AdminDashboardContent() {
         fetchPendingStaff()
       } else if (activeTab === 'inventory') {
         fetchCategorizedIngredientsData()
+        fetchPendingIntakes()
+        fetchIntakeHistory()
       }
     }
-  }, [token, activeTab])
+  }, [token, activeTab, fetchIntakeHistory])
 
   const fetchAccountingStats = async () => {
     try {
@@ -151,7 +214,7 @@ function AdminDashboardContent() {
     }
   }
 
-  const handleAssignPosition = async (staffId: string, position: 'COOK' | 'DELIVERY') => {
+  const handleAssignPosition = async (staffId: string, position: 'COOK' | 'DELIVERY' | 'REJECT') => {
     try {
       const response = await fetch(`/api/staff/${staffId}/assign-position`, {
         method: 'POST',
@@ -243,6 +306,56 @@ function AdminDashboardContent() {
     } catch (error) {
       console.error('카테고리별 일괄 재입고 실패:', error)
       alert('카테고리별 일괄 재입고 중 오류가 발생했습니다.')
+    }
+  }
+
+  // 입고 승인 대기 목록 조회
+  const fetchPendingIntakes = useCallback(async () => {
+    if (!token) return
+    
+    try {
+      const response = await fetch('/api/ingredients/intake/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setPendingIntakes(data.intakes || [])
+        }
+      }
+    } catch (error) {
+      console.error('입고 승인 대기 목록 조회 실패:', error)
+    }
+  }, [token])
+
+  // 입고 승인 처리
+  const handleApproveIntake = async (intakeId: string) => {
+    if (!confirm('이 입고 기록을 승인하시겠습니까?')) return
+    
+    try {
+      const response = await fetch(`/api/ingredients/intake/${intakeId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok && data.success) {
+        alert(data.message || '입고 기록이 승인되었습니다')
+        await fetchPendingIntakes()
+        await fetchCategorizedIngredientsData()
+        await fetchIntakeHistory()
+      } else {
+        alert(data.error || data.detail || '입고 승인에 실패했습니다')
+      }
+    } catch (error) {
+      console.error('입고 승인 실패:', error)
+      alert('입고 승인 중 오류가 발생했습니다')
     }
   }
 
@@ -452,6 +565,16 @@ function AdminDashboardContent() {
                             >
                               배달원으로 할당
                             </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('정말 이 직원을 탈락시키겠습니까? 계정이 삭제됩니다.')) {
+                                  handleAssignPosition(staff.staff_id, 'REJECT')
+                                }
+                              }}
+                              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+                            >
+                              탈락
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -561,6 +684,128 @@ function AdminDashboardContent() {
 
           {!loading && activeTab === 'inventory' && (
             <div className="space-y-6">
+              {/* 입고 승인 대기 목록 */}
+              {pendingIntakes.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-2xl shadow-lg p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-2xl">⚠️</span>
+                    <h2 className="text-xl font-bold text-gray-800">입고 승인 대기 ({pendingIntakes.length}건)</h2>
+                  </div>
+                  <div className="space-y-3">
+                    {pendingIntakes.map((intake) => (
+                      <div key={intake.intake_id} className="bg-white rounded-lg p-4 border border-yellow-300">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h3 className="font-bold text-gray-900">{intake.staff_name}</h3>
+                            <p className="text-sm text-gray-600">
+                              {intake.created_at ? new Date(intake.created_at).toLocaleString('ko-KR') : ''}
+                            </p>
+                            {intake.note && (
+                              <p className="text-xs text-gray-500 mt-1">비고: {intake.note}</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleApproveIntake(intake.intake_id)}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+                          >
+                            승인
+                          </button>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-sm font-semibold text-gray-700 mb-2">입고 항목:</p>
+                          <div className="space-y-1">
+                            {Array.isArray(intake.intake_items) && intake.intake_items.map((item: any, idx: number) => (
+                              <p key={idx} className="text-xs text-gray-600">
+                                • {item.ingredient_code}: {item.quantity}개
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🗒️</span>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">최근 입고 기록</h2>
+                    <p className="text-sm text-gray-500">최근 승인 및 대기 내역을 확인하세요</p>
+                  </div>
+                  <button
+                    onClick={() => fetchIntakeHistory()}
+                    className="ml-auto px-3 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-lg transition-colors"
+                  >
+                    새로고침
+                  </button>
+                </div>
+
+                {intakeHistory.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">입고 기록이 아직 없습니다.</p>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                    {intakeHistory.map((entry) => (
+                      <div key={entry.intake_id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {entry.staff_name || '알 수 없는 직원'}
+                              {entry.staff_email && (
+                                <span className="ml-2 text-xs text-gray-500">{entry.staff_email}</span>
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {entry.created_at ? new Date(entry.created_at).toLocaleString('ko-KR') : '시간 정보 없음'}
+                            </p>
+                            {entry.note && (
+                              <p className="text-xs text-gray-600 mt-1">비고: {entry.note}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              entry.status === 'APPROVED'
+                                ? 'bg-green-100 text-green-700'
+                                : entry.status === 'PENDING'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {entry.status === 'APPROVED' ? '승인 완료' :
+                               entry.status === 'PENDING' ? '승인 대기' :
+                               entry.status}
+                            </span>
+                            {entry.approved_at && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                승인: {new Date(entry.approved_at).toLocaleString('ko-KR')}
+                                {entry.approved_by && ` · ${entry.approved_by}`}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {Array.isArray(entry.intake_items) && entry.intake_items.length > 0 && (
+                          <div className="mt-3 bg-white rounded-lg p-3 border border-gray-200">
+                            <p className="text-xs font-semibold text-gray-700 mb-2">입고 항목</p>
+                            <div className="space-y-1">
+                              {entry.intake_items.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs text-gray-600">
+                                  <span>{item.ingredient_code || '미정 재료'}</span>
+                                  <span className="font-medium">
+                                    {item.quantity ?? '-'}
+                                    {item.unit ? ` ${item.unit}` : '개'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {Object.entries(categorizedIngredients).map(([categoryKey, category]) => {
                 const typedCategory = category as IngredientCategory
                 return (

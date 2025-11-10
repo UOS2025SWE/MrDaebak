@@ -52,15 +52,28 @@ export default function Header({ currentPage }: HeaderProps) {
                 <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-amber-600 rounded-full"></span>
               )}
             </Link>
-            <Link 
-              href="/menu" 
-              className={`text-stone-700 font-medium rounded-md hover:bg-amber-50 hover:text-amber-700 transition-all duration-300 relative whitespace-nowrap ${isScrolled ? 'text-sm px-3 py-2' : 'text-base px-5 py-3'}`}
-            >
-              메뉴
-              {currentPage === 'menu' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-amber-600 rounded-full"></span>
-              )}
-            </Link>
+            {!isStaff && !isManager && (
+              <Link 
+                href="/menu" 
+                className={`text-stone-700 font-medium rounded-md hover:bg-amber-50 hover:text-amber-700 transition-all duration-300 relative whitespace-nowrap ${isScrolled ? 'text-sm px-3 py-2' : 'text-base px-5 py-3'}`}
+              >
+                메뉴
+                {currentPage === 'menu' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-amber-600 rounded-full"></span>
+                )}
+              </Link>
+            )}
+            {(isAuthenticated && !isStaff && !isManager) && (
+              <Link 
+                href="/orders" 
+                className={`text-stone-700 font-medium rounded-md hover:bg-amber-50 hover:text-amber-700 transition-all duration-300 relative whitespace-nowrap ${isScrolled ? 'text-sm px-3 py-2' : 'text-base px-5 py-3'}`}
+              >
+                주문 내역
+                {currentPage === 'orders' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-amber-600 rounded-full"></span>
+                )}
+              </Link>
+            )}
             <a href="#events" className={`text-stone-700 font-medium rounded-md hover:bg-amber-50 hover:text-amber-700 transition-all duration-300 whitespace-nowrap ${isScrolled ? 'text-sm px-3 py-2' : 'text-base px-5 py-3'}`}>
               이벤트
             </a>
@@ -72,16 +85,8 @@ export default function Header({ currentPage }: HeaderProps) {
             </a>
           </nav>
           
-          {/* Right: Action Buttons */}
+          {/* Right: User Section */}
           <div className={`flex items-center justify-self-end transition-all duration-300 ${isScrolled ? 'gap-1' : 'gap-2'}`}>
-            {/* Cart Button */}
-            <button className={`relative text-stone-600 hover:text-amber-700 transition-all duration-300 hover:bg-amber-50 rounded-md ${isScrolled ? 'p-1.5' : 'p-2'}`}>
-              <svg className={`fill-none stroke-current transition-all duration-300 ${isScrolled ? 'w-4 h-4' : 'w-5 h-5'}`} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5H17M9 19.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM20.5 19.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-              </svg>
-              {/* Badge will be shown conditionally based on cart items */}
-            </button>
-            
             {/* User Authentication Section */}
             {isAuthenticated ? (
               <UserDropdown />

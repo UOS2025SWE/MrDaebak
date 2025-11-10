@@ -62,6 +62,16 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
 
+  useEffect(() => {
+    if (authLoading) return
+
+    if (isAuthenticated && user?.user_type === 'STAFF') {
+      router.replace('/dashboard/staff')
+    } else if (isAuthenticated && user?.user_type === 'MANAGER') {
+      router.replace('/dashboard/admin')
+    }
+  }, [authLoading, isAuthenticated, router, user])
+
   // 주문 목록 불러오기 함수 (useCallback으로 분리하여 WebSocket 핸들러에서도 사용)
   const fetchOrders = useCallback(async () => {
     // AuthContext가 로딩 중이면 기다림
@@ -71,6 +81,10 @@ export default function OrdersPage() {
 
     if (!isAuthenticated || !user?.id) {
       router.push('/login')
+      return
+    }
+
+    if (user.user_type === 'STAFF' || user.user_type === 'MANAGER') {
       return
     }
 
@@ -141,6 +155,8 @@ export default function OrdersPage() {
         return 'bg-green-100 text-green-800'
       case 'CANCELLED':
         return 'bg-red-100 text-red-800'
+      case 'PAYMENT_FAILED':
+        return 'bg-orange-100 text-orange-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -158,6 +174,8 @@ export default function OrdersPage() {
         return '✅'
       case 'CANCELLED':
         return '❌'
+      case 'PAYMENT_FAILED':
+        return '💳'
       default:
         return '📦'
     }
@@ -175,6 +193,8 @@ export default function OrdersPage() {
         return '배달완료'
       case 'CANCELLED':
         return '취소'
+      case 'PAYMENT_FAILED':
+        return '결제실패'
       default:
         return '알 수 없음'
     }
@@ -303,7 +323,7 @@ export default function OrdersPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {orders.map((order) => (
+                    {orders.map((order: Order) => (
                 <div key={order.id} className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all">
                   <div className="p-6">
                     {/* 주문 헤더 */}

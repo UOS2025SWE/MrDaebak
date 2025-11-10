@@ -7,9 +7,14 @@ export interface Staff {
   id: string  // UUID
   name: string
   type: 'cook' | 'delivery'
-  status: 'free' | 'busy'
-  currentTask?: string
+  status: 'free' | 'busy' | 'off-duty'
+  currentTask?: string | null
   updatedAt: string
+  is_on_duty?: boolean
+  last_check_in?: string | null
+  last_check_out?: string | null
+  salary?: number | null
+  next_payday?: string | null
 }
 
 // 재료 정보

@@ -107,18 +107,14 @@ interface Order {
 // 주문 카드 컴포넌트
 function OrderCard({
   order,
-  isCookingCompleted,
   onStatusChange,
-  onCookingComplete,
   userPosition
 }: {
   order: Order;
-  isCookingCompleted: boolean;
-  onStatusChange: (orderId: string, newStatus: string) => void;
-  onCookingComplete: (orderId: string) => void;
+  onStatusChange: (orderId: string, newStatus: string) => Promise<void>;
   userPosition?: 'COOK' | 'DELIVERY' | 'STAFF';
 }) {
-  const getStatusDisplay = (status: string, cookingCompleted: boolean) => {
+  const getStatusDisplay = (status: string) => {
     switch (status) {
       case 'RECEIVED':
         return { text: '접수 완료', color: 'blue' };
@@ -133,32 +129,26 @@ function OrderCard({
     }
   };
 
-  const getNextAction = (status: string, cookingCompleted: boolean, position?: 'COOK' | 'DELIVERY' | 'STAFF') => {
+  const getNextAction = (status: string, position?: 'COOK' | 'DELIVERY' | 'STAFF') => {
     switch (status) {
       case 'RECEIVED':
         // 조리 수락: COOK만 가능
         if (position === 'COOK') {
-          return { label: '조리 수락', nextStatus: 'PREPARING', color: 'blue', isLocal: false };
+          return { label: '조리 수락', nextStatus: 'PREPARING', color: 'blue' };
         }
         return null;
       case 'PREPARING':
-        if (cookingCompleted) {
-          // 조리 완료 후 배달 시작: DELIVERY만 가능
-          if (position === 'DELIVERY') {
-            return { label: '배달 시작', nextStatus: 'DELIVERING', color: 'green', isLocal: false };
-          }
-          return null;
-        } else {
-          // 조리 완료: COOK만 가능
-          if (position === 'COOK') {
-            return { label: '조리 완료', nextStatus: '', color: 'amber', isLocal: true };
-          }
-          return null;
+        if (position === 'COOK' || position === 'STAFF') {
+          return { label: '조리 완료', nextStatus: 'DELIVERING', color: 'amber' };
         }
+        if (position === 'DELIVERY') {
+          return { label: '배달 시작', nextStatus: 'DELIVERING', color: 'green' };
+        }
+        return null;
       case 'DELIVERING':
         // 배달 완료: DELIVERY만 가능
-        if (position === 'DELIVERY') {
-          return { label: '배달 완료', nextStatus: 'COMPLETED', color: 'green', isLocal: false };
+        if (position === 'DELIVERY' || position === 'STAFF') {
+          return { label: '배달 완료', nextStatus: 'COMPLETED', color: 'green' };
         }
         return null;
       default:
@@ -166,8 +156,8 @@ function OrderCard({
     }
   };
 
-  const statusDisplay = getStatusDisplay(order.status, isCookingCompleted);
-  const nextAction = getNextAction(order.status, isCookingCompleted, userPosition);
+  const statusDisplay = getStatusDisplay(order.status);
+  const nextAction = getNextAction(order.status, userPosition);
 
   const styleNames: Record<string, string> = {
     'simple': '심플',
@@ -270,13 +260,12 @@ function OrderCard({
       {/* 액션 버튼 */}
       {nextAction && (
         <button
-          onClick={() => {
-            if (nextAction.isLocal) {
-              // 로컬 state만 변경 (조리 완료 → 배달 탭으로 이동)
-              onCookingComplete(order.id);
-            } else {
-              // API 호출하여 DB 상태 변경
-              onStatusChange(order.id, nextAction.nextStatus);
+          onClick={async () => {
+            try {
+              await onStatusChange(order.id, nextAction.nextStatus);
+            } catch (err) {
+              console.error('액션 처리 오류:', err);
+              // 에러는 이미 handleStatusChange에서 처리됨
             }
           }}
           className={`w-full py-3 px-4 rounded-lg font-semibold text-white transition-colors bg-gradient-to-r from-${nextAction.color}-600 to-${nextAction.color}-700 hover:from-${nextAction.color}-700 hover:to-${nextAction.color}-800 shadow-md hover:shadow-lg`}
@@ -305,8 +294,20 @@ function StaffDashboardContent() {
   const [isSubmittingIntake, setIsSubmittingIntake] = useState(false);
   const [intakeResult, setIntakeResult] = useState<string | null>(null);
 
-  // 조리 완료된 주문 추적 (로컬 state - 배달 탭으로 이동하기 위한 플래그)
-  const [cookingCompletedOrders, setCookingCompletedOrders] = useState<Set<string>>(new Set());
+  // 출퇴근 상태
+  const [isOnDuty, setIsOnDuty] = useState(false);
+  const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
+  const [lastCheckOut, setLastCheckOut] = useState<string | null>(null);
+  
+  // 월급 정보
+  const [salary, setSalary] = useState<number | null>(null);
+  const [nextPayday, setNextPayday] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.user_type === 'MANAGER') {
+      router.replace('/dashboard/admin');
+    }
+  }, [user?.user_type, router]);
 
   // 주문 목록 가져오기 (useCallback으로 메모이제이션)
   const fetchOrders = useCallback(async () => {
@@ -380,7 +381,15 @@ function StaffDashboardContent() {
         throw new Error(data.detail || data.error || '입고 처리 실패');
       }
 
-      setIntakeResult(`재료 ${data.processed.length}건 입고 완료`);
+      // 매니저는 즉시 반영, COOK은 승인 대기
+      if (data.processed && Array.isArray(data.processed)) {
+        setIntakeResult(`재료 ${data.processed.length}건 입고 완료`);
+      } else if (data.message) {
+        setIntakeResult(data.message); // "입고 기록이 제출되었습니다. 매니저 승인을 기다려주세요."
+      } else {
+        setIntakeResult('입고 기록이 제출되었습니다.');
+      }
+      
       setIntakeItems(createDefaultIntakeState());
       setIntakeNote('');
     } catch (err) {
@@ -397,8 +406,102 @@ function StaffDashboardContent() {
     return () => clearTimeout(timer);
   }, [intakeResult]);
 
+  // 출퇴근 상태 조회
+  const fetchDutyStatus = useCallback(async () => {
+    if (!token || !user?.id) return;
+    
+    try {
+      const response = await fetch('/api/staff/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          const myStaff = data.data.find((s: any) => s.id === user.id || s.staff_id === user.id);
+          if (myStaff) {
+            setIsOnDuty(myStaff.is_on_duty || false);
+            setLastCheckIn(myStaff.last_check_in || null);
+            setLastCheckOut(myStaff.last_check_out || null);
+            setSalary(myStaff.salary || null);
+            setNextPayday(myStaff.next_payday || null);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('출퇴근 상태 조회 오류:', err);
+    }
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    fetchDutyStatus();
+  }, [fetchDutyStatus]);
+
+  // 출근 처리
+  const handleCheckIn = async () => {
+    if (!token || !user?.id) return;
+    
+    try {
+      const response = await fetch(`/api/staff/${user.id}/check-in`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setIsOnDuty(true);
+        setLastCheckIn(data.last_check_in);
+        await fetchDutyStatus();
+        alert('출근 처리되었습니다');
+      } else {
+        alert(data.error || '출근 처리에 실패했습니다');
+      }
+    } catch (err) {
+      console.error('출근 처리 오류:', err);
+      alert('출근 처리 중 오류가 발생했습니다');
+    }
+  };
+
+  // 퇴근 처리
+  const handleCheckOut = async () => {
+    if (!token || !user?.id) return;
+    
+    try {
+      const response = await fetch(`/api/staff/${user.id}/check-out`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setIsOnDuty(false);
+        setLastCheckOut(data.last_check_out);
+        await fetchDutyStatus();
+        alert('퇴근 처리되었습니다');
+      } else {
+        alert(data.error || '퇴근 처리에 실패했습니다');
+      }
+    } catch (err) {
+      console.error('퇴근 처리 오류:', err);
+      alert('퇴근 처리 중 오류가 발생했습니다');
+    }
+  };
+
   // 주문 상태 변경 (API 호출)
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    if (!token) {
+      alert('인증 토큰을 확인할 수 없습니다. 다시 로그인해주세요.');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
@@ -409,26 +512,21 @@ function StaffDashboardContent() {
         body: JSON.stringify({ new_status: newStatus })
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('상태 변경에 실패했습니다');
+        throw new Error(data.detail || data.error || '상태 변경에 실패했습니다');
       }
 
       // 성공 시 주문 목록 새로고침
       await fetchOrders();
     } catch (err) {
       console.error('상태 변경 오류:', err);
-      alert('주문 상태 변경에 실패했습니다');
+      const errorMessage = err instanceof Error ? err.message : '주문 상태 변경에 실패했습니다';
+      alert(errorMessage);
+      throw err; // 상위로 에러 전파
     }
   };
-
-  // 조리 완료 처리 (로컬 state만 변경 - 배달 탭으로 이동)
-  const handleCookingComplete = useCallback((orderId: string) => {
-    setCookingCompletedOrders(prev => {
-      const newSet = new Set(prev);
-      newSet.add(orderId);
-      return newSet;
-    });
-  }, []);
 
   // WebSocket 연결 및 실시간 업데이트
   const { status: wsStatus, lastMessage } = useWebSocket({
@@ -450,14 +548,14 @@ function StaffDashboardContent() {
     }
   }, [token, fetchOrders]);
 
-  // 조리 관련 주문: RECEIVED + (PREPARING이면서 조리완료 안누른것)
+  // 조리 관련 주문: RECEIVED + PREPARING
   const cookingOrders = orders.filter(o =>
-    o.status === 'RECEIVED' || (o.status === 'PREPARING' && !cookingCompletedOrders.has(o.id))
+    o.status === 'RECEIVED' || o.status === 'PREPARING'
   );
 
-  // 배달 관련 주문: (PREPARING이면서 조리완료 누른것) + DELIVERING
+  // 배달 관련 주문: DELIVERING
   const deliveringOrders = orders.filter(o =>
-    (o.status === 'PREPARING' && cookingCompletedOrders.has(o.id)) || o.status === 'DELIVERING'
+    o.status === 'DELIVERING'
   );
 
   // 완료된 주문
@@ -499,6 +597,41 @@ function StaffDashboardContent() {
                      user?.position ? '직원' : '포지션 미정'}
                   </p>
                   <p className="text-sm font-semibold text-gray-800">{user?.name || user?.email}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      isOnDuty 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {isOnDuty ? '🟢 출근 중' : '⚪ 퇴근'}
+                    </span>
+                  </div>
+                  {user?.user_type === 'STAFF' && user?.position && salary && (
+                    <div className="mt-2 text-xs text-gray-600">
+                      <p>💰 월급: {salary.toLocaleString()}원</p>
+                      <p>📅 월급 지급일: 매월 25일</p>
+                      {nextPayday && (
+                        <p className="text-amber-600">다음 지급일: {new Date(nextPayday).toLocaleDateString('ko-KR')}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {!isOnDuty ? (
+                    <button
+                      onClick={handleCheckIn}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors shadow-md"
+                    >
+                      출근
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCheckOut}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors shadow-md"
+                    >
+                      퇴근
+                    </button>
+                  )}
                 </div>
                 <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                   <svg className="w-7 h-7 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -509,7 +642,8 @@ function StaffDashboardContent() {
             </div>
           </div>
 
-          {/* Inventory Intake Section */}
+          {/* Inventory Intake Section - COOK 또는 매니저만 표시 */}
+          {(user?.position === 'COOK' || user?.user_type === 'MANAGER') && (
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-green-100">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <div>
@@ -574,56 +708,86 @@ function StaffDashboardContent() {
               </button>
             </div>
           </div>
+          )}
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-xl shadow-md p-5 border border-blue-100">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-700">전체 주문</h3>
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+          {/* 근태 및 급여 요약 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-xl shadow-md p-5 border border-amber-100">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">현재 근무 상태</h3>
+                  <p className="text-xs text-gray-500">실시간으로 출퇴근 상태를 확인하세요</p>
                 </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  isOnDuty ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {isOnDuty ? '근무중' : '퇴근'}
+                </span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{orders.length}</p>
+              <p className="text-2xl font-bold text-gray-900 mb-2">
+                {user?.position === 'COOK' ? '요리사' :
+                 user?.position === 'DELIVERY' ? '배달원' :
+                 user?.position || '직원'}
+              </p>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>조리 대기: {cookingOrders.length}건</span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                <span>배달 진행: {deliveringOrders.length}건</span>
+              </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-5 border border-amber-100">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-700">조리 대기/중</h3>
-                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+            <div className="bg-white rounded-xl shadow-md p-5 border border-blue-100">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">나의 출근 일지</h3>
+                  <p className="text-xs text-gray-500">최근 출근/퇴근 기록을 확인하세요</p>
+                </div>
+                <button
+                  onClick={fetchDutyStatus}
+                  className="text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md transition-colors"
+                >
+                  새로고침
+                </button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">최근 출근</span>
+                  <span className="font-semibold text-gray-900">
+                    {lastCheckIn ? new Date(lastCheckIn).toLocaleString('ko-KR') : '기록 없음'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">최근 퇴근</span>
+                  <span className="font-semibold text-gray-900">
+                    {lastCheckOut ? new Date(lastCheckOut).toLocaleString('ko-KR') : '기록 없음'}
+                  </span>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{cookingOrders.length}</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-md p-5 border border-green-100">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-700">배달 중</h3>
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
-                  </svg>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">급여 정보</h3>
+                  <p className="text-xs text-gray-500">월급과 지급 일정을 확인하세요</p>
+                </div>
+                <span className="text-xl">💰</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">월급</span>
+                  <span className="font-semibold text-gray-900">
+                    {salary ? `${salary.toLocaleString()}원` : '미정'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">다음 지급일</span>
+                  <span className="font-semibold text-gray-900">
+                    {nextPayday ? new Date(nextPayday).toLocaleDateString('ko-KR') : '일정 없음'}
+                  </span>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{deliveringOrders.length}</p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-md p-5 border border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-700">완료</h3>
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{completedOrders.length}</p>
             </div>
           </div>
 
@@ -653,9 +817,7 @@ function StaffDashboardContent() {
                       <OrderCard
                         key={order.id}
                         order={order}
-                        isCookingCompleted={cookingCompletedOrders.has(order.id)}
                         onStatusChange={handleStatusChange}
-                        onCookingComplete={handleCookingComplete}
                         userPosition={user?.position}
                       />
                     ))}
@@ -690,9 +852,7 @@ function StaffDashboardContent() {
                       <OrderCard
                         key={order.id}
                         order={order}
-                        isCookingCompleted={cookingCompletedOrders.has(order.id)}
                         onStatusChange={handleStatusChange}
-                        onCookingComplete={handleCookingComplete}
                         userPosition={user?.position}
                       />
                     ))}
@@ -727,9 +887,7 @@ function StaffDashboardContent() {
                         <OrderCard
                           key={order.id}
                           order={order}
-                          isCookingCompleted={cookingCompletedOrders.has(order.id)}
                           onStatusChange={handleStatusChange}
-                          onCookingComplete={handleCookingComplete}
                           userPosition={user?.position}
                         />
                       ))}
@@ -764,9 +922,7 @@ function StaffDashboardContent() {
                         <OrderCard
                           key={order.id}
                           order={order}
-                          isCookingCompleted={cookingCompletedOrders.has(order.id)}
                           onStatusChange={handleStatusChange}
-                          onCookingComplete={handleCookingComplete}
                           userPosition={user?.position}
                         />
                       ))}

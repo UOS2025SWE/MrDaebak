@@ -362,13 +362,19 @@ class StaffService:
     def get_staff_with_order_status(self, db: Session) -> dict[str, Any]:
         """주문 상태와 연동된 직원 목록 조회 (주문 기반 자동 상태 계산)"""
         try:
-            # 데이터베이스에서 STAFF 사용자 조회
+            # 데이터베이스에서 STAFF 사용자 조회 (출퇴근 정보 포함)
             query = text("""
                 SELECT
                     u.user_id::text as id,
                     u.name,
                     sd.position,
-                    u.created_at
+                    u.created_at,
+                    sd.is_on_duty,
+                    sd.last_check_in,
+                    sd.last_check_out,
+                    sd.salary,
+                    sd.last_payday,
+                    sd.next_payday
                 FROM users u
                 INNER JOIN staff_details sd ON u.user_id = sd.staff_id
                 WHERE u.user_type = 'STAFF'
@@ -399,46 +405,66 @@ class StaffService:
             delivering_orders = [order for order in active_orders if order[2] == 'DELIVERING']
 
             # 직원 목록 생성
-            staff_list = []
-            cook_staff = []
-            delivery_staff = []
+            staff_list: list[dict[str, Any]] = []
+            cook_staff_on_duty: list[dict[str, Any]] = []
+            delivery_staff_on_duty: list[dict[str, Any]] = []
+            off_duty_staff: list[dict[str, Any]] = []
 
             for row in db_staff:
                 staff_id = row[0]
                 name = row[1]
                 position = row[2]  # 'COOK' or 'DELIVERY'
+                is_on_duty = row[4] if len(row) > 4 else False
+                last_check_in = row[5] if len(row) > 5 else None
+                last_check_out = row[6] if len(row) > 6 else None
+                salary = row[7] if len(row) > 7 else None
+                last_payday = row[8] if len(row) > 8 else None
+                next_payday = row[9] if len(row) > 9 else None
 
                 # position을 type으로 매핑
                 staff_type = 'cook' if position == 'COOK' else 'delivery' if position == 'DELIVERY' else 'cook'
 
-                staff_info = {
+                staff_info: dict[str, Any] = {
                     'id': staff_id,
                     'name': name,
                     'type': staff_type,
                     'status': 'free',
                     'currentTask': None,
-                    'updatedAt': datetime.now().isoformat()
+                    'updatedAt': datetime.now().isoformat(),
+                    'is_on_duty': is_on_duty or False,
+                    'last_check_in': last_check_in.isoformat() if last_check_in else None,
+                    'last_check_out': last_check_out.isoformat() if last_check_out else None,
+                    'salary': float(salary) if salary else None,
+                    'last_payday': last_payday.isoformat() if last_payday else None,
+                    'next_payday': next_payday.isoformat() if next_payday else None
                 }
 
+                if not is_on_duty:
+                    staff_info['status'] = 'off-duty'
+                    off_duty_staff.append(staff_info)
+                    continue
+
                 if staff_type == 'cook':
-                    cook_staff.append(staff_info)
+                    cook_staff_on_duty.append(staff_info)
                 else:
-                    delivery_staff.append(staff_info)
+                    delivery_staff_on_duty.append(staff_info)
 
             # 조리 중인 주문을 요리사에게 할당
             for i, order in enumerate(preparing_orders):
-                if i < len(cook_staff):
-                    cook_staff[i]['status'] = 'busy'
-                    cook_staff[i]['currentTask'] = f"{order[3] or '메뉴'} 조리중 ({order[1]})"
+                if i < len(cook_staff_on_duty):
+                    cook_staff_on_duty[i]['status'] = 'busy'
+                    cook_staff_on_duty[i]['currentTask'] = f"{order[3] or '메뉴'} 조리중 ({order[1]})"
 
             # 배달 중인 주문을 배달원에게 할당
             for i, order in enumerate(delivering_orders):
-                if i < len(delivery_staff):
-                    delivery_staff[i]['status'] = 'busy'
-                    delivery_staff[i]['currentTask'] = f"{order[4] or '주소'} 배달중 ({order[1]})"
+                if i < len(delivery_staff_on_duty):
+                    delivery_staff_on_duty[i]['status'] = 'busy'
+                    delivery_staff_on_duty[i]['currentTask'] = f"{order[4] or '주소'} 배달중 ({order[1]})"
 
-            # 전체 리스트 병합
-            staff_list = cook_staff + delivery_staff
+            # 전체 리스트 병합 (출근자 우선, 퇴근자는 마지막)
+            staff_list.extend(cook_staff_on_duty)
+            staff_list.extend(delivery_staff_on_duty)
+            staff_list.extend(off_duty_staff)
 
             return {
                 "success": True,

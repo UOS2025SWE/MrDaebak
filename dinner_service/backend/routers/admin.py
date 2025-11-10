@@ -188,13 +188,14 @@ async def get_accounting_stats(
     verify_admin_token(credentials)
 
     try:
-        # 총 주문 수 및 총 매출
+        # 총 주문 수 및 총 매출 (결제실패/취소 제외)
         orders_query = text("""
             SELECT
                 COUNT(*) as total_orders,
                 COALESCE(SUM(total_price), 0) as total_revenue
             FROM orders
             WHERE order_status IN ('RECEIVED', 'PREPARING', 'DELIVERING', 'COMPLETED')
+              AND order_status NOT IN ('PAYMENT_FAILED', 'CANCELLED')
         """)
         orders_result = db.execute(orders_query).fetchone()
 
@@ -223,6 +224,7 @@ async def get_accounting_stats(
             INNER JOIN order_items oi ON o.order_id = oi.order_id
             INNER JOIN menu_items mi ON oi.menu_item_id = mi.menu_item_id
             WHERE o.order_status IN ('RECEIVED', 'PREPARING', 'DELIVERING', 'COMPLETED')
+              AND o.order_status NOT IN ('PAYMENT_FAILED', 'CANCELLED')
             GROUP BY mi.name
             ORDER BY order_count DESC, total_revenue DESC
             LIMIT 5

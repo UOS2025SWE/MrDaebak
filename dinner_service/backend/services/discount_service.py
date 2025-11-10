@@ -23,28 +23,54 @@ class DiscountService:
     
     @classmethod
     def get_customer_discount_info(cls, user_id: str, db: Session) -> dict[str, Any]:
-        """고객의 할인 정보 조회 (UUID 기반)"""
+        """고객의 할인 정보 조회 (UUID 기반)
+        
+        주의: COOK이 조리 시작한(PREPARING 이상) 주문만 카운트합니다.
+        취소된 주문(RECEIVED 상태에서 취소)은 제외됩니다.
+        """
         try:
-            # 사용자의 총 주문 횟수 조회 (users + customer_loyalty)
+            # 사용자의 실제 주문 횟수 조회 (COOK이 조리 시작한 주문만)
+            # PREPARING, DELIVERING, COMPLETED 상태만 카운트 (결제실패/취소 제외)
             query = text("""
                 SELECT
-                    COALESCE(cl.order_count, 0) as order_count,
+                    COUNT(o.order_id) as order_count,
                     u.name,
                     u.email
                 FROM users u
-                LEFT JOIN customer_loyalty cl ON u.user_id = cl.customer_id
+                LEFT JOIN orders o ON u.user_id = o.customer_id
+                    AND o.order_status IN ('PREPARING', 'DELIVERING', 'COMPLETED')
+                    AND o.order_status NOT IN ('PAYMENT_FAILED', 'CANCELLED')
                 WHERE u.user_id = CAST(:user_id AS uuid)
+                GROUP BY u.user_id, u.name, u.email
             """)
 
             result = db.execute(query, {"user_id": user_id}).fetchone()
 
             if not result:
+                # 사용자 정보만 조회
+                user_query = text("""
+                    SELECT name, email
+                    FROM users
+                    WHERE user_id = CAST(:user_id AS uuid)
+                """)
+                user_result = db.execute(user_query, {"user_id": user_id}).fetchone()
+                
+                if not user_result:
+                    return {
+                        "eligible": False,
+                        "discount_rate": 0.0,
+                        "customer_type": "신규고객",
+                        "total_orders": 0,
+                        "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
+                    }
+                
                 return {
                     "eligible": False,
                     "discount_rate": 0.0,
                     "customer_type": "신규고객",
                     "total_orders": 0,
-                    "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
+                    "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD,
+                    "customer_name": user_result[0] or "고객"
                 }
 
             total_orders = result[0] or 0

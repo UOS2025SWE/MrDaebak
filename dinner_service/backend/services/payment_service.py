@@ -49,9 +49,12 @@ class PaymentService:
 
         Returns:
             유효 여부
+            
+        Raises:
+            ValueError: 카드 번호가 유효하지 않은 경우
         """
         if not card_number:
-            return False
+            raise ValueError("유효하지 않은 카드 번호입니다")
         
         # 하이픈, 공백, 모든 비숫자 제거
         card_clean = ''.join(c for c in card_number if c.isdigit())
@@ -59,8 +62,8 @@ class PaymentService:
         # 16자리 숫자인지 확인
         if len(card_clean) != 16:
             logger.warning(f"카드 번호 길이 오류: 입력={card_number}, 정제 후={card_clean}, 길이={len(card_clean)}")
-            return False
-
+            raise ValueError("유효하지 않은 카드 번호입니다")
+        
         return True
 
     @staticmethod

@@ -233,8 +233,9 @@ export default function ManagePage() {
     )
   }
 
-  const cookStaff = staffList.filter(staff => staff.type === 'cook')
-  const deliveryStaff = staffList.filter(staff => staff.type === 'delivery')
+  const cookStaff = staffList.filter(staff => staff.type === 'cook' && staff.status !== 'off-duty')
+  const deliveryStaff = staffList.filter(staff => staff.type === 'delivery' && staff.status !== 'off-duty')
+  const offDutyStaff = staffList.filter(staff => staff.status === 'off-duty')
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
@@ -273,6 +274,11 @@ export default function ManagePage() {
                 </div>
               </div>
             )}
+            {offDutyStaff.length > 0 && (
+              <p className="mt-4 text-sm text-stone-500">
+                퇴근한 직원: {offDutyStaff.length}명
+              </p>
+            )}
           </div>
 
           {/* 2컬럼 레이아웃 */}
@@ -290,29 +296,35 @@ export default function ManagePage() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {cookStaff.map((staff) => (
-                    <div 
-                      key={staff.id}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
-                        staff.status === 'free' 
-                          ? 'bg-green-50 border-green-200 hover:border-green-300' 
-                          : 'bg-red-50 border-red-200 hover:border-red-300'
-                      }`}
-                      onClick={() => toggleStaffStatus(staff.id)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-bold text-stone-900">{staff.name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          staff.status === 'free' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {staff.status === 'free' ? '자유' : '조리중'}
-                        </span>
-                      </div>
-                      {staff.currentTask && (
-                        <p className="text-sm text-stone-600">{staff.currentTask}</p>
-                      )}
+                  {cookStaff.length === 0 ? (
+                    <div className="col-span-full text-center py-10 border-2 border-dashed border-amber-200 rounded-xl text-sm text-stone-500">
+                      출근한 조리 직원이 없습니다.
                     </div>
-                  ))}
+                  ) : (
+                    cookStaff.map((staff: Staff) => (
+                      <div 
+                        key={staff.id}
+                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
+                          staff.status === 'free' 
+                            ? 'bg-green-50 border-green-200 hover:border-green-300' 
+                            : 'bg-red-50 border-red-200 hover:border-red-300'
+                        }`}
+                        onClick={() => toggleStaffStatus(staff.id)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-bold text-stone-900">{staff.name}</h3>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            staff.status === 'free' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {staff.status === 'free' ? '자유' : '조리중'}
+                          </span>
+                        </div>
+                        {staff.currentTask && (
+                          <p className="text-sm text-stone-600">{staff.currentTask}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -327,29 +339,35 @@ export default function ManagePage() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {deliveryStaff.map((staff) => (
-                    <div 
-                      key={staff.id}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
-                        staff.status === 'free' 
-                          ? 'bg-green-50 border-green-200 hover:border-green-300' 
-                          : 'bg-blue-50 border-blue-200 hover:border-blue-300'
-                      }`}
-                      onClick={() => toggleStaffStatus(staff.id)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-bold text-stone-900">{staff.name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          staff.status === 'free' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {staff.status === 'free' ? '자유' : '배달중'}
-                        </span>
-                      </div>
-                      {staff.currentTask && (
-                        <p className="text-sm text-stone-600">{staff.currentTask}</p>
-                      )}
+                  {deliveryStaff.length === 0 ? (
+                    <div className="col-span-full text-center py-10 border-2 border-dashed border-blue-200 rounded-xl text-sm text-stone-500">
+                      출근한 배달 직원이 없습니다.
                     </div>
-                  ))}
+                  ) : (
+                    deliveryStaff.map((staff: Staff) => (
+                      <div 
+                        key={staff.id}
+                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
+                          staff.status === 'free' 
+                            ? 'bg-green-50 border-green-200 hover:border-green-300' 
+                            : 'bg-blue-50 border-blue-200 hover:border-blue-300'
+                        }`}
+                        onClick={() => toggleStaffStatus(staff.id)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-bold text-stone-900">{staff.name}</h3>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            staff.status === 'free' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {staff.status === 'free' ? '자유' : '배달중'}
+                          </span>
+                        </div>
+                        {staff.currentTask && (
+                          <p className="text-sm text-stone-600">{staff.currentTask}</p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

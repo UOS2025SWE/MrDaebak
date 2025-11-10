@@ -17,7 +17,7 @@ router = APIRouter(tags=["staff"])
 
 
 class AssignPositionRequest(BaseModel):
-    position: Annotated[str, Field(pattern="^(COOK|DELIVERY)$")]  # COOK 또는 DELIVERY
+    position: Annotated[str, Field(pattern="^(COOK|DELIVERY|REJECT)$")]  # COOK, DELIVERY, 또는 REJECT (탈락)
 
 @router.get("/")
 async def get_all_staff(
@@ -119,6 +119,25 @@ async def assign_staff_position(
         if staff[1] != 'STAFF':
             raise HTTPException(status_code=400, detail="직원이 아닌 사용자입니다")
 
+        # REJECT인 경우 직원 계정 삭제
+        if request.position == "REJECT":
+            delete_query = text("""
+                DELETE FROM users
+                WHERE user_id = CAST(:staff_id AS uuid)
+                  AND user_type = 'STAFF'
+            """)
+            db.execute(delete_query, {"staff_id": staff_id})
+            db.commit()
+            
+            return {
+                "success": True,
+                "message": "직원 계정이 삭제되었습니다",
+                "staff": {
+                    "staff_id": staff_id,
+                    "status": "deleted"
+                }
+            }
+
         # 포지션에 따른 권한 및 급여 설정
         if request.position == "COOK":
             permissions = {"cook": True, "cooking_start": True, "cooking_complete": True}
@@ -183,6 +202,96 @@ async def assign_staff_position(
         return {
             "success": False,
             "error": f"포지션 할당 실패: {str(e)}"
+        }
+
+
+@router.post("/{staff_id}/check-in")
+async def check_in_staff(
+    staff_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: dict = Depends(get_current_user)
+) -> dict[str, Any]:
+    """직원 출근 처리"""
+    try:
+        # 본인만 출근 가능
+        if str(current_user.get("id")) != staff_id:
+            raise HTTPException(status_code=403, detail="본인만 출근할 수 있습니다")
+        
+        from datetime import datetime
+        check_in_query = text("""
+            UPDATE staff_details
+            SET is_on_duty = TRUE,
+                last_check_in = :check_in_time
+            WHERE staff_id = CAST(:staff_id AS uuid)
+            RETURNING is_on_duty, last_check_in
+        """)
+        
+        check_in_time = datetime.now()
+        result = db.execute(check_in_query, {
+            "staff_id": staff_id,
+            "check_in_time": check_in_time
+        }).fetchone()
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "출근 처리되었습니다",
+            "is_on_duty": result[0],
+            "last_check_in": result[1].isoformat() if result[1] else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": f"출근 처리 실패: {str(e)}"
+        }
+
+
+@router.post("/{staff_id}/check-out")
+async def check_out_staff(
+    staff_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: dict = Depends(get_current_user)
+) -> dict[str, Any]:
+    """직원 퇴근 처리"""
+    try:
+        # 본인만 퇴근 가능
+        if str(current_user.get("id")) != staff_id:
+            raise HTTPException(status_code=403, detail="본인만 퇴근할 수 있습니다")
+        
+        from datetime import datetime
+        check_out_query = text("""
+            UPDATE staff_details
+            SET is_on_duty = FALSE,
+                last_check_out = :check_out_time
+            WHERE staff_id = CAST(:staff_id AS uuid)
+            RETURNING is_on_duty, last_check_out
+        """)
+        
+        check_out_time = datetime.now()
+        result = db.execute(check_out_query, {
+            "staff_id": staff_id,
+            "check_out_time": check_out_time
+        }).fetchone()
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "퇴근 처리되었습니다",
+            "is_on_duty": result[0],
+            "last_check_out": result[1].isoformat() if result[1] else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": f"퇴근 처리 실패: {str(e)}"
         }
 
 

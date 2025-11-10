@@ -482,7 +482,7 @@ async def update_order_status(
             )
 
         # 주문 상태 유효성 검증
-        valid_statuses = ["RECEIVED", "PREPARING", "DELIVERING", "COMPLETED", "CANCELLED"]
+        valid_statuses = ["RECEIVED", "PREPARING", "DELIVERING", "COMPLETED", "CANCELLED", "PAYMENT_FAILED"]
         if request.new_status not in valid_statuses:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -491,7 +491,7 @@ async def update_order_status(
 
         # 주문 존재 여부 확인
         check_query = text("""
-            SELECT order_id, order_status
+            SELECT order_id, order_status, customer_id
             FROM orders
             WHERE order_id = CAST(:order_id AS uuid)
         """)
@@ -515,6 +515,21 @@ async def update_order_status(
             "order_id": order_id,
             "new_status": request.new_status
         }).fetchone()
+
+        # 조리 시작 시점(RECEIVED → PREPARING)에 고객 주문 횟수 증가
+        if order.order_status == 'RECEIVED' and request.new_status == 'PREPARING':
+            if order.customer_id:
+                try:
+                    from ..services.discount_service import DiscountService
+                    # 주문 총액 조회
+                    price_query = text("SELECT total_price FROM orders WHERE order_id = CAST(:order_id AS uuid)")
+                    price_result = db.execute(price_query, {"order_id": order_id}).fetchone()
+                    total_price = float(price_result[0]) if price_result and price_result[0] else 0
+                    
+                    DiscountService.increment_user_orders(str(order.customer_id), db, total_price)
+                    logger.info(f"조리 시작: 고객 주문 횟수 증가 - customer_id={order.customer_id}, order_id={order_id}")
+                except Exception as inc_error:
+                    logger.warning(f"주문 횟수 증가 실패 (상태 변경은 성공): {inc_error}")
 
         db.commit()
 

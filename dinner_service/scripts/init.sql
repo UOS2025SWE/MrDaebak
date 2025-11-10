@@ -32,8 +32,27 @@ CREATE TABLE IF NOT EXISTS staff_details (
     salary NUMERIC,
     permissions JSONB,
     hired_at TIMESTAMP DEFAULT NOW(),
+    is_on_duty BOOLEAN DEFAULT FALSE,
+    last_check_in TIMESTAMP,
+    last_check_out TIMESTAMP,
+    last_payday TIMESTAMP,
+    next_payday TIMESTAMP,
     CONSTRAINT fk_staff_user FOREIGN KEY (staff_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS ingredient_intake_requests (
+    intake_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    intake_items JSONB NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    approved_at TIMESTAMP,
+    approved_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_intake_status ON ingredient_intake_requests(status);
+CREATE INDEX IF NOT EXISTS idx_intake_staff ON ingredient_intake_requests(staff_id);
 
 CREATE TABLE IF NOT EXISTS serving_styles (
     serving_style_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -265,14 +284,25 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO users (email, password_hash, name, phone_number, address, user_type)
 VALUES
-    ('customer@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Customer', '010-1000-2000', 'Seoul', 'CUSTOMER'),
-    ('staff@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Staff', '010-3000-4000', 'Seoul', 'STAFF'),
-    ('manager@example.com', '$2b$12$tq7a9CLVXKlCwsaWkBWyncFHQkX3eGUB7n/flQKXnfY5ZwdlQriu6', 'Demo Manager', '010-5000-6000', 'Seoul', 'MANAGER')
+    ('customer@example.com', '$2b$12$aEbAF9Kz1Jf3dIisBQ3Nyut/cs6s1ChfF6MJxk1HKSlVu0m77eDmi', 'Demo Customer', '010-1000-2000', 'Seoul', 'CUSTOMER'),
+    ('delivery@example.com', '$2b$12$aEbAF9Kz1Jf3dIisBQ3Nyut/cs6s1ChfF6MJxk1HKSlVu0m77eDmi', 'Demo Delivery', '010-4000-5000', 'Seoul', 'STAFF'),
+    ('cook@example.com', '$2b$12$aEbAF9Kz1Jf3dIisBQ3Nyut/cs6s1ChfF6MJxk1HKSlVu0m77eDmi', 'Demo Cook', '010-6000-7000', 'Seoul', 'STAFF'),
+    ('manager@example.com', '$2b$12$aEbAF9Kz1Jf3dIisBQ3Nyut/cs6s1ChfF6MJxk1HKSlVu0m77eDmi', 'Demo Manager', '010-5000-6000', 'Seoul', 'MANAGER')
 ON CONFLICT (email) DO NOTHING;
 
+
+-- 직원 상세 정보 추가 (요리사 - COOK) - cook@example.com
 INSERT INTO staff_details (staff_id, store_id, position, salary, permissions)
 SELECT u.user_id, s.store_id, 'COOK', 3500000, '{"cook": true, "cooking_start": true, "cooking_complete": true}'::jsonb
 FROM users u
 JOIN stores s ON s.name = 'Main Kitchen'
-WHERE u.email = 'staff@example.com'
+WHERE u.email = 'cook@example.com'
+ON CONFLICT (staff_id) DO NOTHING;
+
+-- 직원 상세 정보 추가 (배달원 - DELIVERY)
+INSERT INTO staff_details (staff_id, store_id, position, salary, permissions)
+SELECT u.user_id, s.store_id, 'DELIVERY', 2800000, '{"delivery": true, "delivery_start": true, "delivery_complete": true}'::jsonb
+FROM users u
+JOIN stores s ON s.name = 'Main Kitchen'
+WHERE u.email = 'delivery@example.com'
 ON CONFLICT (staff_id) DO NOTHING;

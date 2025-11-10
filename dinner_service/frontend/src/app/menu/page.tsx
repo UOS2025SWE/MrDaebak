@@ -77,13 +77,26 @@ export default function MenuPage() {
   const [discountInfo, setDiscountInfo] = useState<DiscountInfo | null>(null)
   const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(null)
 
+  // 직원 및 매니저는 메뉴 페이지 접근 불가
   useEffect(() => {
+    if (user && (user.user_type === 'STAFF' || user.user_type === 'MANAGER')) {
+      router.push('/dashboard/staff')
+      return
+    }
+  }, [user, router])
+
+  useEffect(() => {
+    // 직원/매니저가 아닌 경우에만 메뉴 데이터 로드
+    if (user && (user.user_type === 'STAFF' || user.user_type === 'MANAGER')) {
+      return
+    }
+    
     fetchMenuData()
-    if (isAuthenticated && user?.id) {
+    if (isAuthenticated && user?.id && user?.user_type === 'CUSTOMER') {
       fetchDiscountInfo()
       fetchRecentOrder()
     }
-  }, [isAuthenticated, user?.id])
+  }, [isAuthenticated, user])
 
   const fetchMenuData = async () => {
     try {

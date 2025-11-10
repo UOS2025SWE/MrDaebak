@@ -241,14 +241,14 @@ class OrderService:
             pricing_info["base_price_total"] = int(base_total_decimal)
             pricing_info["customization_cost"] = int(customization_cost_decimal)
 
-            # TODO: 재료 재고 차감 임시 비활성화 (store_inventory 테이블 연동 필요)
-            # inventory_result = OrderService._consume_ingredients(db, dinner_id, style, quantity)
-            # if not inventory_result["success"]:
-            #     return {
-            #         "success": False,
-            #         "error": f"재고 부족으로 주문 생성 실패: {inventory_result['error']}",
-            #         "order": None
-            #     }
+            # 재고 확인 및 차감
+            inventory_result = OrderService._check_and_consume_ingredients(db, store_id, code, style, quantity, customizations)
+            if not inventory_result["success"]:
+                return {
+                    "success": False,
+                    "error": f"재고 부족으로 주문 생성 실패: {inventory_result['error']}",
+                    "order": None
+                }
 
             # 6. 시간 계산 (조리시간 + 배달시간)
             current_time = datetime.now()
@@ -328,9 +328,8 @@ class OrderService:
                 "price_per_item": unit_price
             })
 
-            # 고객 주문 횟수 증가 및 총 지출 업데이트 (discount_service.py 업데이트 완료)
-            if customer_id:
-                DiscountService.increment_user_orders(customer_id, db, pricing_info["final_price"])
+            # 주의: 고객 주문 횟수는 조리 시작 시점(PREPARING 상태 변경)에 업데이트됩니다.
+            # order_service.py의 update_order_status에서 처리합니다.
 
             # 모든 작업이 성공했을 때만 commit
             db.commit()
@@ -423,6 +422,116 @@ class OrderService:
                 additional_cost += unit_price * diff
 
         return additional_cost * quantity
+
+    @staticmethod
+    def _check_and_consume_ingredients(
+        db: Session,
+        store_id: str,
+        dinner_code: str,
+        style: str,
+        quantity: int,
+        customizations: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """재고 확인 및 차감"""
+        try:
+            # 기본 재료 조회
+            base_ingredients = OrderService.get_base_ingredients(db, dinner_code, style)
+            
+            # 커스터마이징으로 인한 재료 변경 계산
+            needed_ingredients: dict[str, int] = {}
+            
+            for ingredient_code, base_qty in base_ingredients.items():
+                needed_qty = base_qty * quantity
+                
+                # 커스터마이징 반영
+                if customizations:
+                    # customizations는 dict 형태: {ingredient_code: quantity_change}
+                    if ingredient_code in customizations:
+                        qty_change = customizations[ingredient_code]
+                        if qty_change > 0:
+                            needed_qty += qty_change * quantity
+                        elif qty_change < 0:
+                            needed_qty += qty_change * quantity  # 음수는 자동으로 빼짐
+                            needed_qty = max(0, needed_qty)
+                
+                if needed_qty > 0:
+                    needed_ingredients[ingredient_code] = needed_qty
+            
+            # 재고 확인
+            insufficient = []
+            for ingredient_code, needed_qty in needed_ingredients.items():
+                # 재료 ID 조회
+                ingredient_id_query = text("""
+                    SELECT ingredient_id
+                    FROM ingredients
+                    WHERE name = :name
+                """)
+                ingredient_result = db.execute(ingredient_id_query, {"name": ingredient_code}).fetchone()
+                
+                if not ingredient_result:
+                    insufficient.append(f"{ingredient_code} (재료 정보 없음)")
+                    continue
+                
+                ingredient_id = ingredient_result[0]
+                
+                # 재고 확인 (없으면 0으로 처리)
+                stock_query = text("""
+                    SELECT quantity_on_hand
+                    FROM store_inventory
+                    WHERE store_id = CAST(:store_id AS uuid)
+                      AND ingredient_id = CAST(:ingredient_id AS uuid)
+                """)
+                stock_result = db.execute(stock_query, {
+                    "store_id": store_id,
+                    "ingredient_id": ingredient_id
+                }).fetchone()
+                
+                current_stock = float(stock_result[0]) if stock_result and stock_result[0] is not None else 0
+                
+                if current_stock < needed_qty:
+                    insufficient.append(f"{ingredient_code} (필요: {needed_qty}, 현재: {current_stock})")
+            
+            if insufficient:
+                return {
+                    "success": False,
+                    "error": f"재고 부족: {', '.join(insufficient)}",
+                    "insufficient": insufficient
+                }
+            
+            # 재고 차감
+            for ingredient_code, needed_qty in needed_ingredients.items():
+                ingredient_id_query = text("""
+                    SELECT ingredient_id
+                    FROM ingredients
+                    WHERE name = :name
+                """)
+                ingredient_result = db.execute(ingredient_id_query, {"name": ingredient_code}).fetchone()
+                ingredient_id = ingredient_result[0]
+                
+                # 재고 차감 (UPSERT 방식)
+                update_query = text("""
+                    INSERT INTO store_inventory (store_id, ingredient_id, quantity_on_hand)
+                    VALUES (CAST(:store_id AS uuid), CAST(:ingredient_id AS uuid), -:quantity)
+                    ON CONFLICT (store_id, ingredient_id)
+                    DO UPDATE SET quantity_on_hand = store_inventory.quantity_on_hand - :quantity
+                """)
+                db.execute(update_query, {
+                    "store_id": store_id,
+                    "ingredient_id": ingredient_id,
+                    "quantity": needed_qty
+                })
+            
+            return {
+                "success": True,
+                "consumed": needed_ingredients
+            }
+            
+        except Exception as e:
+            logger.error(f"재고 확인/차감 중 오류: {e}")
+            return {
+                "success": False,
+                "error": f"재고 처리 중 오류가 발생했습니다: {str(e)}"
+            }
 
     @staticmethod
     def get_base_ingredients(db: Session, dinner_code: str, style: str) -> dict[str, int]:
