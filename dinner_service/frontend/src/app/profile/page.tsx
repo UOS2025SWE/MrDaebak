@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Header from '../../components/Header'
@@ -19,6 +19,16 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
   const isStaffAccount = user?.user_type === 'STAFF'
+  const isAdminAccount = useMemo(
+    () =>
+      Boolean(
+        user?.role === 'admin' ||
+          user?.is_admin === true ||
+          user?.user_type === 'MANAGER' ||
+          profile?.is_admin === true
+      ),
+    [user?.role, user?.is_admin, user?.user_type, profile?.is_admin]
+  )
 
   // 인증되지 않은 사용자는 로그인 페이지로 리다이렉트
   useEffect(() => {
@@ -73,7 +83,7 @@ export default function ProfilePage() {
       }
 
       // 2. 최근 주문 정보 조회 (직원 계정은 제외)
-      if (!isStaffAccount) {
+      if (!isStaffAccount && !isAdminAccount) {
         const orderResponse = await fetch(`/api/orders/user/${user?.id}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -265,7 +275,11 @@ export default function ProfilePage() {
               회원 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800">정보</span>
             </h1>
             <p className="text-xl text-stone-600">
-              {isStaffAccount ? '내 계정 정보를 확인하세요' : '내 계정 정보와 최근 주문 내역'}
+              {isStaffAccount
+                ? '내 계정 정보를 확인하세요'
+                : isAdminAccount
+                ? '관리자 계정 정보를 확인하세요'
+                : '내 계정 정보와 최근 주문 내역'}
             </p>
           </div>
 
@@ -364,7 +378,7 @@ export default function ProfilePage() {
             </div>
 
             {/* 최근 주문 정보 카드 (직원 계정 제외) */}
-            {!isStaffAccount && (
+            {!isStaffAccount && !isAdminAccount && (
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-amber-100">
               <h2 className="text-2xl font-bold text-stone-900 mb-6 flex items-center gap-3">
                 <span>🍽️</span>

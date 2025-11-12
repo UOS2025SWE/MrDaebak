@@ -36,6 +36,14 @@ export interface CheckoutRequest {
 
   // 커스터마이징 정보
   customizations?: { [key: string]: number } | null
+  side_dishes?: Array<{ code: string; quantity: number }>
+  cake_customization?: {
+    message?: string
+    flavor?: string
+    size?: string
+    image_path?: string
+    status?: string
+  } | null
 }
 
 export interface CheckoutResponse {

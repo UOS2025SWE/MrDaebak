@@ -8,13 +8,14 @@ import logging
 import traceback
 from typing import Any
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .discount_service import DiscountService
 from .menu_service import MenuService
+from .side_dish_service import side_dish_service
 from .websocket_manager import manager as ws_manager
 
 # 로깅 설정
@@ -36,29 +37,192 @@ INGREDIENT_UNIT_PRICES: dict[str, Decimal] = {
     "bread": Decimal("1500"),
     "heart_plate": Decimal("1000"),
     "cupid_decoration": Decimal("1500"),
-    "napkin": Decimal("500")
+    "napkin": Decimal("500"),
+    "plastic_plate": Decimal("500"),
+    "plastic_cup": Decimal("300"),
+    "paper_napkin": Decimal("100"),
+    "plastic_tray": Decimal("800"),
+    "ceramic_plate": Decimal("5000"),
+    "ceramic_cup": Decimal("3000"),
+    "cotton_napkin": Decimal("800"),
+    "wooden_tray": Decimal("4000"),
+    "plastic_wine_glass": Decimal("700"),
+    "glass_wine_glass": Decimal("3500"),
+    "linen_napkin": Decimal("1200"),
+    "vase_with_flowers": Decimal("8000"),
+    "cake_base": Decimal("12000"),
+    "buttercream_frosting": Decimal("5000"),
+    "fresh_berries": Decimal("4500"),
+    "fondant": Decimal("6000"),
+    "edible_gold_leaf": Decimal("9000"),
+    "chocolate_ganache": Decimal("5500"),
+    "cake_board": Decimal("1500"),
+    "edible_flowers": Decimal("5000")
 }
 
 
 MENU_BASE_INGREDIENTS: dict[str, dict[str, dict[str, int]]] = {
     "valentine": {
-        "simple": {"heart_plate": 1, "cupid_decoration": 1, "napkin": 1, "wine": 1, "premium_steak": 1},
-        "grand": {"heart_plate": 1, "cupid_decoration": 2, "napkin": 1, "wine": 1, "premium_steak": 1},
-        "deluxe": {"heart_plate": 1, "cupid_decoration": 3, "napkin": 2, "wine": 1, "premium_steak": 1}
+        "simple": {
+            "heart_plate": 1,
+            "cupid_decoration": 1,
+            "paper_napkin": 1,
+            "plastic_tray": 1,
+            "plastic_wine_glass": 1,
+            "wine": 1,
+            "premium_steak": 1
+        },
+        "grand": {
+            "heart_plate": 1,
+            "cupid_decoration": 2,
+            "cotton_napkin": 1,
+            "wooden_tray": 1,
+            "plastic_wine_glass": 1,
+            "wine": 1,
+            "premium_steak": 1
+        },
+        "deluxe": {
+            "heart_plate": 1,
+            "cupid_decoration": 3,
+            "linen_napkin": 2,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "glass_wine_glass": 1,
+            "wine": 1,
+            "premium_steak": 1
+        }
     },
     "french": {
-        "simple": {"coffee": 1, "wine": 1, "fresh_salad": 1, "premium_steak": 1},
-        "grand": {"coffee": 1, "wine": 1, "fresh_salad": 1, "premium_steak": 1},
-        "deluxe": {"coffee": 1, "wine": 1, "fresh_salad": 1, "premium_steak": 1}
+        "simple": {
+            "plastic_plate": 1,
+            "plastic_cup": 1,
+            "paper_napkin": 1,
+            "plastic_tray": 1,
+            "plastic_wine_glass": 1,
+            "coffee": 1,
+            "wine": 1,
+            "fresh_salad": 1,
+            "premium_steak": 1
+        },
+        "grand": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "cotton_napkin": 1,
+            "wooden_tray": 1,
+            "plastic_wine_glass": 1,
+            "coffee": 1,
+            "wine": 1,
+            "fresh_salad": 1,
+            "premium_steak": 1
+        },
+        "deluxe": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "linen_napkin": 1,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "glass_wine_glass": 1,
+            "coffee": 1,
+            "wine": 1,
+            "fresh_salad": 1,
+            "premium_steak": 1
+        }
     },
     "english": {
-        "simple": {"scrambled_eggs": 1, "bacon": 2, "bread": 1, "premium_steak": 1},
-        "grand": {"scrambled_eggs": 2, "bacon": 3, "bread": 1, "premium_steak": 1},
-        "deluxe": {"scrambled_eggs": 2, "bacon": 4, "bread": 2, "premium_steak": 1}
+        "simple": {
+            "plastic_plate": 1,
+            "plastic_cup": 1,
+            "paper_napkin": 1,
+            "plastic_tray": 1,
+            "scrambled_eggs": 1,
+            "bacon": 2,
+            "bread": 1,
+            "premium_steak": 1
+        },
+        "grand": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "cotton_napkin": 1,
+            "wooden_tray": 1,
+            "scrambled_eggs": 2,
+            "bacon": 3,
+            "bread": 1,
+            "premium_steak": 1
+        },
+        "deluxe": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "linen_napkin": 1,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "scrambled_eggs": 2,
+            "bacon": 4,
+            "bread": 2,
+            "premium_steak": 1
+        }
     },
     "champagne": {
-        "grand": {"champagne_bottle": 1, "baguette": 4, "coffee_pot": 1, "wine": 1, "premium_steak": 2},
-        "deluxe": {"champagne_bottle": 1, "baguette": 4, "coffee_pot": 1, "wine": 1, "premium_steak": 2}
+        "grand": {
+            "ceramic_plate": 2,
+            "ceramic_cup": 2,
+            "cotton_napkin": 2,
+            "wooden_tray": 1,
+            "plastic_wine_glass": 2,
+            "champagne_bottle": 1,
+            "baguette": 4,
+            "coffee_pot": 1,
+            "wine": 1,
+            "premium_steak": 2
+        },
+        "deluxe": {
+            "ceramic_plate": 2,
+            "ceramic_cup": 2,
+            "linen_napkin": 2,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "glass_wine_glass": 2,
+            "champagne_bottle": 1,
+            "baguette": 4,
+            "coffee_pot": 1,
+            "wine": 1,
+            "premium_steak": 2
+        }
+    },
+    "cake": {
+        "simple": {
+            "cake_base": 1,
+            "buttercream_frosting": 1,
+            "fresh_berries": 1,
+            "cake_board": 1,
+            "plastic_plate": 1,
+            "plastic_tray": 1,
+            "paper_napkin": 1
+        },
+        "grand": {
+            "cake_base": 1,
+            "buttercream_frosting": 1,
+            "fondant": 1,
+            "fresh_berries": 1,
+            "cake_board": 1,
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "cotton_napkin": 1,
+            "wooden_tray": 1
+        },
+        "deluxe": {
+            "cake_base": 1,
+            "buttercream_frosting": 1,
+            "fondant": 1,
+            "edible_gold_leaf": 1,
+            "chocolate_ganache": 1,
+            "edible_flowers": 1,
+            "cake_board": 1,
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "linen_napkin": 1,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1
+        }
     }
 }
 
@@ -98,10 +262,14 @@ class OrderService:
             }
         
         customizations = order_data.get("customizations")
+        side_dishes = order_data.get("side_dishes")
+        cake_customization = order_data.get("cake_customization")
 
         return OrderService._create_order_internal(
             db, dinner_id, dinner_code, style, quantity, customer_id,
-            delivery_address, order_type, special_requests, menu_name, scheduled_for, customizations
+            delivery_address, order_type, special_requests, menu_name, scheduled_for, customizations,
+            side_dishes=side_dishes,
+            cake_customization=cake_customization
         )
     
     @staticmethod
@@ -154,7 +322,9 @@ class OrderService:
         special_requests: str | None = None,
         menu_name: str | None = None,  # 메뉴 이름 (에러 메시지용)
         scheduled_for: str | None = None,
-        customizations: dict[str, Any] | None = None
+        customizations: dict[str, Any] | None = None,
+        side_dishes: list[dict[str, Any]] | None = None,
+        cake_customization: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """주문 생성"""
         try:
@@ -220,7 +390,19 @@ class OrderService:
 
             base_total_decimal = unit_price_decimal * quantity
             customization_cost_decimal = OrderService._calculate_customization_cost(db, code, style, quantity, customizations)
-            total_price_before_discount_decimal = base_total_decimal + customization_cost_decimal
+
+            side_dish_summary = OrderService._prepare_side_dishes(
+                db, side_dishes, cake_customization
+            )
+            if not side_dish_summary.get("success", False):
+                return {
+                    "success": False,
+                    "error": side_dish_summary.get("error", "사이드 디시 구성이 올바르지 않습니다."),
+                    "order": None
+                }
+
+            side_dish_total_decimal = side_dish_summary["total_price"]
+            total_price_before_discount_decimal = base_total_decimal + customization_cost_decimal + side_dish_total_decimal
             total_price_before_discount = int(total_price_before_discount_decimal)
             unit_price = int(unit_price_decimal)
 
@@ -240,9 +422,19 @@ class OrderService:
 
             pricing_info["base_price_total"] = int(base_total_decimal)
             pricing_info["customization_cost"] = int(customization_cost_decimal)
+            pricing_info["side_dish_total"] = int(side_dish_total_decimal)
 
             # 재고 확인 및 차감
-            inventory_result = OrderService._check_and_consume_ingredients(db, store_id, code, style, quantity, customizations)
+            inventory_result = OrderService._check_and_consume_ingredients(
+                db,
+                store_id,
+                code,
+                style,
+                quantity,
+                customizations,
+                extra_ingredients=side_dish_summary["ingredients"],
+                consume=False
+            )
             if not inventory_result["success"]:
                 return {
                     "success": False,
@@ -318,15 +510,56 @@ class OrderService:
                 (order_id, menu_item_id, serving_style_id, quantity, price_per_item)
                 VALUES
                 (CAST(:order_id AS uuid), CAST(:menu_item_id AS uuid), CAST(:serving_style_id AS uuid), :quantity, :price_per_item)
+                RETURNING order_item_id::text
             """)
 
-            db.execute(insert_item_query, {
+            order_item_result = db.execute(insert_item_query, {
                 "order_id": order_id,
                 "menu_item_id": dinner_id,
                 "serving_style_id": serving_style_id,
                 "quantity": quantity,
                 "price_per_item": unit_price
-            })
+            }).fetchone()
+
+            order_item_id = order_item_result[0]
+
+            if side_dish_summary["items"]:
+                insert_side_query = text("""
+                    INSERT INTO order_side_dishes
+                    (order_id, side_dish_id, quantity, price_per_unit, total_price)
+                    VALUES (
+                        CAST(:order_id AS uuid),
+                        CAST(:side_dish_id AS uuid),
+                        :quantity,
+                        :price_per_unit,
+                        :total_price
+                    )
+                """)
+
+                for side_item in side_dish_summary["items"]:
+                    price_per_unit_decimal = Decimal(str(side_item["price_per_unit"]))
+                    total_price_decimal = Decimal(str(side_item["total_price"]))
+                    db.execute(insert_side_query, {
+                        "order_id": order_id,
+                        "side_dish_id": side_item["side_dish_id"],
+                        "quantity": side_item["quantity"],
+                        "price_per_unit": price_per_unit_decimal,
+                        "total_price": total_price_decimal
+                    })
+
+            if cake_customization:
+                OrderService._store_cake_customization(
+                    db,
+                    order_item_id=order_item_id,
+                    customer_id=customer_id,
+                    customization=cake_customization
+                )
+
+            OrderService._store_inventory_reservations(
+                db,
+                order_id=order_id,
+                consumption_map=inventory_result.get("consumed", {})
+            )
 
             # 주의: 고객 주문 횟수는 조리 시작 시점(PREPARING 상태 변경)에 업데이트됩니다.
             # order_service.py의 update_order_status에서 처리합니다.
@@ -376,7 +609,9 @@ class OrderService:
                     "estimated_delivery_time": order_result[2].isoformat() if order_result[2] else None,
                     "cooking_time_minutes": cooking_time_minutes,
                     "delivery_time_minutes": delivery_time_minutes,
-                    "total_time_minutes": cooking_time_minutes + delivery_time_minutes
+                    "total_time_minutes": cooking_time_minutes + delivery_time_minutes,
+                    "side_dishes": side_dish_summary["items"],
+                    "cake_customization": cake_customization if cake_customization else None
                 },
                 "message": "주문이 성공적으로 생성되었습니다."
             }
@@ -424,13 +659,120 @@ class OrderService:
         return additional_cost * quantity
 
     @staticmethod
+    def _prepare_side_dishes(
+        db: Session,
+        side_dishes_payload: list[dict[str, Any]] | None,
+        custom_cake_customization: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        if not side_dishes_payload:
+            return {
+                "success": True,
+                "total_price": Decimal("0"),
+                "ingredients": {},
+                "items": []
+            }
+
+        aggregated_ingredients: dict[str, Decimal] = {}
+        prepared_items: list[dict[str, Any]] = []
+        total_price = Decimal("0")
+
+        for payload in side_dishes_payload:
+            if not isinstance(payload, dict):
+                return {"success": False, "error": "잘못된 사이드 디시 데이터 형식"}
+
+            code = (payload.get("code") or payload.get("side_dish_code") or "").strip().lower()
+            if not code:
+                return {"success": False, "error": "사이드 디시 코드가 필요합니다"}
+
+            try:
+                quantity = int(payload.get("quantity", 1))
+            except (TypeError, ValueError):
+                return {"success": False, "error": f"잘못된 사이드 디시 수량: {code}"}
+
+            if quantity <= 0:
+                return {"success": False, "error": f"사이드 디시 수량은 1 이상이어야 합니다: {code}"}
+
+            side_dish = side_dish_service.get_side_dish_by_code(db, code)
+            if not side_dish:
+                return {"success": False, "error": f"사이드 디시를 찾을 수 없습니다: {code}"}
+            if not side_dish.get("is_available"):
+                return {"success": False, "error": f"사이드 디시가 현재 비활성화되었습니다: {code}"}
+
+            price_per_unit = side_dish.get("base_price", Decimal("0"))
+            if not isinstance(price_per_unit, Decimal):
+                price_per_unit = Decimal(str(price_per_unit))
+
+            line_total = price_per_unit * quantity
+            total_price += line_total
+
+            ingredient_list = side_dish.get("ingredients", [])
+            flavor_code = (payload.get("flavor") or "").strip()
+            size_code = (payload.get("size") or "").strip()
+            if code == side_dish_service.CUSTOM_CAKE_CODE:
+                if not flavor_code and custom_cake_customization:
+                    flavor_code = (custom_cake_customization.get("flavor") or "").strip()
+                if not size_code and custom_cake_customization:
+                    size_code = (custom_cake_customization.get("size") or "").strip()
+
+                variant_ingredients = side_dish_service.get_custom_cake_recipe_variant(
+                    db, flavor_code, size_code
+                )
+                if variant_ingredients:
+                    ingredient_list = [
+                        {
+                            "ingredient_code": item["ingredient_code"],
+                            "quantity": item["quantity"],
+                        }
+                        for item in variant_ingredients
+                    ]
+
+            normalized_ingredients: list[dict[str, Any]] = []
+            for ingredient in ingredient_list:
+                ingredient_code = ingredient.get("ingredient_code")
+                ingredient_qty = ingredient.get("quantity", 0)
+                if not ingredient_code:
+                    continue
+                ingredient_qty_decimal = Decimal(str(ingredient_qty)) * quantity
+                aggregated_ingredients[ingredient_code] = aggregated_ingredients.get(ingredient_code, Decimal("0")) + ingredient_qty_decimal
+                normalized_ingredients.append({
+                    "ingredient_code": ingredient_code,
+                    "quantity": float(ingredient_qty_decimal)
+                })
+
+            item_payload: dict[str, Any] = {
+                "side_dish_id": side_dish["side_dish_id"],
+                "code": code,
+                "name": side_dish.get("name"),
+                "quantity": quantity,
+                "price_per_unit": float(price_per_unit),
+                "total_price": float(line_total),
+                "ingredients": normalized_ingredients
+            }
+            if code == side_dish_service.CUSTOM_CAKE_CODE:
+                item_payload["metadata"] = {
+                    "flavor": flavor_code or None,
+                    "size": size_code or None,
+                }
+
+            prepared_items.append(item_payload)
+
+        return {
+            "success": True,
+            "total_price": total_price,
+            "ingredients": aggregated_ingredients,
+            "items": prepared_items
+        }
+
+    @staticmethod
     def _check_and_consume_ingredients(
         db: Session,
         store_id: str,
         dinner_code: str,
         style: str,
         quantity: int,
-        customizations: dict[str, Any] | None = None
+        customizations: dict[str, Any] | None = None,
+        extra_ingredients: dict[str, Decimal] | None = None,
+        consume: bool = True
     ) -> dict[str, Any]:
         """재고 확인 및 차감"""
         try:
@@ -438,29 +780,45 @@ class OrderService:
             base_ingredients = OrderService.get_base_ingredients(db, dinner_code, style)
             
             # 커스터마이징으로 인한 재료 변경 계산
-            needed_ingredients: dict[str, int] = {}
+            needed_ingredients: dict[str, Decimal] = {}
             
             for ingredient_code, base_qty in base_ingredients.items():
-                needed_qty = base_qty * quantity
+                needed_qty = Decimal(str(base_qty)) * quantity
                 
                 # 커스터마이징 반영
-                if customizations:
-                    # customizations는 dict 형태: {ingredient_code: quantity_change}
-                    if ingredient_code in customizations:
-                        qty_change = customizations[ingredient_code]
-                        if qty_change > 0:
-                            needed_qty += qty_change * quantity
-                        elif qty_change < 0:
-                            needed_qty += qty_change * quantity  # 음수는 자동으로 빼짐
-                            needed_qty = max(0, needed_qty)
+                if customizations and ingredient_code in customizations:
+                    qty_change = customizations[ingredient_code]
+                    try:
+                        qty_change_decimal = Decimal(str(qty_change)) * quantity
+                    except (InvalidOperation, ValueError):
+                        qty_change_decimal = Decimal("0")
+
+                    needed_qty += qty_change_decimal
+                    if needed_qty < 0:
+                        needed_qty = Decimal("0")
                 
                 if needed_qty > 0:
                     needed_ingredients[ingredient_code] = needed_qty
+
+            if extra_ingredients:
+                for ingredient_code, additional_qty in extra_ingredients.items():
+                    additional_decimal = Decimal(str(additional_qty))
+                    if additional_decimal <= 0:
+                        continue
+                    if ingredient_code in needed_ingredients:
+                        needed_ingredients[ingredient_code] += additional_decimal
+                    else:
+                        needed_ingredients[ingredient_code] = additional_decimal
+            
+            if not needed_ingredients:
+                return {"success": True, "consumed": {}}
             
             # 재고 확인
             insufficient = []
+            ingredient_cache: dict[str, str] = {}
+            stock_cache: dict[str, float] = {}
+            
             for ingredient_code, needed_qty in needed_ingredients.items():
-                # 재료 ID 조회
                 ingredient_id_query = text("""
                     SELECT ingredient_id
                     FROM ingredients
@@ -473,8 +831,8 @@ class OrderService:
                     continue
                 
                 ingredient_id = ingredient_result[0]
+                ingredient_cache[ingredient_code] = ingredient_id
                 
-                # 재고 확인 (없으면 0으로 처리)
                 stock_query = text("""
                     SELECT quantity_on_hand
                     FROM store_inventory
@@ -486,10 +844,11 @@ class OrderService:
                     "ingredient_id": ingredient_id
                 }).fetchone()
                 
-                current_stock = float(stock_result[0]) if stock_result and stock_result[0] is not None else 0
+                current_stock = Decimal(str(stock_result[0])) if stock_result and stock_result[0] is not None else Decimal("0")
+                stock_cache[ingredient_code] = float(current_stock)
                 
                 if current_stock < needed_qty:
-                    insufficient.append(f"{ingredient_code} (필요: {needed_qty}, 현재: {current_stock})")
+                    insufficient.append(f"{ingredient_code} (필요: {float(needed_qty)}, 현재: {float(current_stock)})")
             
             if insufficient:
                 return {
@@ -498,32 +857,30 @@ class OrderService:
                     "insufficient": insufficient
                 }
             
-            # 재고 차감
-            for ingredient_code, needed_qty in needed_ingredients.items():
-                ingredient_id_query = text("""
-                    SELECT ingredient_id
-                    FROM ingredients
-                    WHERE name = :name
-                """)
-                ingredient_result = db.execute(ingredient_id_query, {"name": ingredient_code}).fetchone()
-                ingredient_id = ingredient_result[0]
-                
-                # 재고 차감 (UPSERT 방식)
-                update_query = text("""
-                    INSERT INTO store_inventory (store_id, ingredient_id, quantity_on_hand)
-                    VALUES (CAST(:store_id AS uuid), CAST(:ingredient_id AS uuid), -:quantity)
-                    ON CONFLICT (store_id, ingredient_id)
-                    DO UPDATE SET quantity_on_hand = store_inventory.quantity_on_hand - :quantity
-                """)
-                db.execute(update_query, {
-                    "store_id": store_id,
-                    "ingredient_id": ingredient_id,
-                    "quantity": needed_qty
-                })
-            
+            # consumed dict should return floats for readability
+            consumed_map = {code: float(quantity) for code, quantity in needed_ingredients.items()}
+
+            if consume:
+                for ingredient_code, needed_qty in needed_ingredients.items():
+                    ingredient_id = ingredient_cache.get(ingredient_code)
+                    if not ingredient_id:
+                        continue
+                    
+                    update_query = text("""
+                        INSERT INTO store_inventory (store_id, ingredient_id, quantity_on_hand)
+                        VALUES (CAST(:store_id AS uuid), CAST(:ingredient_id AS uuid), -:quantity)
+                        ON CONFLICT (store_id, ingredient_id)
+                        DO UPDATE SET quantity_on_hand = store_inventory.quantity_on_hand - :quantity
+                    """)
+                    db.execute(update_query, {
+                        "store_id": store_id,
+                        "ingredient_id": ingredient_id,
+                        "quantity": needed_qty
+                    })
+             
             return {
                 "success": True,
-                "consumed": needed_ingredients
+                "consumed": consumed_map
             }
             
         except Exception as e:
@@ -532,6 +889,44 @@ class OrderService:
                 "success": False,
                 "error": f"재고 처리 중 오류가 발생했습니다: {str(e)}"
             }
+
+    @staticmethod
+    def _store_inventory_reservations(
+        db: Session,
+        order_id: str,
+        consumption_map: dict[str, Any]
+    ) -> None:
+        """주문별 재고 소모 예정량을 저장"""
+        if not consumption_map:
+            return
+
+        insert_query = text(
+            """
+            INSERT INTO order_inventory_reservations (order_id, ingredient_code, quantity, consumed, created_at)
+            VALUES (CAST(:order_id AS uuid), :ingredient_code, :quantity, FALSE, NOW())
+            ON CONFLICT (order_id, ingredient_code)
+            DO UPDATE SET
+                quantity = EXCLUDED.quantity,
+                consumed = FALSE,
+                consumed_at = NULL,
+                created_at = NOW()
+            """
+        )
+
+        for ingredient_code, quantity in consumption_map.items():
+            try:
+                quantity_decimal = Decimal(str(quantity))
+            except (InvalidOperation, ValueError):
+                continue
+
+            if quantity_decimal <= 0:
+                continue
+
+            db.execute(insert_query, {
+                "order_id": order_id,
+                "ingredient_code": ingredient_code,
+                "quantity": quantity_decimal
+            })
 
     @staticmethod
     def get_base_ingredients(db: Session, dinner_code: str, style: str) -> dict[str, int]:
@@ -637,7 +1032,7 @@ class OrderService:
             for result in results:
                 order_id, order_number, order_status, total_price, delivery_address, created_at, delivery_time_estimated, menu_name, menu_code, style_name, quantity, price_per_item, order_item_id = result
 
-                # 커스터마이징 정보 조회
+                # 재료 커스터마이징 정보 조회
                 customizations = {}
                 if order_item_id:
                     customization_query = text("""
@@ -649,6 +1044,30 @@ class OrderService:
 
                     for item_name, quantity_change in customization_results:
                         customizations[item_name] = quantity_change
+
+                cake_customization = None
+                if order_item_id:
+                    cake_query = text(
+                        """
+                        SELECT image_path, message, flavor, size, status, created_at
+                        FROM cake_customizations
+                        WHERE order_item_id = CAST(:order_item_id AS uuid)
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                        """
+                    )
+                    cake_row = db.execute(
+                        cake_query, {"order_item_id": str(order_item_id)}
+                    ).fetchone()
+                    if cake_row:
+                        cake_customization = {
+                            "image_path": cake_row[0],
+                            "message": cake_row[1],
+                            "flavor": cake_row[2],
+                            "size": cake_row[3],
+                            "status": cake_row[4],
+                            "created_at": cake_row[5].isoformat() if cake_row[5] else None,
+                        }
 
                 orders.append({
                     "id": str(order_id),  # UUID를 문자열로 변환
@@ -664,7 +1083,8 @@ class OrderService:
                     "order_date": created_at.strftime("%Y-%m-%d %H:%M") if created_at else "",
                     "estimated_delivery_time": delivery_time_estimated.strftime("%Y-%m-%d %H:%M") if delivery_time_estimated else "",
                     "estimated_time_minutes": OrderService._calculate_estimated_time(order_status),
-                    "customizations": customizations if customizations else None
+                    "customizations": customizations if customizations else None,
+                    "cake_customization": cake_customization
                 })
 
             logger.info(f"사용자 주문 조회 성공: user_id={user_id}, 주문 수={len(orders)}")
@@ -703,3 +1123,204 @@ class OrderService:
             "cancelled": 0
         }
         return status_time_map.get(status, 0)
+
+    @staticmethod
+    def _store_cake_customization(
+        db: Session,
+        order_item_id: str,
+        customer_id: str | None,
+        customization: dict[str, Any]
+    ) -> None:
+        image_path = customization.get("image_path")
+        message = customization.get("message")
+        flavor = customization.get("flavor")
+        size = customization.get("size")
+        status = customization.get("status", "PENDING")
+
+        insert_query = text("""
+            INSERT INTO cake_customizations
+            (order_item_id, customer_id, image_path, message, flavor, size, status)
+            VALUES
+            (CAST(:order_item_id AS uuid), CAST(:customer_id AS uuid), :image_path, :message, :flavor, :size, :status)
+        """)
+
+        db.execute(insert_query, {
+            "order_item_id": order_item_id,
+            "customer_id": customer_id if customer_id else None,
+            "image_path": image_path,
+            "message": message,
+            "flavor": flavor,
+            "size": size,
+            "status": status
+        })
+
+    @staticmethod
+    def consume_order_inventory(
+        db: Session,
+        order_id: str
+    ) -> dict[str, Any]:
+        """저장된 예약 정보를 바탕으로 실제 재고를 차감"""
+        try:
+            order_meta_query = text(
+                """
+                SELECT store_id::text, COALESCE(inventory_consumed, FALSE) AS inventory_consumed
+                FROM orders
+                WHERE order_id = CAST(:order_id AS uuid)
+                """
+            )
+
+            order_meta = db.execute(order_meta_query, {"order_id": order_id}).fetchone()
+            if not order_meta:
+                return {"success": False, "error": "주문을 찾을 수 없습니다"}
+
+            if order_meta.inventory_consumed:
+                return {"success": True, "consumed": {}, "skipped": True}
+
+            store_id = order_meta.store_id
+            if not store_id:
+                store_id = OrderService._get_main_store_id(db)
+
+            if not store_id:
+                return {"success": False, "error": "스토어 정보를 찾을 수 없습니다"}
+
+            reservations_query = text(
+                """
+                SELECT ingredient_code, quantity
+                FROM order_inventory_reservations
+                WHERE order_id = CAST(:order_id AS uuid)
+                  AND consumed = FALSE
+                """
+            )
+
+            reservations = db.execute(reservations_query, {"order_id": order_id}).fetchall()
+
+            if not reservations:
+                update_flag = text(
+                    """
+                    UPDATE orders
+                    SET inventory_consumed = TRUE
+                    WHERE order_id = CAST(:order_id AS uuid)
+                    """
+                )
+                db.execute(update_flag, {"order_id": order_id})
+                return {"success": True, "consumed": {}, "skipped": True}
+
+            needed_ingredients: dict[str, Decimal] = {}
+            for ingredient_code, quantity in reservations:
+                try:
+                    qty_decimal = Decimal(str(quantity))
+                except (InvalidOperation, ValueError):
+                    return {"success": False, "error": f"재고 수량 변환에 실패했습니다: {ingredient_code}"}
+
+                if qty_decimal <= 0:
+                    continue
+                needed_ingredients[ingredient_code] = qty_decimal
+
+            ingredient_cache: dict[str, str] = {}
+            insufficient: list[str] = []
+
+            for ingredient_code, needed_qty in needed_ingredients.items():
+                ingredient_row = db.execute(
+                    text("""
+                        SELECT ingredient_id
+                        FROM ingredients
+                        WHERE name = :name
+                    """),
+                    {"name": ingredient_code}
+                ).fetchone()
+
+                if not ingredient_row:
+                    insufficient.append(f"{ingredient_code} (재료 정보 없음)")
+                    continue
+
+                ingredient_id = ingredient_row[0]
+                ingredient_cache[ingredient_code] = ingredient_id
+
+                stock_row = db.execute(
+                    text("""
+                        SELECT quantity_on_hand
+                        FROM store_inventory
+                        WHERE store_id = CAST(:store_id AS uuid)
+                          AND ingredient_id = CAST(:ingredient_id AS uuid)
+                    """),
+                    {"store_id": store_id, "ingredient_id": ingredient_id}
+                ).fetchone()
+
+                current_stock = Decimal(str(stock_row[0])) if stock_row and stock_row[0] is not None else Decimal("0")
+
+                if current_stock < needed_qty:
+                    insufficient.append(
+                        f"{ingredient_code} (필요: {float(needed_qty)}, 현재: {float(current_stock)})"
+                    )
+
+            if insufficient:
+                return {
+                    "success": False,
+                    "error": f"재고 부족: {', '.join(insufficient)}",
+                    "insufficient": insufficient
+                }
+
+            for ingredient_code, needed_qty in needed_ingredients.items():
+                ingredient_id = ingredient_cache.get(ingredient_code)
+                if not ingredient_id:
+                    continue
+
+                db.execute(
+                    text("""
+                        INSERT INTO store_inventory (store_id, ingredient_id, quantity_on_hand)
+                        VALUES (CAST(:store_id AS uuid), CAST(:ingredient_id AS uuid), -:quantity)
+                        ON CONFLICT (store_id, ingredient_id)
+                        DO UPDATE SET quantity_on_hand = store_inventory.quantity_on_hand - :quantity
+                    """),
+                    {
+                        "store_id": store_id,
+                        "ingredient_id": ingredient_id,
+                        "quantity": needed_qty
+                    }
+                )
+
+            db.execute(
+                text("""
+                    UPDATE order_inventory_reservations
+                    SET consumed = TRUE,
+                        consumed_at = NOW()
+                    WHERE order_id = CAST(:order_id AS uuid)
+                """),
+                {"order_id": order_id}
+            )
+
+            db.execute(
+                text("""
+                    UPDATE orders
+                    SET inventory_consumed = TRUE
+                    WHERE order_id = CAST(:order_id AS uuid)
+                """),
+                {"order_id": order_id}
+            )
+
+            return {
+                "success": True,
+                "consumed": {code: float(qty) for code, qty in needed_ingredients.items()}
+            }
+
+        except Exception as exc:
+            logger.error(f"주문 재고 차감 실패: {exc}")
+            return {"success": False, "error": f"재고 차감 실패: {exc}"}
+
+    @classmethod
+    def _get_main_store_id(cls, db: Session) -> str | None:
+        """메인 스토어 ID 조회"""
+        try:
+            store_query = text(
+                """
+                SELECT store_id::text
+                FROM stores
+                ORDER BY created_at ASC
+                LIMIT 1
+                """
+            )
+            row = db.execute(store_query).fetchone()
+            return row[0] if row else None
+        except Exception as exc:
+            logger.error(f"스토어 ID 조회 실패: {exc}")
+            return None

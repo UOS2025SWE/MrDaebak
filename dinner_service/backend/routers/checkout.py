@@ -63,6 +63,8 @@ class CheckoutRequest(BaseModel):
 
     # 커스터마이징 정보 (선택)
     customizations: Optional[dict[str, int]] = Field(None, description="재료 커스터마이징 정보 {재료명: 수량}")
+    side_dishes: Optional[list[dict[str, Any]]] = Field(None, description="추가 사이드 디시 [{code, quantity}]")
+    cake_customization: Optional[dict[str, Any]] = Field(None, description="케이크 커스터마이징 정보")
 
 
 class CheckoutResponse(BaseModel):
@@ -118,7 +120,9 @@ async def process_checkout(
                 "order_type": "gui",
                 "scheduled_for": scheduled_for_iso,
                 "special_requests": request.delivery.delivery_notes,
-                "customizations": request.customizations
+                "customizations": request.customizations,
+                "side_dishes": request.side_dishes,
+                "cake_customization": request.cake_customization
             }
         )
 

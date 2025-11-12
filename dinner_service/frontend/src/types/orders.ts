@@ -13,4 +13,12 @@ export interface Order {
   status: string
   order_date: string
   estimated_time_minutes: number
+  side_dishes?: Array<{ code: string; name?: string; quantity: number; total_price?: number }>;
+  cake_customization?: {
+    message?: string
+    flavor?: string
+    size?: string
+    image_path?: string
+    status?: string
+  } | null;
 }

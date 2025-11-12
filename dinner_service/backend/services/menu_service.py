@@ -17,23 +17,166 @@ logger = logging.getLogger(__name__)
 
 MENU_BASE_INGREDIENTS: dict[str, dict[str, dict[str, int]]] = {
     "valentine": {
-        "simple": {"heart_plate": 1, "cupid_decoration": 1, "napkin": 1, "wine": 1, "premium_steak": 1},
-        "grand": {"heart_plate": 1, "cupid_decoration": 2, "napkin": 1, "wine": 1, "premium_steak": 1},
-        "deluxe": {"heart_plate": 1, "cupid_decoration": 3, "napkin": 2, "wine": 1, "premium_steak": 1}
+        "simple": {
+            "heart_plate": 1,
+            "cupid_decoration": 1,
+            "paper_napkin": 1,
+            "plastic_tray": 1,
+            "plastic_wine_glass": 1,
+            "wine": 1,
+            "premium_steak": 1
+        },
+        "grand": {
+            "heart_plate": 1,
+            "cupid_decoration": 2,
+            "cotton_napkin": 1,
+            "wooden_tray": 1,
+            "plastic_wine_glass": 1,
+            "wine": 1,
+            "premium_steak": 1
+        },
+        "deluxe": {
+            "heart_plate": 1,
+            "cupid_decoration": 3,
+            "linen_napkin": 2,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "glass_wine_glass": 1,
+            "wine": 1,
+            "premium_steak": 1
+        }
     },
     "french": {
-        "simple": {"coffee": 1, "wine": 1, "fresh_salad": 1, "premium_steak": 1},
-        "grand": {"coffee": 1, "wine": 1, "fresh_salad": 1, "premium_steak": 1},
-        "deluxe": {"coffee": 1, "wine": 1, "fresh_salad": 1, "premium_steak": 1}
+        "simple": {
+            "plastic_plate": 1,
+            "plastic_cup": 1,
+            "paper_napkin": 1,
+            "plastic_tray": 1,
+            "plastic_wine_glass": 1,
+            "coffee": 1,
+            "wine": 1,
+            "fresh_salad": 1,
+            "premium_steak": 1
+        },
+        "grand": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "cotton_napkin": 1,
+            "wooden_tray": 1,
+            "plastic_wine_glass": 1,
+            "coffee": 1,
+            "wine": 1,
+            "fresh_salad": 1,
+            "premium_steak": 1
+        },
+        "deluxe": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "linen_napkin": 1,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "glass_wine_glass": 1,
+            "coffee": 1,
+            "wine": 1,
+            "fresh_salad": 1,
+            "premium_steak": 1
+        }
     },
     "english": {
-        "simple": {"scrambled_eggs": 1, "bacon": 2, "bread": 1, "premium_steak": 1},
-        "grand": {"scrambled_eggs": 2, "bacon": 3, "bread": 1, "premium_steak": 1},
-        "deluxe": {"scrambled_eggs": 2, "bacon": 4, "bread": 2, "premium_steak": 1}
+        "simple": {
+            "plastic_plate": 1,
+            "plastic_cup": 1,
+            "paper_napkin": 1,
+            "plastic_tray": 1,
+            "scrambled_eggs": 1,
+            "bacon": 2,
+            "bread": 1,
+            "premium_steak": 1
+        },
+        "grand": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "cotton_napkin": 1,
+            "wooden_tray": 1,
+            "scrambled_eggs": 2,
+            "bacon": 3,
+            "bread": 1,
+            "premium_steak": 1
+        },
+        "deluxe": {
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "linen_napkin": 1,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "scrambled_eggs": 2,
+            "bacon": 4,
+            "bread": 2,
+            "premium_steak": 1
+        }
     },
     "champagne": {
-        "grand": {"champagne_bottle": 1, "baguette": 4, "coffee_pot": 1, "wine": 1, "premium_steak": 2},
-        "deluxe": {"champagne_bottle": 1, "baguette": 4, "coffee_pot": 1, "wine": 1, "premium_steak": 2}
+        "grand": {
+            "ceramic_plate": 2,
+            "ceramic_cup": 2,
+            "cotton_napkin": 2,
+            "wooden_tray": 1,
+            "plastic_wine_glass": 2,
+            "champagne_bottle": 1,
+            "baguette": 4,
+            "coffee_pot": 1,
+            "wine": 1,
+            "premium_steak": 2
+        },
+        "deluxe": {
+            "ceramic_plate": 2,
+            "ceramic_cup": 2,
+            "linen_napkin": 2,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1,
+            "glass_wine_glass": 2,
+            "champagne_bottle": 1,
+            "baguette": 4,
+            "coffee_pot": 1,
+            "wine": 1,
+            "premium_steak": 2
+        }
+    },
+    "cake": {
+        "simple": {
+            "cake_base": 1,
+            "buttercream_frosting": 1,
+            "fresh_berries": 1,
+            "cake_board": 1,
+            "plastic_plate": 1,
+            "plastic_tray": 1,
+            "paper_napkin": 1
+        },
+        "grand": {
+            "cake_base": 1,
+            "buttercream_frosting": 1,
+            "fondant": 1,
+            "fresh_berries": 1,
+            "cake_board": 1,
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "cotton_napkin": 1,
+            "wooden_tray": 1
+        },
+        "deluxe": {
+            "cake_base": 1,
+            "buttercream_frosting": 1,
+            "fondant": 1,
+            "edible_gold_leaf": 1,
+            "chocolate_ganache": 1,
+            "edible_flowers": 1,
+            "cake_board": 1,
+            "ceramic_plate": 1,
+            "ceramic_cup": 1,
+            "linen_napkin": 1,
+            "wooden_tray": 1,
+            "vase_with_flowers": 1
+        }
     }
 }
 
@@ -42,6 +185,25 @@ class MenuService:
 
     _menu_data = None
     _operation_config = None
+    _main_store_id: str | None = None
+
+    @classmethod
+    def _get_main_store_id(cls, db: Session) -> str | None:
+        """메인 스토어 ID 조회 (캐싱)"""
+        if cls._main_store_id is None:
+            try:
+                query = text("SELECT store_id::text FROM stores ORDER BY created_at ASC LIMIT 1")
+                result = db.execute(query).fetchone()
+                if result:
+                    cls._main_store_id = result[0]
+                else:
+                    logger.error("스토어가 존재하지 않습니다")
+                    return None
+            except Exception as e:
+                logger.error(f"스토어 ID 조회 실패: {e}")
+                return None
+
+        return cls._main_store_id
 
     @classmethod
     def _load_menu_data(cls) -> dict[str, Any]:
@@ -71,13 +233,65 @@ class MenuService:
                     cls._operation_config = json.load(f)
             except Exception as e:
                 logger.error(f"운영 설정 로드 실패: {e}")
-                cls._operation_config = {
-                    "cooking_times": {},
-                    "style_pricing": {"simple": 0, "grand": 5000, "deluxe": 10000},
-                    "delivery_config": {"base_time": 20}
-                }
+                cls._operation_config = {}
 
         return cls._operation_config
+
+    @classmethod
+    def _calculate_style_availability(
+        cls,
+        db: Session,
+        menu_code: str,
+        base_ingredient_map: dict[str, dict[str, int]] | None
+    ) -> dict[str, bool]:
+        """스타일별 재료 가용성 계산"""
+        if not base_ingredient_map:
+            return {}
+
+        store_id = cls._get_main_store_id(db)
+        if not store_id:
+            return {style: True for style in base_ingredient_map.keys()}
+
+        ingredient_codes: set[str] = set()
+        for ingredients in base_ingredient_map.values():
+            ingredient_codes.update(ingredients.keys())
+
+        if not ingredient_codes:
+            return {style: True for style in base_ingredient_map.keys()}
+
+        placeholders = ", ".join(f":code_{idx}" for idx, _ in enumerate(ingredient_codes))
+        query = text(
+            f"""
+            SELECT i.name, COALESCE(si.quantity_on_hand, 0) AS quantity_on_hand
+            FROM ingredients i
+            LEFT JOIN store_inventory si
+                ON si.ingredient_id = i.ingredient_id
+               AND si.store_id = CAST(:store_id AS uuid)
+            WHERE i.name IN ({placeholders})
+            """
+        )
+
+        params: dict[str, Any] = {"store_id": store_id}
+        for idx, code in enumerate(ingredient_codes):
+            params[f"code_{idx}"] = code
+
+        rows = db.execute(query, params).fetchall()
+        inventory_map = {
+            row[0]: float(row[1]) if row[1] is not None else 0.0
+            for row in rows
+        }
+
+        availability: dict[str, bool] = {}
+        for style, ingredients in base_ingredient_map.items():
+            style_available = True
+            for ingredient_code, required_qty in ingredients.items():
+                available_qty = inventory_map.get(ingredient_code, 0.0)
+                if available_qty < required_qty:
+                    style_available = False
+                    break
+            availability[style] = style_available
+
+        return availability
 
     @staticmethod
     def get_menu_data(db: Session) -> dict[str, Any]:
@@ -119,13 +333,19 @@ class MenuService:
                 korean_description = menu_info.get("description", description or "")
 
                 base_ingredient_map = MenuService._get_base_ingredients_for_menu(db, code)
+                style_availability = MenuService._calculate_style_availability(db, code, base_ingredient_map)
 
                 # 스타일별 정보 조회
-                # menu_item_id는 UUID 객체이므로 그대로 전달
-                styles = MenuService._get_styles_for_menu(db, menu_item_id, code, base_price, base_ingredient_map)
+                styles = MenuService._get_styles_for_menu(
+                    db,
+                    menu_item_id,
+                    code,
+                    base_price,
+                    base_ingredient_map,
+                    style_availability
+                )
 
-                # 재고 확인
-                available = MenuService._check_menu_availability(db, str(menu_item_id))
+                has_available_style = any(style.get("available", True) for style in styles)
 
                 menu_list.append({
                     "id": str(menu_item_id),  # UUID를 문자열로 변환
@@ -134,7 +354,7 @@ class MenuService:
                     "description": korean_description,  # 한글 설명 사용
                     "base_price": int(base_price) if base_price else 50000,
                     "styles": styles,
-                    "available": available and is_available,
+                    "available": bool(is_available and has_available_style),
                     "image_url": f"/images/{code}-dinner.jpg"
                 })
 
@@ -156,7 +376,8 @@ class MenuService:
         menu_item_id,
         menu_code: str,
         base_price: Decimal | float | int,
-        base_ingredient_map: dict[str, dict[str, int]] | None = None
+        base_ingredient_map: dict[str, dict[str, int]] | None = None,
+        style_availability: dict[str, bool] | None = None
     ) -> list[dict[str, Any]]:
         """특정 메뉴 항목의 서빙 스타일 정보 조회 (menu_serving_style_availability 조인)"""
         try:
@@ -183,6 +404,8 @@ class MenuService:
                 base_amount = Decimal("0")
             else:
                 base_amount = base_price if isinstance(base_price, Decimal) else Decimal(str(base_price))
+
+            availability_map = style_availability or {}
 
             for result in results:
                 serving_style_id, name, description, price_modifier = result
@@ -213,7 +436,8 @@ class MenuService:
                     "price": final_price,
                     "cooking_time": cooking_time,  # 스타일별 조리시간 사용
                     "description": korean_description or description or "",  # 한글 설명 우선 사용
-                    "base_ingredients": base_ingredient_map.get(style_code, {}) if base_ingredient_map else {}
+                    "base_ingredients": base_ingredient_map.get(style_code, {}) if base_ingredient_map else {},
+                    "available": availability_map.get(style_code, True)
                 })
 
             return styles
@@ -321,6 +545,100 @@ class MenuService:
         return result
 
     @staticmethod
+    def upsert_base_ingredient(
+        db: Session,
+        menu_code: str,
+        style: str,
+        ingredient_code: str,
+        base_quantity: int
+    ) -> dict[str, Any]:
+        try:
+            style_key = style.lower().strip()
+            ingredient_key = (ingredient_code or "").strip()
+            if not menu_code or not style_key or not ingredient_key:
+                return {"success": False, "error": "메뉴, 스타일, 재료 정보를 확인해주세요"}
+
+            quantity = int(base_quantity)
+            if quantity < 0:
+                return {"success": False, "error": "수량은 0 이상이어야 합니다"}
+
+            ingredient_check = text("""
+                SELECT ingredient_id
+                FROM ingredients
+                WHERE name = :name
+            """)
+            ingredient_row = db.execute(ingredient_check, {"name": ingredient_key}).fetchone()
+            if not ingredient_row:
+                return {"success": False, "error": "존재하지 않는 재료입니다"}
+
+            upsert_query = text("""
+                INSERT INTO menu_base_ingredients (menu_code, style, ingredient_code, base_quantity)
+                VALUES (:menu_code, :style, :ingredient_code, :base_quantity)
+                ON CONFLICT (menu_code, style, ingredient_code)
+                DO UPDATE SET base_quantity = EXCLUDED.base_quantity
+            """)
+            db.execute(upsert_query, {
+                "menu_code": menu_code,
+                "style": style_key,
+                "ingredient_code": ingredient_key,
+                "base_quantity": quantity
+            })
+
+            db.commit()
+            return {
+                "success": True,
+                "menu_code": menu_code,
+                "style": style_key,
+                "ingredient_code": ingredient_key,
+                "base_quantity": quantity
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error(f"기본 재료 업데이트 실패: {e}")
+            return {"success": False, "error": f"기본 재료 업데이트 실패: {str(e)}"}
+
+    @staticmethod
+    def remove_base_ingredient(
+        db: Session,
+        menu_code: str,
+        style: str,
+        ingredient_code: str
+    ) -> dict[str, Any]:
+        try:
+            style_key = style.lower().strip()
+            ingredient_key = (ingredient_code or "").strip()
+            if not menu_code or not style_key or not ingredient_key:
+                return {"success": False, "error": "메뉴, 스타일, 재료 정보를 확인해주세요"}
+
+            delete_query = text("""
+                DELETE FROM menu_base_ingredients
+                WHERE menu_code = :menu_code
+                  AND style = :style
+                  AND ingredient_code = :ingredient_code
+            """)
+            result = db.execute(delete_query, {
+                "menu_code": menu_code,
+                "style": style_key,
+                "ingredient_code": ingredient_key
+            })
+
+            if result.rowcount == 0:
+                db.rollback()
+                return {"success": False, "error": "해당 재료 구성을 찾을 수 없습니다"}
+
+            db.commit()
+            return {
+                "success": True,
+                "menu_code": menu_code,
+                "style": style_key,
+                "ingredient_code": ingredient_key
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error(f"기본 재료 삭제 실패: {e}")
+            return {"success": False, "error": f"기본 재료 삭제 실패: {str(e)}"}
+
+    @staticmethod
     def _get_style_korean_name(style: str) -> str:
         """스타일 영문명을 한글로 변환"""
         style_names = {
@@ -349,19 +667,6 @@ class MenuService:
             "deluxe": "꽃들이 있는 작은 꽃병, 도자기 접시와 도자기 컵, 린넨 냅킨이 나무 쟁반에 제공"
         }
         return descriptions.get(style, "")
-
-    @staticmethod
-    def _check_menu_availability(db: Session, item_id: str) -> bool:
-        """메뉴 재고 가용성 체크 (store_inventory 연동 대기)"""
-        try:
-            # 간단한 재고 확인 (store_inventory 테이블 연동 예정)
-            # 현재는 항상 true 반환, 추후 재고 시스템과 연동
-            return True
-
-        except Exception as e:
-            logger.error(f"재고 확인 중 오류 (item_id: {item_id}): {e}")
-            return False
-
 
     @staticmethod
     def get_cooking_time(dinner_code: str, style: str) -> int:

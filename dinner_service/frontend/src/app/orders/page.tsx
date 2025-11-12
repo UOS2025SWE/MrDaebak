@@ -10,45 +10,66 @@ import type { Order } from '@/types/orders'
 
 // 재료 한글 이름 매핑
 const ingredientNames: { [key: string]: string } = {
-  // Valentine 디너 구성품
   heart_plate: '하트 모양 접시',
   cupid_decoration: '큐피드 장식',
   napkin: '냅킨',
+  paper_napkin: '종이 냅킨',
+  cotton_napkin: '면 냅킨',
+  linen_napkin: '린넨 냅킨',
+  plastic_tray: '플라스틱 쟁반',
+  wooden_tray: '나무 쟁반',
+  plastic_plate: '플라스틱 접시',
+  plastic_cup: '플라스틱 컵',
+  ceramic_plate: '도자기 접시',
+  ceramic_cup: '도자기 컵',
+  plastic_wine_glass: '플라스틱 와인잔',
+  glass_wine_glass: '유리 와인잔',
+  vase_with_flowers: '꽃병 장식',
   wine: '와인',
   premium_steak: '프리미엄 스테이크',
-  // French 디너 구성품
   coffee: '커피',
   fresh_salad: '신선한 샐러드',
-  // English 디너 구성품
   scrambled_eggs: '에그 스크램블',
   bacon: '베이컨',
   bread: '빵',
-  // Champagne 디너 구성품
   champagne_bottle: '샴페인',
   baguette: '바게트빵',
-  coffee_pot: '커피 포트'
+  coffee_pot: '커피 포트',
+  cake_base: '케이크 시트',
+  buttercream_frosting: '버터크림',
+  fresh_berries: '신선한 베리',
+  fondant: '폰단트',
+  edible_gold_leaf: '식용 금박',
+  chocolate_ganache: '초콜릿 가나슈',
+  cake_board: '케이크 보드',
+  edible_flowers: '식용 꽃'
 }
 
 // 메뉴별/스타일별 기본 재료 수량 매핑
 const menuIngredients: Record<string, Record<string, Record<string, number>>> = {
   valentine: {
-    simple: { heart_plate: 1, cupid_decoration: 1, napkin: 1, wine: 1, premium_steak: 1 },
-    grand: { heart_plate: 1, cupid_decoration: 2, napkin: 1, wine: 1, premium_steak: 1 },
-    deluxe: { heart_plate: 1, cupid_decoration: 3, napkin: 2, wine: 1, premium_steak: 1 }
+    simple: { heart_plate: 1, cupid_decoration: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
+    grand: { heart_plate: 1, cupid_decoration: 2, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
+    deluxe: { heart_plate: 1, cupid_decoration: 3, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, wine: 1, premium_steak: 1 }
   },
   french: {
-    simple: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    grand: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    deluxe: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
+    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
+    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
+    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
   },
   english: {
-    simple: { scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
-    grand: { scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
-    deluxe: { scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
+    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
+    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
+    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
   },
   champagne: {
-    grand: { champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
-    deluxe: { champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
+    grand: { ceramic_plate: 2, ceramic_cup: 2, cotton_napkin: 2, wooden_tray: 1, plastic_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
+    deluxe: { ceramic_plate: 2, ceramic_cup: 2, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
+  },
+  cake: {
+    simple: { cake_base: 1, buttercream_frosting: 1, fresh_berries: 1, cake_board: 1, plastic_plate: 1, plastic_tray: 1, paper_napkin: 1 },
+    grand: { cake_base: 1, buttercream_frosting: 1, fondant: 1, fresh_berries: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1 },
+    deluxe: { cake_base: 1, buttercream_frosting: 1, fondant: 1, edible_gold_leaf: 1, chocolate_ganache: 1, edible_flowers: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1 }
   }
 }
 
@@ -524,6 +545,51 @@ export default function OrdersPage() {
                   })()}
                 </div>
               </div>
+
+              {selectedOrder.cake_customization && (
+                <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl p-5">
+                  <h3 className="text-lg font-bold text-pink-800 mb-3">🎂 커스터마이징 케이크</h3>
+                  <div className="space-y-2 text-sm text-pink-900">
+                    {selectedOrder.cake_customization.message && (
+                      <div>
+                        <span className="font-medium text-pink-900">메시지: </span>
+                        {selectedOrder.cake_customization.message}
+                      </div>
+                    )}
+                    {selectedOrder.cake_customization.flavor && (
+                      <div>
+                        <span className="font-medium text-pink-900">맛: </span>
+                        {selectedOrder.cake_customization.flavor}
+                      </div>
+                    )}
+                    {selectedOrder.cake_customization.size && (
+                      <div>
+                        <span className="font-medium text-pink-900">사이즈: </span>
+                        {selectedOrder.cake_customization.size}
+                      </div>
+                    )}
+                    {selectedOrder.cake_customization.status && (
+                      <div className="text-xs text-pink-600">
+                        상태: {selectedOrder.cake_customization.status === 'REQUESTED' ? '요청됨' : selectedOrder.cake_customization.status}
+                      </div>
+                    )}
+                    {selectedOrder.cake_customization.image_path ? (
+                      <a
+                        href={selectedOrder.cake_customization.image_path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-xs text-pink-600 underline"
+                      >
+                        참고 이미지 보기
+                      </a>
+                    ) : (
+                      <p className="text-xs text-pink-700">
+                        참고 이미지가 등록되지 않았습니다.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* 가격 정보 */}
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5">

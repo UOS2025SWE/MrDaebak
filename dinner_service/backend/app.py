@@ -11,7 +11,7 @@ import os
 import httpx
 
 # 라우터 임포트
-from .routers import auth, menu, order, discount, admin, voice, staff, ingredients, checkout, websocket
+from .routers import auth, menu, order, discount, admin, voice, staff, ingredients, checkout, websocket, side_dishes, cake
 
 # 데이터베이스 서비스 임포트
 from .services.database import init_database
@@ -63,6 +63,8 @@ app.include_router(admin.router, prefix="/api/admin")
 app.include_router(voice.router, prefix="/api/voice")
 app.include_router(staff.router, prefix="/api/staff")
 app.include_router(ingredients.router, prefix="/api/ingredients")
+app.include_router(side_dishes.router, prefix="/api/side-dishes")
+app.include_router(cake.router, prefix="/api/cake")
 app.include_router(checkout.router, prefix="/api/checkout")
 
 

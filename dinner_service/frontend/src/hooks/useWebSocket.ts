@@ -70,8 +70,11 @@ export function useWebSocket({
     try {
       setStatus(reconnectAttemptsRef.current > 0 ? 'reconnecting' : 'connecting');
 
-      const wsUrl = `ws://localhost:8000/api/ws?token=${token}`;
-      const ws = new WebSocket(wsUrl);
+      const protocol = typeof window !== 'undefined' ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') : 'ws:'
+      const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8000'
+      const wsBase = process.env.NEXT_PUBLIC_WS_BASE ?? `${protocol}//${host}`
+      const wsUrl = `${wsBase.replace(/\/$/, '')}/api/ws?token=${token}`
+      const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
         setStatus('connected');
@@ -86,7 +89,12 @@ export function useWebSocket({
 
       ws.onmessage = (event) => {
         try {
-          const message: WebSocketMessage = JSON.parse(event.data);
+          const raw = typeof event.data === 'string' ? event.data.trim() : event.data
+          if (!raw) {
+            return
+          }
+
+          const message: WebSocketMessage = typeof raw === 'string' ? JSON.parse(raw) : raw
           setLastMessage(message);
 
           // 콜백 호출
@@ -133,12 +141,55 @@ export function useWebSocket({
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket 오류:', error instanceof Error ? error.message : 'Unknown error');
-        setStatus('error');
+        let derivedMessage: string | undefined
+        let readyState: string | undefined
+        let socketUrl: string | undefined
+
+        if (error instanceof Event) {
+          const target = error.currentTarget || error.target
+          if (target instanceof WebSocket) {
+            socketUrl = target.url
+            const stateNames: Record<number, string> = {
+              [WebSocket.CONNECTING]: 'CONNECTING',
+              [WebSocket.OPEN]: 'OPEN',
+              [WebSocket.CLOSING]: 'CLOSING',
+              [WebSocket.CLOSED]: 'CLOSED',
+            }
+            readyState = stateNames[target.readyState] ?? String(target.readyState)
+            derivedMessage = `연결 오류 (state=${readyState})`
+          }
+        }
+
+        if (!derivedMessage && typeof error === 'object' && error && 'message' in error) {
+          derivedMessage = String((error as { message?: unknown }).message)
+        }
+
+        const message = derivedMessage && derivedMessage.trim() ? derivedMessage : '연결 오류가 발생했습니다.'
+        console.error('WebSocket 오류 이벤트:', {
+          message,
+          readyState,
+          url: socketUrl,
+          raw: error,
+        })
+
+        if (showToasts) {
+          showToast({
+            type: 'error',
+            title: 'WebSocket 오류',
+            message,
+            duration: 4000,
+          })
+        }
+        setStatus('error')
       };
 
       ws.onclose = (event) => {
-        setStatus('disconnected');
+        console.warn('WebSocket 연결 종료:', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        })
+        setStatus('disconnected')
 
         // Heartbeat 중지
         if (heartbeatIntervalRef.current) {

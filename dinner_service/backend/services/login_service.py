@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 
 # HTTP Bearer 스키마 설정
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
+
+DEFAULT_MANAGER_EMAIL = os.getenv("DEFAULT_MANAGER_EMAIL", "manager@example.com")
+DEFAULT_MANAGER_PASSWORD = os.getenv("DEFAULT_MANAGER_PASSWORD", "manager123!")
+DEFAULT_MANAGER_NAME = os.getenv("DEFAULT_MANAGER_NAME", "Demo Manager")
+DEFAULT_MANAGER_PHONE = os.getenv("DEFAULT_MANAGER_PHONE", "010-5000-6000")
+DEFAULT_MANAGER_ADDRESS = os.getenv("DEFAULT_MANAGER_ADDRESS", "Seoul")
 
 class LoginService:
     """로그인 관련 비즈니스 로직 처리"""
@@ -77,15 +84,16 @@ class LoginService:
 def authenticate_user(db: Session, email: str, password: str) -> dict[str, Any]:
     """사용자 인증 처리"""
     try:
+        normalized_email = (email or "").strip().lower()
         # STAFF인 경우 staff_details의 position 정보도 함께 조회
         user_query = text("""
             SELECT u.user_id, u.email, u.password_hash, u.user_type, u.name, sd.position
             FROM users u
             LEFT JOIN staff_details sd ON u.user_id = sd.staff_id
-            WHERE u.email = :email
+            WHERE lower(u.email) = :email
         """)
 
-        result = db.execute(user_query, {"email": email}).fetchone()
+        result = db.execute(user_query, {"email": normalized_email}).fetchone()
 
         if not result:
             return {
@@ -357,6 +365,47 @@ def verify_admin_access(is_admin: bool) -> bool:
     return is_admin
 
 
+def _fetch_user_data_by_email(db: Session, email: str) -> dict[str, Any] | None:
+    user_query = text(
+        """
+            SELECT u.user_id,
+                   u.email,
+                   u.user_type,
+                   u.name,
+                   sd.position
+            FROM users u
+            LEFT JOIN staff_details sd ON u.user_id = sd.staff_id
+            WHERE u.email = :email
+        """
+    )
+
+    result = db.execute(user_query, {"email": email}).fetchone()
+    if result is None:
+        return None
+
+    user_type = result[2]
+    position = result[4] if len(result) > 4 else None
+
+    if user_type == 'MANAGER':
+        role = "admin"
+    elif user_type == 'STAFF':
+        role = "staff"
+    else:
+        role = "customer"
+
+    display_name = result[3] if result[3] else result[1].split('@')[0]
+
+    return {
+        "id": str(result[0]),
+        "email": result[1],
+        "is_admin": (user_type == 'MANAGER'),
+        "role": role,
+        "user_type": user_type,
+        "position": position if user_type == 'STAFF' else None,
+        "name": display_name
+    }
+
+
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[Session, Depends(get_db)]
@@ -382,45 +431,11 @@ async def get_current_user(
 
         logger.info(f"JWT에서 추출한 이메일: {username}")
 
-        # 데이터베이스에서 사용자 정보 조회
-        user_query = text("""
-            SELECT u.user_id,
-                   u.email,
-                   u.user_type,
-                   u.name,
-                   sd.position
-            FROM users u
-            LEFT JOIN staff_details sd ON u.user_id = sd.staff_id
-            WHERE u.email = :email
-        """)
+        user_data = _fetch_user_data_by_email(db, username)
 
-        result = db.execute(user_query, {"email": username}).fetchone()
-        logger.info(f"데이터베이스 조회 결과: {result}")
-
-        if result is None:
+        if user_data is None:
             logger.error(f"데이터베이스에서 이메일 '{username}' 사용자를 찾을 수 없습니다")
             raise credentials_exception
-
-        # 사용자 정보 반환
-        user_type = result[2]
-        position = result[4] if len(result) > 4 else None
-
-        if user_type == 'MANAGER':
-            role = "admin"
-        elif user_type == 'STAFF':
-            role = "staff"
-        else:
-            role = "customer"
-
-        user_data = {
-            "id": str(result[0]),  # UUID를 문자열로 변환
-            "email": result[1],
-            "is_admin": (user_type == 'MANAGER'),  # user_type을 boolean으로 변환 (하위 호환성)
-            "role": role,
-            "user_type": user_type,
-            "position": position if user_type == 'STAFF' else None,
-            "name": result[3] if result[3] else result[1].split('@')[0]
-        }
 
         return user_data
 
@@ -432,3 +447,26 @@ async def get_current_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="사용자 정보 조회 중 오류가 발생했습니다"
         )
+
+
+async def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(optional_security)],
+    db: Annotated[Session, Depends(get_db)]
+) -> dict[str, Any] | None:
+    """선택적 JWT 토큰 기반 사용자 조회 (없거나 유효하지 않으면 None)"""
+    if credentials is None:
+        return None
+
+    try:
+        payload = LoginService.verify_token(credentials.credentials)
+        if payload is None:
+            return None
+
+        username = payload.get("sub")
+        if not username:
+            return None
+
+        return _fetch_user_data_by_email(db, username)
+    except Exception as exc:
+        logger.debug(f"선택적 사용자 정보 조회 실패: {exc}")
+        return None

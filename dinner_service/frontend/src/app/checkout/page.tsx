@@ -5,7 +5,8 @@
 
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import type { FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../contexts/AuthContext'
 import Header from '../../components/Header'
@@ -22,45 +23,66 @@ import type { DiscountInfo } from '../../types/common'
 
 // 재료 한글 이름 매핑 (order 페이지와 동일)
 const ingredientNames: { [key: string]: string } = {
-  // Valentine 디너 구성품
   heart_plate: '하트 모양 접시',
   cupid_decoration: '큐피드 장식',
   napkin: '냅킨',
+  paper_napkin: '종이 냅킨',
+  cotton_napkin: '면 냅킨',
+  linen_napkin: '린넨 냅킨',
+  plastic_tray: '플라스틱 쟁반',
+  wooden_tray: '나무 쟁반',
+  plastic_plate: '플라스틱 접시',
+  plastic_cup: '플라스틱 컵',
+  ceramic_plate: '도자기 접시',
+  ceramic_cup: '도자기 컵',
+  plastic_wine_glass: '플라스틱 와인잔',
+  glass_wine_glass: '유리 와인잔',
+  vase_with_flowers: '꽃병 장식',
   wine: '와인',
   premium_steak: '프리미엄 스테이크',
-  // French 디너 구성품
   coffee: '커피',
   fresh_salad: '신선한 샐러드',
-  // English 디너 구성품
   scrambled_eggs: '에그 스크램블',
   bacon: '베이컨',
   bread: '빵',
-  // Champagne 디너 구성품
   champagne_bottle: '샴페인',
   baguette: '바게트빵',
-  coffee_pot: '커피 포트'
+  coffee_pot: '커피 포트',
+  cake_base: '케이크 시트',
+  buttercream_frosting: '버터크림',
+  fresh_berries: '신선한 베리',
+  fondant: '폰단트',
+  edible_gold_leaf: '식용 금박',
+  chocolate_ganache: '초콜릿 가나슈',
+  cake_board: '케이크 보드',
+  edible_flowers: '식용 꽃'
 }
 
 // 메뉴별 기본 재료 구성 (order 페이지와 동일)
 const menuIngredients: { [key: string]: { [key: string]: { [key: string]: number } } } = {
   valentine: {
-    simple: { heart_plate: 1, cupid_decoration: 1, napkin: 1, wine: 1, premium_steak: 1 },
-    grand: { heart_plate: 1, cupid_decoration: 2, napkin: 1, wine: 1, premium_steak: 1 },
-    deluxe: { heart_plate: 1, cupid_decoration: 3, napkin: 2, wine: 1, premium_steak: 1 }
+    simple: { heart_plate: 1, cupid_decoration: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
+    grand: { heart_plate: 1, cupid_decoration: 2, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
+    deluxe: { heart_plate: 1, cupid_decoration: 3, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, wine: 1, premium_steak: 1 }
   },
   french: {
-    simple: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    grand: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    deluxe: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
+    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
+    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
+    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
   },
   english: {
-    simple: { scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
-    grand: { scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
-    deluxe: { scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
+    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
+    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
+    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
   },
   champagne: {
-    grand: { champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
-    deluxe: { champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
+    grand: { ceramic_plate: 2, ceramic_cup: 2, cotton_napkin: 2, wooden_tray: 1, plastic_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
+    deluxe: { ceramic_plate: 2, ceramic_cup: 2, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
+  },
+  cake: {
+    simple: { cake_base: 1, buttercream_frosting: 1, fresh_berries: 1, cake_board: 1, plastic_plate: 1, plastic_tray: 1, paper_napkin: 1 },
+    grand: { cake_base: 1, buttercream_frosting: 1, fondant: 1, fresh_berries: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1 },
+    deluxe: { cake_base: 1, buttercream_frosting: 1, fondant: 1, edible_gold_leaf: 1, chocolate_ganache: 1, edible_flowers: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1 }
   }
 }
 
@@ -78,8 +100,43 @@ const ingredientUnitPrices: Record<string, number> = {
   bread: 1500,
   heart_plate: 1000,
   cupid_decoration: 1500,
-  napkin: 500
+  napkin: 500,
+  paper_napkin: 100,
+  cotton_napkin: 800,
+  linen_napkin: 1200,
+  plastic_tray: 800,
+  wooden_tray: 4000,
+  plastic_plate: 500,
+  plastic_cup: 300,
+  ceramic_plate: 5000,
+  ceramic_cup: 3000,
+  plastic_wine_glass: 700,
+  glass_wine_glass: 3500,
+  vase_with_flowers: 8000,
+  cake_base: 12000,
+  buttercream_frosting: 5000,
+  fresh_berries: 4500,
+  fondant: 6000,
+  edible_gold_leaf: 9000,
+  chocolate_ganache: 5500,
+  cake_board: 1500,
+  edible_flowers: 5000
 }
+
+const CUSTOM_CAKE_FLAVORS = [
+  { code: 'vanilla', label: '바닐라' },
+  { code: 'chocolate', label: '초콜릿' },
+  { code: 'red_velvet', label: '레드벨벳' },
+  { code: 'green_tea', label: '녹차' }
+] as const
+
+const CUSTOM_CAKE_SIZES = [
+  { code: 'size_1', label: '1호 (2~3인)' },
+  { code: 'size_2', label: '2호 (3~4인)' },
+  { code: 'size_3', label: '3호 (4~6인)' }
+] as const
+
+type CustomCakeRecipeMap = Record<string, Record<string, SideDishIngredient[]>>
 
 const calculateCustomizationCost = (
   menuCode: string,
@@ -108,10 +165,122 @@ const calculateCustomizationCost = (
   return additionalCost * quantity
 }
 
+type SideDishIngredient = {
+  ingredient_code: string
+  ingredient_id?: string
+  quantity: number
+  ingredient_name: string
+}
+
+type SideDishOption = {
+  side_dish_id: string
+  code: string
+  name: string
+  description?: string
+  base_price: number
+  is_available: boolean
+  ingredients: SideDishIngredient[]
+  unit_price: number
+}
+
+const getIngredientDisplayName = (code: string): string => {
+  if (!code) return ''
+  return ingredientNames[code] || code.replace(/_/g, ' ')
+}
+
+const toSideDishIngredients = (raw: any): SideDishIngredient[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      const ingredientCode = item?.ingredient_code ?? item?.code ?? ''
+      const quantityValue = Number(item?.quantity ?? 0)
+      return {
+        ingredient_code: ingredientCode,
+        ingredient_id: item?.ingredient_id,
+        quantity: Number.isFinite(quantityValue) ? quantityValue : 0,
+        ingredient_name: getIngredientDisplayName(ingredientCode)
+      }
+    })
+    .filter((item) => item.ingredient_code)
+}
+
+const deriveSideDishUnitPrice = (basePrice: number, ingredients: SideDishIngredient[]): number => {
+  const normalizedBase = Number.isFinite(basePrice) ? basePrice : 0
+  if (normalizedBase > 0) {
+    return normalizedBase
+  }
+
+  const ingredientsTotal = ingredients.reduce((sum, ingredient) => {
+    const unitPrice = ingredientUnitPrices[ingredient.ingredient_code] ?? 0
+    return sum + unitPrice * ingredient.quantity
+  }, 0)
+
+  return Math.max(0, Math.round(ingredientsTotal))
+}
+
+const buildCustomCakeFallbackOption = (): SideDishOption => {
+  const deluxeIngredients = menuIngredients.cake?.deluxe || {}
+  const ingredientList = Object.entries(deluxeIngredients).map(([ingredientCode, quantity]) => ({
+    ingredient_code: ingredientCode,
+    ingredient_id: undefined,
+    quantity: Number(quantity) || 0,
+    ingredient_name: getIngredientDisplayName(ingredientCode)
+  }))
+
+  const fallbackPrice = 42000
+
+  return {
+    side_dish_id: 'custom_cake',
+    code: 'custom_cake',
+    name: '커스터마이징 케이크',
+    description: '사진과 메시지를 첨부하여 맞춤 제작합니다.',
+    base_price: fallbackPrice,
+    is_available: true,
+    ingredients: ingredientList,
+    unit_price: fallbackPrice
+  }
+}
+
+const generateSideDishFallbackId = (): string => {
+  const globalCrypto = typeof globalThis !== 'undefined' && 'crypto' in globalThis ? (globalThis as any).crypto : undefined
+  if (globalCrypto && typeof globalCrypto.randomUUID === 'function') {
+    return globalCrypto.randomUUID()
+  }
+  return `side-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const formatIngredientQuantity = (quantity: number): string => {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return ''
+  }
+  const rounded = Math.round(quantity)
+  if (Math.abs(quantity - rounded) < 0.001) {
+    return `${rounded}개`
+  }
+  return `${quantity.toFixed(2).replace(/\.00$/, '')}단위`
+}
+
+const createSideDishOptionFromResponse = (dish: any): SideDishOption => {
+  const ingredients = toSideDishIngredients(dish?.ingredients)
+  const basePrice = Number(dish?.base_price ?? dish?.price ?? 0)
+  const unitPrice = deriveSideDishUnitPrice(basePrice, ingredients)
+
+  return {
+    side_dish_id: dish?.side_dish_id ?? dish?.id ?? dish?.code ?? generateSideDishFallbackId(),
+    code: (dish?.code ?? '').toLowerCase(),
+    name: dish?.name ?? '사이드 메뉴',
+    description: dish?.description ?? undefined,
+    base_price: Number.isFinite(basePrice) ? basePrice : 0,
+    is_available: Boolean(dish?.is_available ?? true),
+    ingredients,
+    unit_price: unitPrice
+  }
+}
+
 export default function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, loading } = useAuth()
+  const { user, loading, token } = useAuth()
 
   const scheduleDateOptions = useMemo(() => {
     const base = new Date()
@@ -139,9 +308,24 @@ export default function CheckoutPage() {
 
   // 커스터마이징 정보 파싱
   const customizationsParam = searchParams.get('customizations')
-const customizations = customizationsParam
-  ? (JSON.parse(decodeURIComponent(customizationsParam)) as Record<string, number>)
-  : null
+  const rawCustomizations = customizationsParam
+    ? (JSON.parse(decodeURIComponent(customizationsParam)) as Record<string, number>)
+    : null
+  const customizations = useMemo<Record<string, number> | null>(() => {
+    if (!rawCustomizations) return null
+    const baseIngredientsForStyle = menuIngredients[menuCode]?.[style] || {}
+    const adjusted: Record<string, number> = {}
+    for (const [key, value] of Object.entries(rawCustomizations)) {
+      const qty = Number(value)
+      const baseQty = baseIngredientsForStyle[key] ?? 0
+      if (Number.isNaN(qty)) {
+        adjusted[key] = baseQty
+      } else {
+        adjusted[key] = Math.max(baseQty, qty)
+      }
+    }
+    return adjusted
+  }, [rawCustomizations, menuCode, style])
 
   // 메뉴 정보가 없으면 주문 페이지로 리다이렉트
   useEffect(() => {
@@ -163,6 +347,22 @@ const customizations = customizationsParam
   const [menuInfo, setMenuInfo] = useState<any>(null)
   const [originalPrice, setOriginalPrice] = useState(0)
   const [customizationCost, setCustomizationCost] = useState(0)
+  const [basePrice, setBasePrice] = useState(0)
+  const [sideDishOptions, setSideDishOptions] = useState<SideDishOption[]>([])
+  const [sideDishSelections, setSideDishSelections] = useState<Record<string, number>>({})
+  const [sideDishCost, setSideDishCost] = useState(0)
+  const [customCakeOption, setCustomCakeOption] = useState<SideDishOption | null>(null)
+  const [includeCustomCake, setIncludeCustomCake] = useState(false)
+  const [customCakeCost, setCustomCakeCost] = useState(0)
+  const [customCakeRecipes, setCustomCakeRecipes] = useState<Record<string, Record<string, SideDishIngredient[]>>>({})
+  const [cakeCustomizationState, setCakeCustomizationState] = useState({
+    message: '',
+    flavor: CUSTOM_CAKE_FLAVORS[0].code,
+    size: CUSTOM_CAKE_SIZES[0].code,
+    imagePath: ''
+  })
+  const [cakeImagePreview, setCakeImagePreview] = useState<string | null>(null)
+  const [isUploadingCakeImage, setIsUploadingCakeImage] = useState(false)
   const [discountInfo, setDiscountInfo] = useState<DiscountInfo | null>(null)
 
   // 배송 정보
@@ -203,6 +403,131 @@ const customizations = customizationsParam
     }
   }, [menuCode, style])
 
+  const fetchCustomCakeRecipes = useCallback(async () => {
+    try {
+      const response = await fetch('/api/side-dishes/custom-cake/recipes', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+      })
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || data.detail || '커스텀 케이크 레시피를 불러오지 못했습니다.')
+      }
+      const recipeMap: CustomCakeRecipeMap = {}
+      if (data.data && typeof data.data === 'object') {
+        Object.entries(data.data as Record<string, Record<string, any>>).forEach(([flavor, sizeMap]) => {
+          recipeMap[flavor] = {}
+          if (sizeMap && typeof sizeMap === 'object') {
+            Object.entries(sizeMap).forEach(([size, ingredients]) => {
+              const processed = Array.isArray(ingredients)
+                ? ingredients.map((ingredient: any) => ({
+                    ingredient_code: ingredient?.ingredient_code ?? '',
+                    quantity: Number(ingredient?.quantity ?? 0),
+                    ingredient_name: getIngredientDisplayName(ingredient?.ingredient_code ?? '')
+                  })).filter((item) => item.ingredient_code)
+                : []
+              recipeMap[flavor][size] = processed
+            })
+          }
+        })
+      }
+      setCustomCakeRecipes(recipeMap)
+      setCakeCustomizationState((prev) => {
+        const nextFlavor = recipeMap[prev.flavor] ? prev.flavor : CUSTOM_CAKE_FLAVORS[0].code
+        const nextSize = recipeMap[nextFlavor]?.[prev.size] ? prev.size : CUSTOM_CAKE_SIZES[0].code
+        return {
+          ...prev,
+          flavor: nextFlavor,
+          size: nextSize
+        }
+      })
+    } catch (error) {
+      console.error('커스텀 케이크 레시피 조회 실패:', error)
+    }
+  }, [token])
+
+  useEffect(() => {
+    const fetchSideDishes = async () => {
+      try {
+        const response = await fetch('/api/side-dishes', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+        })
+        const data = await response.json()
+        if (data.success && Array.isArray(data.data)) {
+          const mappedDishes: SideDishOption[] = data.data.map(createSideDishOptionFromResponse)
+
+          const customCake = mappedDishes.find((dish) => dish.code === 'custom_cake')
+          if (customCake) {
+            setCustomCakeOption(customCake)
+          } else {
+            setCustomCakeOption(buildCustomCakeFallbackOption())
+          }
+
+          const filtered = mappedDishes
+            .filter((dish) => dish.code !== 'custom_cake')
+            .filter((dish) => dish.is_available)
+          setSideDishOptions(filtered)
+        } else {
+          setCustomCakeOption(buildCustomCakeFallbackOption())
+          setSideDishOptions([])
+        }
+      } catch (error) {
+        console.error('사이드 디시 정보를 불러오는데 실패했습니다:', error)
+        setCustomCakeOption(buildCustomCakeFallbackOption())
+        setSideDishOptions([])
+      }
+    }
+
+    fetchSideDishes()
+  }, [token])
+
+  useEffect(() => {
+    fetchCustomCakeRecipes()
+  }, [fetchCustomCakeRecipes])
+
+  const selectedFlavorCode = cakeCustomizationState.flavor
+  const selectedSizeCode = cakeCustomizationState.size
+
+  const selectedCustomCakeIngredients = useMemo<SideDishIngredient[]>(() => {
+    const flavorMap = customCakeRecipes[selectedFlavorCode]
+    if (flavorMap && flavorMap[selectedSizeCode]) {
+      return flavorMap[selectedSizeCode]
+    }
+    if (customCakeOption?.ingredients) {
+      return customCakeOption.ingredients
+    }
+    return []
+  }, [customCakeRecipes, selectedFlavorCode, selectedSizeCode, customCakeOption])
+
+  const selectedFlavorLabel = useMemo(() => {
+    return CUSTOM_CAKE_FLAVORS.find((item) => item.code === selectedFlavorCode)?.label || '기본'
+  }, [selectedFlavorCode])
+
+  const selectedSizeLabel = useMemo(() => {
+    return CUSTOM_CAKE_SIZES.find((item) => item.code === selectedSizeCode)?.label || '기본'
+  }, [selectedSizeCode])
+
+  useEffect(() => {
+    const cost = sideDishOptions.reduce<number>((sum, dish) => {
+      const qty = sideDishSelections[dish.code] || 0
+      return sum + dish.unit_price * qty
+    }, 0)
+    setSideDishCost(cost)
+  }, [sideDishOptions, sideDishSelections])
+
+  useEffect(() => {
+    if (includeCustomCake && customCakeOption) {
+      setCustomCakeCost(customCakeOption.unit_price)
+    } else {
+      setCustomCakeCost(0)
+    }
+  }, [includeCustomCake, customCakeOption])
+
+  useEffect(() => {
+    if (menuCode === 'cake' && customCakeOption) {
+      setIncludeCustomCake(true)
+    }
+  }, [menuCode, customCakeOption])
+
   // 기본 배송지 정보 가져오기
   useEffect(() => {
     if (user?.id) {
@@ -234,6 +559,10 @@ const customizations = customizationsParam
     fetchDiscountInfo()
   }, [user?.id])
 
+  useEffect(() => {
+    setOriginalPrice(basePrice + customizationCost + sideDishCost + customCakeCost)
+  }, [basePrice, customizationCost, sideDishCost, customCakeCost])
+
   const fetchMenuInfo = async () => {
     try {
       const response = await fetch(`/api/menu/${menuCode}`)
@@ -244,9 +573,10 @@ const customizations = customizationsParam
         // 가격 계산 (스타일별) - styles 배열에서 찾기
         const selectedStyle = data.data.styles?.find((s: any) => s.code === style)
         const stylePrice = selectedStyle?.price || 0
+        const basePriceTotal = stylePrice * quantity
         const customizationAddition = calculateCustomizationCost(menuCode, style, customizations, quantity)
+        setBasePrice(basePriceTotal)
         setCustomizationCost(customizationAddition)
-        setOriginalPrice(stylePrice * quantity + customizationAddition)
       } else {
         console.error('메뉴 정보 조회 실패:', data)
       }
@@ -280,7 +610,6 @@ const customizations = customizationsParam
     }
   }
 
-  const basePriceForDisplay = Math.max(0, originalPrice - customizationCost)
   const discountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
   const finalPrice = Math.max(0, originalPrice - discountAmount)
 
@@ -335,7 +664,7 @@ const customizations = customizationsParam
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     const validation = validateForm()
@@ -350,6 +679,31 @@ const customizations = customizationsParam
     setIsProcessing(true)
 
     try {
+    const sideDishPayload: Array<{ code: string; quantity: number; flavor?: string; size?: string }> = Object.entries(sideDishSelections)
+        .map(([code, qty]) => ({ code, quantity: Number(qty) || 0 }))
+        .filter((item) => item.quantity > 0)
+
+      if (includeCustomCake && customCakeOption) {
+        sideDishPayload.push({
+          code: customCakeOption.code,
+          quantity: 1,
+          flavor: cakeCustomizationState.flavor,
+          size: cakeCustomizationState.size
+        })
+      }
+
+      const cakeCustomizationPayloadRaw = includeCustomCake
+        ? {
+            message: cakeCustomizationState.message || undefined,
+            flavor: cakeCustomizationState.flavor || undefined,
+            size: cakeCustomizationState.size || undefined,
+            image_path: cakeCustomizationState.imagePath || undefined,
+            status: 'REQUESTED'
+          }
+        : undefined
+
+      const hasCakeCustomization = includeCustomCake && !!cakeCustomizationPayloadRaw
+
       const checkoutRequest: CheckoutRequest = {
         menu_code: menuCode,
         style: style,
@@ -358,7 +712,9 @@ const customizations = customizationsParam
         payment: paymentInfo,
         user_id: user?.id,
         save_as_default_address: saveAsDefault,
-        customizations: customizations  // 커스터마이징 정보 전달
+        customizations: customizations,
+        side_dishes: sideDishPayload.length > 0 ? sideDishPayload : undefined,
+        cake_customization: hasCakeCustomization ? cakeCustomizationPayloadRaw : undefined
       }
 
       const response = await fetch('/api/checkout/checkout', {
@@ -393,6 +749,79 @@ const customizations = customizationsParam
       setIsProcessing(false)
     }
   }
+
+  const handleSideDishQuantityChange = (code: string, quantity: number) => {
+    setSideDishSelections(prev => {
+      const next = { ...prev }
+      const safeQuantity = Number.isNaN(quantity) ? 0 : Math.max(0, Math.floor(quantity))
+      if (safeQuantity > 0) {
+        next[code] = safeQuantity
+      } else {
+        delete next[code]
+      }
+      return next
+    })
+  }
+
+  const handleCakeCustomizationChange = (field: 'message' | 'flavor' | 'size', value: string) => {
+    setCakeCustomizationState(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleCakeImageUpload = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    setIsUploadingCakeImage(true)
+    try {
+      const response = await fetch('/api/cake/customizations/upload-image', {
+        method: 'POST',
+        body: formData
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        setCakeCustomizationState(prev => ({
+          ...prev,
+          imagePath: data.image_path || ''
+        }))
+        if (cakeImagePreview) {
+          URL.revokeObjectURL(cakeImagePreview)
+        }
+        setCakeImagePreview(URL.createObjectURL(file))
+      } else {
+        alert(data.detail || data.error || '이미지 업로드에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('케이크 이미지 업로드 실패:', error)
+      alert('이미지 업로드 중 오류가 발생했습니다.')
+    } finally {
+      setIsUploadingCakeImage(false)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (cakeImagePreview) {
+        URL.revokeObjectURL(cakeImagePreview)
+      }
+    }
+  }, [cakeImagePreview])
+
+  useEffect(() => {
+    if (!includeCustomCake) {
+      if (cakeImagePreview) {
+        URL.revokeObjectURL(cakeImagePreview)
+        setCakeImagePreview(null)
+      }
+      setCakeCustomizationState({
+        message: '',
+        flavor: CUSTOM_CAKE_FLAVORS[0].code,
+        size: CUSTOM_CAKE_SIZES[0].code,
+        imagePath: ''
+      })
+    }
+  }, [includeCustomCake])
 
   if (!menuCode || !style) {
     return null
@@ -457,7 +886,6 @@ const customizations = customizationsParam
                         </p>
                       )}
 
-                      {/* 커스터마이징 정보 표시 - 변경된 항목만 */}
                       {customizations && Object.keys(customizations).length > 0 && (() => {
                         const baseIngredients = menuIngredients[menuCode]?.[style] || {}
                         const changedItems = Object.entries(customizations).filter(([ingredient, qty]) => {
@@ -492,24 +920,103 @@ const customizations = customizationsParam
                           </div>
                         )
                       })()}
+
+                      {(Object.keys(sideDishSelections).length > 0 || (includeCustomCake && customCakeOption)) && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="text-sm font-bold text-gray-800 mb-2">🍽️ 추가 사이드 디시</h4>
+                          <div className="space-y-1">
+                            {Object.entries(sideDishSelections).map(([code, qty]) => {
+                              const dish = sideDishOptions.find(d => d.code === code)
+                              if (!dish) return null
+                              return (
+                                <div key={code} className="flex justify-between text-xs">
+                                  <span className="text-gray-700">{dish.name}</span>
+                                  <span className="font-medium text-purple-600">
+                                    {qty}개
+                                    <span className="text-xs ml-1 text-gray-500">(+{(dish.unit_price * qty).toLocaleString()}원)</span>
+                                  </span>
+                                </div>
+                              )
+                            })}
+                            {includeCustomCake && customCakeOption && (
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-700">
+                                  {customCakeOption.name}
+                                  <span className="ml-2 text-pink-500">{selectedFlavorLabel} · {selectedSizeLabel}</span>
+                                </span>
+                                <span className="font-medium text-pink-600">
+                                  1개
+                                  <span className="text-xs ml-1 text-gray-500">(+{customCakeOption.unit_price.toLocaleString()}원)</span>
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {includeCustomCake && (
+                        (cakeCustomizationState.message || cakeCustomizationState.flavor || cakeCustomizationState.size || cakeCustomizationState.imagePath) && (
+                          <div className="mt-4 pt-4 border-t border-gray-200">
+                            <h4 className="text-sm font-bold text-gray-800 mb-2">🎂 케이크 커스터마이징</h4>
+                            <div className="space-y-1 text-xs text-gray-700">
+                              {cakeCustomizationState.message && (
+                                <div>
+                                  <span className="font-medium text-gray-800">메시지: </span>
+                                  {cakeCustomizationState.message}
+                                </div>
+                              )}
+                              {selectedFlavorLabel && (
+                                <div>
+                                  <span className="font-medium text-gray-800">맛: </span>
+                                  {selectedFlavorLabel}
+                                </div>
+                              )}
+                              {selectedSizeLabel && (
+                                <div>
+                                  <span className="font-medium text-gray-800">사이즈: </span>
+                                  {selectedSizeLabel}
+                                </div>
+                              )}
+                              {cakeCustomizationState.imagePath && (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-800">참고 이미지:</span>
+                                  <span className="text-blue-600 underline text-xs">
+                                    업로드 완료
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
 
                   {/* 가격 정보 */}
                   <div className="border-t pt-4 space-y-3">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>기본 금액</span>
+                      <span>{basePrice.toLocaleString()}원</span>
+                    </div>
                     {customizationCost > 0 && (
-                      <>
-                        <div className="flex justify-between text-sm text-gray-600">
-                          <span>기본 금액</span>
-                          <span>{basePriceForDisplay.toLocaleString()}원</span>
-                        </div>
-                        <div className="flex justify-between text-sm text-gray-600">
-                          <span>커스터마이징 추가금</span>
-                          <span className="text-blue-600">+{customizationCost.toLocaleString()}원</span>
-                        </div>
-                        <div className="h-px bg-gray-200" />
-                      </>
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>커스터마이징 추가금</span>
+                        <span className="text-blue-600">+{customizationCost.toLocaleString()}원</span>
+                      </div>
                     )}
+                    {sideDishCost > 0 && (
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>사이드 디시</span>
+                        <span className="text-purple-600">+{sideDishCost.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {customCakeCost > 0 && (
+                      <div className="flex justify-between text-sm text-gray-600">
+                        <span>커스터마이징 케이크</span>
+                        <span className="text-pink-600">+{customCakeCost.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {(customizationCost > 0 || sideDishCost > 0 || customCakeCost > 0) && <div className="h-px bg-gray-200" />}
                     {discountInfo?.eligible ? (
                       <>
                         {/* 할인 적용된 경우 */}
@@ -752,6 +1259,177 @@ const customizations = customizationsParam
                 </div>
               </div>
 
+              {/* 사이드 디시 선택 섹션 */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold">사이드 디시 추가</h2>
+                  {sideDishCost + customCakeCost > 0 && (
+                    <span className="text-sm font-medium text-purple-600">
+                      +{(sideDishCost + customCakeCost).toLocaleString()}원
+                    </span>
+                  )}
+                </div>
+                {sideDishOptions.length === 0 && !customCakeOption ? (
+                  <p className="text-sm text-gray-600">현재 추가 가능한 사이드 디시가 없습니다.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {sideDishOptions.length > 0 &&
+                      sideDishOptions.map((dish) => (
+                        <div key={dish.code} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-gray-800">{dish.name}</h3>
+                              {dish.description && (
+                                <p className="text-sm text-gray-600 mt-1">{dish.description}</p>
+                              )}
+                              <p className="text-sm text-gray-600 mt-1">1개당 {dish.unit_price.toLocaleString()}원</p>
+                              {dish.base_price <= 0 && (
+                                <p className="text-xs text-gray-500 mt-1">※ 재료 원가를 기준으로 산출한 예상 금액입니다.</p>
+                              )}
+                              {dish.ingredients.length > 0 && (
+                                <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                                  <p className="text-xs font-semibold text-gray-600 mb-2">구성 재료</p>
+                                  <ul className="space-y-1 text-xs text-gray-600">
+                                    {dish.ingredients.map((ingredient) => (
+                                      <li key={`${dish.code}-${ingredient.ingredient_code}`} className="flex justify-between gap-6">
+                                        <span className="truncate">{ingredient.ingredient_name}</span>
+                                        <span className="font-medium text-gray-700">{formatIngredientQuantity(ingredient.quantity)}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                            <div className="w-32">
+                              <label className="block text-xs font-medium text-gray-600 mb-1">수량</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={sideDishSelections[dish.code] || 0}
+                                onChange={(e) => handleSideDishQuantityChange(dish.code, Number(e.target.value))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                    {customCakeOption && (
+                      <div className="border border-pink-200 rounded-lg p-4 bg-pink-50">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-pink-800 flex items-center gap-2">
+                              🎂 {customCakeOption.name}
+                            </h3>
+                            <p className="text-sm text-pink-700 mt-1">
+                              {customCakeOption.description || '메인 디너와 함께 제공되는 맞춤형 케이크 옵션입니다.'}
+                            </p>
+                            <p className="text-sm text-pink-600 mt-1">
+                              1개당 {customCakeOption.unit_price.toLocaleString()}원
+                            </p>
+                            <p className="text-xs text-pink-600 mt-1">현재 선택: {selectedFlavorLabel} · {selectedSizeLabel}</p>
+                            {customCakeOption.base_price <= 0 && (
+                              <p className="text-xs text-pink-500 mt-1">※ 재료 원가를 기준으로 산출한 예상 금액입니다.</p>
+                            )}
+                            {selectedCustomCakeIngredients.length > 0 && (
+                              <div className="mt-3 bg-white border border-pink-200 rounded-lg p-3">
+                                <p className="text-xs font-semibold text-pink-700 mb-2">기본 구성 재료</p>
+                                <ul className="space-y-1 text-xs text-pink-700">
+                                  {selectedCustomCakeIngredients.map((ingredient) => (
+                                    <li key={`custom-cake-${ingredient.ingredient_code}`} className="flex justify-between gap-6">
+                                      <span className="truncate">{ingredient.ingredient_name}</span>
+                                      <span className="font-medium text-pink-800">{formatIngredientQuantity(ingredient.quantity)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIncludeCustomCake((prev) => !prev)}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                              includeCustomCake
+                                ? 'bg-pink-600 text-white hover:bg-pink-700'
+                                : 'bg-white border border-pink-300 text-pink-700 hover:bg-pink-100'
+                            }`}
+                          >
+                            {includeCustomCake ? '추가됨' : '추가하기'}
+                          </button>
+                        </div>
+
+                        {includeCustomCake && (
+                          <div className="space-y-4 bg-white border border-pink-200 rounded-lg p-4">
+                            <p className="text-xs text-pink-600">
+                              원하는 메시지, 맛, 사이즈와 참고 이미지를 업로드해주세요. 요리사가 확인 후 맞춤 제작합니다.
+                            </p>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">케이크 메시지</label>
+                              <textarea
+                                value={cakeCustomizationState.message}
+                                onChange={(e) => handleCakeCustomizationChange('message', e.target.value)}
+                                rows={2}
+                                placeholder="예: Happy Anniversary!"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">맛 선택</label>
+                                <select
+                                  value={cakeCustomizationState.flavor}
+                                  onChange={(e) => handleCakeCustomizationChange('flavor', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                >
+                                  {CUSTOM_CAKE_FLAVORS.map((flavor) => (
+                                    <option key={flavor.code} value={flavor.code}>{flavor.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">사이즈</label>
+                                <select
+                                  value={cakeCustomizationState.size}
+                                  onChange={(e) => handleCakeCustomizationChange('size', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                >
+                                  {CUSTOM_CAKE_SIZES.map((size) => (
+                                    <option key={size.code} value={size.code}>{size.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">참고 이미지 업로드</label>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) handleCakeImageUpload(file)
+                                  }}
+                                  className="w-full text-sm"
+                                />
+                                {isUploadingCakeImage && <span className="text-sm text-gray-600">업로드 중...</span>}
+                              </div>
+                              {cakeCustomizationState.imagePath && !cakeImagePreview && (
+                                <p className="text-xs text-pink-600 mt-2">이미지 업로드 완료</p>
+                              )}
+                              {cakeImagePreview && (
+                                <div className="mt-3">
+                                  <img src={cakeImagePreview} alt="케이크 참고 이미지" className="w-32 h-32 object-cover rounded-lg border" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* 결제 정보 섹션 */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold mb-4">결제 정보</h2>
@@ -877,7 +1555,7 @@ const customizations = customizationsParam
                 </button>
                 <button
                   type="submit"
-                  disabled={isProcessing || originalPrice === 0}
+                  disabled={isProcessing || basePrice === 0}
                   className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 font-medium flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (
@@ -888,7 +1566,7 @@ const customizations = customizationsParam
                       </svg>
                       결제 처리 중...
                     </>
-                  ) : originalPrice === 0 ? (
+                  ) : basePrice === 0 ? (
                     '주문 정보 로딩 중...'
                   ) : (
                     `${finalPrice.toLocaleString()}원 결제하기`

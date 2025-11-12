@@ -360,6 +360,7 @@ async def get_all_orders_for_staff(
                 ss.name AS style_name,
                 oi.quantity,
                 oi.price_per_item,
+                oi.order_item_id,
                 u.name AS customer_name,
                 u.phone_number AS customer_phone,
                 u.email AS customer_email
@@ -392,8 +393,8 @@ async def get_all_orders_for_staff(
         for result in results:
             (order_id, order_number, order_status_val, payment_status_val, total_price,
              delivery_address, created_at, delivery_time_estimated, menu_name,
-             menu_code, style_name, quantity, price_per_item, customer_name,
-             customer_phone, customer_email) = result
+             menu_code, style_name, quantity, price_per_item, order_item_id,
+             customer_name, customer_phone, customer_email) = result
 
             # 커스터마이징 정보 조회
             customization_query = text("""
@@ -408,6 +409,30 @@ async def get_all_orders_for_staff(
             customizations = {}
             for item_name, quantity_change in customization_results:
                 customizations[item_name] = quantity_change
+
+            cake_customization = None
+            if order_item_id:
+                cake_query = text(
+                    """
+                    SELECT image_path, message, flavor, size, status, created_at
+                    FROM cake_customizations
+                    WHERE order_item_id = CAST(:order_item_id AS uuid)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                )
+                cake_row = db.execute(
+                    cake_query, {"order_item_id": str(order_item_id)}
+                ).fetchone()
+                if cake_row:
+                    cake_customization = {
+                        "image_path": cake_row[0],
+                        "message": cake_row[1],
+                        "flavor": cake_row[2],
+                        "size": cake_row[3],
+                        "status": cake_row[4],
+                        "created_at": cake_row[5].isoformat() if cake_row[5] else None,
+                    }
 
             orders.append({
                 "id": str(order_id),
@@ -426,7 +451,8 @@ async def get_all_orders_for_staff(
                 "customer_name": customer_name or "비회원",
                 "customer_phone": customer_phone or "",
                 "customer_email": customer_email or "",
-                "customizations": customizations if customizations else None
+                "customizations": customizations if customizations else None,
+                "cake_customization": cake_customization
             })
 
         logger.info(f"직원용 주문 조회 성공: {len(orders)}건")
@@ -530,6 +556,17 @@ async def update_order_status(
                     logger.info(f"조리 시작: 고객 주문 횟수 증가 - customer_id={order.customer_id}, order_id={order_id}")
                 except Exception as inc_error:
                     logger.warning(f"주문 횟수 증가 실패 (상태 변경은 성공): {inc_error}")
+
+        transitioned_to_completed = order.order_status != 'COMPLETED' and request.new_status == 'COMPLETED'
+        if transitioned_to_completed:
+            consume_result = OrderService.consume_order_inventory(db, order_id)
+            if not consume_result.get("success", False):
+                error_message = consume_result.get("error", "주문 재고 차감에 실패했습니다")
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=error_message
+                )
 
         db.commit()
 
@@ -637,14 +674,24 @@ async def cancel_order(
             )
 
         # 주문 취소 처리
-        cancel_query = text("""
+        update_query = text("""
             UPDATE orders
             SET order_status = 'CANCELLED',
                 payment_status = 'REFUNDED'
             WHERE order_id = CAST(:order_id AS uuid)
             RETURNING order_id, order_number, order_status
         """)
-        result = db.execute(cancel_query, {"order_id": order_id}).fetchone()
+        result = db.execute(update_query, {"order_id": order_id}).fetchone()
+
+        db.execute(
+            text("""
+                DELETE FROM order_inventory_reservations
+                WHERE order_id = CAST(:order_id AS uuid)
+                  AND consumed = FALSE
+            """),
+            {"order_id": order_id}
+        )
+
         db.commit()
 
         logger.info(f"고객 주문 취소: order_id={order_id}, order_number={order.order_number}")

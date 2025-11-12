@@ -22,5 +22,11 @@
     "description": "2인 식사로 샴페인 1병, 바게트빵 4개, 커피 1포트, 와인, 프리미엄 스테이크가 제공되는 항상 인기인 축제 디너",
     "image_url": "/images/champagne-dinner.jpg",
     "available_styles": ["grand", "deluxe"]
+  },
+  "cake": {
+    "name": "커스터마이징 케이크",
+    "description": "메시지와 맛, 이미지까지 맞춤 제작되는 프리미엄 케이크",
+    "image_url": "/images/cake-special.jpg",
+    "available_styles": ["simple", "grand", "deluxe"]
   }
 }

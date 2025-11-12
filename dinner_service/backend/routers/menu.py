@@ -5,11 +5,13 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..services.database import get_db
 from ..services.menu_service import MenuService
+from ..services.login_service import get_current_user
 
 router = APIRouter(tags=["menu"])
 
@@ -74,3 +76,53 @@ async def get_base_ingredients(
         "success": True,
         "data": data
     }
+
+
+class BaseIngredientUpsertRequest(BaseModel):
+    ingredient_code: str = Field(..., min_length=1, description="재료 코드 (ingredients.name)")
+    base_quantity: int = Field(..., ge=0, description="기본 수량")
+
+
+@router.put("/base-ingredients/{menu_code}/{style}")
+async def upsert_base_ingredient(
+    menu_code: str,
+    style: str,
+    request: BaseIngredientUpsertRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: dict = Depends(get_current_user)
+) -> dict[str, Any]:
+    if current_user.get("user_type") != "MANAGER":
+        raise HTTPException(status_code=403, detail="매니저만 기본 재료를 수정할 수 있습니다")
+
+    result = MenuService.upsert_base_ingredient(
+        db,
+        menu_code=menu_code,
+        style=style,
+        ingredient_code=request.ingredient_code,
+        base_quantity=request.base_quantity
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "기본 재료 수정에 실패했습니다"))
+    return result
+
+
+@router.delete("/base-ingredients/{menu_code}/{style}/{ingredient_code}")
+async def delete_base_ingredient(
+    menu_code: str,
+    style: str,
+    ingredient_code: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: dict = Depends(get_current_user)
+) -> dict[str, Any]:
+    if current_user.get("user_type") != "MANAGER":
+        raise HTTPException(status_code=403, detail="매니저만 기본 재료를 삭제할 수 있습니다")
+
+    result = MenuService.remove_base_ingredient(
+        db,
+        menu_code=menu_code,
+        style=style,
+        ingredient_code=ingredient_code
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "기본 재료 삭제에 실패했습니다"))
+    return result

@@ -10,23 +10,39 @@ import type { DiscountInfo, RecentOrder } from '@/types/common'
 
 // 재료 한글 이름 매핑 (order 페이지와 동일)
 const ingredientNames: { [key: string]: string } = {
-  // Valentine 디너 구성품
   heart_plate: '하트 모양 접시',
   cupid_decoration: '큐피드 장식',
   napkin: '냅킨',
+  paper_napkin: '종이 냅킨',
+  cotton_napkin: '면 냅킨',
+  linen_napkin: '린넨 냅킨',
+  plastic_tray: '플라스틱 쟁반',
+  wooden_tray: '나무 쟁반',
+  plastic_plate: '플라스틱 접시',
+  plastic_cup: '플라스틱 컵',
+  ceramic_plate: '도자기 접시',
+  ceramic_cup: '도자기 컵',
+  plastic_wine_glass: '플라스틱 와인잔',
+  glass_wine_glass: '유리 와인잔',
+  vase_with_flowers: '꽃병 장식',
   wine: '와인',
   premium_steak: '프리미엄 스테이크',
-  // French 디너 구성품
   coffee: '커피',
   fresh_salad: '신선한 샐러드',
-  // English 디너 구성품
   scrambled_eggs: '에그 스크램블',
   bacon: '베이컨',
   bread: '빵',
-  // Champagne 디너 구성품
   champagne_bottle: '샴페인',
   baguette: '바게트빵',
-  coffee_pot: '커피 포트'
+  coffee_pot: '커피 포트',
+  cake_base: '케이크 시트',
+  buttercream_frosting: '버터크림',
+  fresh_berries: '신선한 베리',
+  fondant: '폰단트',
+  edible_gold_leaf: '식용 금박',
+  chocolate_ganache: '초콜릿 가나슈',
+  cake_board: '케이크 보드',
+  edible_flowers: '식용 꽃'
 }
 
 // 스타일별 세부 정보
@@ -48,23 +64,28 @@ const styleDetails = {
 // 메뉴별/스타일별 기본 재료 수량 매핑 (order 페이지와 동일 - 영문 스타일명 사용)
 const menuIngredients: Record<string, Record<string, Record<string, number>>> = {
   valentine: {
-    simple: { heart_plate: 1, cupid_decoration: 1, napkin: 1, wine: 1, premium_steak: 1 },
-    grand: { heart_plate: 1, cupid_decoration: 2, napkin: 1, wine: 1, premium_steak: 1 },
-    deluxe: { heart_plate: 1, cupid_decoration: 3, napkin: 2, wine: 1, premium_steak: 1 }
+    simple: { heart_plate: 1, cupid_decoration: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
+    grand: { heart_plate: 1, cupid_decoration: 2, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
+    deluxe: { heart_plate: 1, cupid_decoration: 3, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, wine: 1, premium_steak: 1 }
   },
   french: {
-    simple: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    grand: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    deluxe: { coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
+    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
+    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
+    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
   },
   english: {
-    simple: { scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
-    grand: { scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
-    deluxe: { scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
+    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
+    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
+    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
   },
   champagne: {
-    grand: { champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
-    deluxe: { champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
+    grand: { ceramic_plate: 2, ceramic_cup: 2, cotton_napkin: 2, wooden_tray: 1, plastic_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
+    deluxe: { ceramic_plate: 2, ceramic_cup: 2, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
+  },
+  cake: {
+    simple: { cake_base: 1, buttercream_frosting: 1, fresh_berries: 1, cake_board: 1, plastic_plate: 1, plastic_tray: 1, paper_napkin: 1 },
+    grand: { cake_base: 1, buttercream_frosting: 1, fondant: 1, fresh_berries: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1 },
+    deluxe: { cake_base: 1, buttercream_frosting: 1, fondant: 1, edible_gold_leaf: 1, chocolate_ganache: 1, edible_flowers: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1 }
   }
 }
 
@@ -250,7 +271,7 @@ export default function MenuPage() {
             {/* Left: Menu Grid (주요 콘텐츠) */}
             <div className="order-2 lg:order-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {menuItems.map((menu) => (
+                {menuItems.filter(menu => menu.code !== 'cake').map((menu) => (
                   <div key={menu.id} className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all transform hover:-translate-y-1 border border-amber-100">
                     {/* Menu Image */}
                     <div className="w-full h-48 bg-gradient-to-br from-amber-50 to-stone-100 overflow-hidden">
@@ -269,52 +290,70 @@ export default function MenuPage() {
                       {/* Styles */}
                       <div className="space-y-2">
                         <h4 className="font-bold text-stone-800 text-sm mb-2">스타일 선택:</h4>
-                        {menu.styles.map((style) => (
-                          <div key={style.name} className="relative group flex items-center justify-between p-3 bg-gradient-to-r from-amber-50 to-stone-50 rounded-xl border border-amber-100 hover:shadow-md transition-all hover:border-amber-200">
-                            <div className="flex-1">
-                              <div className="font-semibold text-stone-900 relative">
-                                {style.name}
-                                {/* 툴팁 */}
-                                <div className="absolute left-14 top-0 w-64 bg-stone-800 text-white p-2.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
-                                  <div className="text-xs font-medium mb-1">{style.name} 스타일</div>
-                                  <div className="text-xs text-stone-200 mb-1">
-                                    {styleDetails[style.name as keyof typeof styleDetails]?.description}
+                        {menu.styles.map((style) => {
+                          const isAvailable = style.available !== false
+                          return (
+                            <div
+                              key={style.name}
+                              className={`relative group flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                isAvailable
+                                  ? 'bg-gradient-to-r from-amber-50 to-stone-50 border-amber-100 hover:shadow-md hover:border-amber-200'
+                                  : 'bg-stone-50 border-stone-200 opacity-60 cursor-not-allowed'
+                              }`}
+                            >
+                              <div className="flex-1">
+                                <div className="font-semibold text-stone-900 relative">
+                                  {style.name}
+                                  {!isAvailable && (
+                                    <span className="ml-2 text-xs font-medium text-red-500">재고 부족</span>
+                                  )}
+                                  {/* 툴팁 */}
+                                  <div className="absolute left-14 top-0 w-64 bg-stone-800 text-white p-2.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-20">
+                                    <div className="text-xs font-medium mb-1">{style.name} 스타일</div>
+                                    <div className="text-xs text-stone-200 mb-1">
+                                      {styleDetails[style.name as keyof typeof styleDetails]?.description}
+                                    </div>
+                                    <div className="text-xs text-amber-300">
+                                      {styleDetails[style.name as keyof typeof styleDetails]?.wineGlass}
+                                    </div>
+                                    <div className="absolute -left-2 top-3 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-stone-800"></div>
                                   </div>
-                                  <div className="text-xs text-amber-300">
-                                    {styleDetails[style.name as keyof typeof styleDetails]?.wineGlass}
-                                  </div>
-                                  <div className="absolute -left-2 top-3 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-stone-800"></div>
+                                </div>
+                                <div className="text-xs text-stone-600 mt-0.5">
+                                  조리 {style.cooking_time}분 · 총 {style.cooking_time + 20}분
                                 </div>
                               </div>
-                              <div className="text-xs text-stone-600 mt-0.5">
-                                조리 {style.cooking_time}분 · 총 {style.cooking_time + 20}분
+                              <div className="text-right">
+                                <div className="flex flex-col items-end gap-0.5">
+                                  {discountInfo?.eligible ? (
+                                    <>
+                                      <div className="text-xs text-stone-500 line-through">{style.price.toLocaleString()}원</div>
+                                      <div className="text-lg font-bold text-red-600">
+                                        {Math.round(style.price * (1 - discountInfo.discount_rate)).toLocaleString()}원
+                                      </div>
+                                      <div className="text-xs text-red-500 font-medium">
+                                        {Math.round(discountInfo.discount_rate * 100)}% 할인
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-lg font-bold bg-gradient-to-r from-amber-600 to-amber-800 text-transparent bg-clip-text">{style.price.toLocaleString()}원</div>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleOrder(menu, style)}
+                                  disabled={!isAvailable}
+                                  className={`mt-2 px-4 py-1.5 font-semibold text-sm rounded-lg transition-all ${
+                                    isAvailable
+                                      ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:shadow-lg hover:scale-105 hover:from-amber-700 hover:to-amber-800'
+                                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  }`}
+                                >
+                                  {isAvailable ? '주문하기' : '준비 중'}
+                                </button>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="flex flex-col items-end gap-0.5">
-                                {discountInfo?.eligible ? (
-                                  <>
-                                    <div className="text-xs text-stone-500 line-through">{style.price.toLocaleString()}원</div>
-                                    <div className="text-lg font-bold text-red-600">
-                                      {Math.round(style.price * (1 - discountInfo.discount_rate)).toLocaleString()}원
-                                    </div>
-                                    <div className="text-xs text-red-500 font-medium">
-                                      {Math.round(discountInfo.discount_rate * 100)}% 할인
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="text-lg font-bold bg-gradient-to-r from-amber-600 to-amber-800 text-transparent bg-clip-text">{style.price.toLocaleString()}원</div>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => handleOrder(menu, style)}
-                                className="mt-2 px-4 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold text-sm rounded-lg hover:shadow-lg transition-all transform hover:scale-105 hover:from-amber-700 hover:to-amber-800"
-                              >
-                                주문하기
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   </div>

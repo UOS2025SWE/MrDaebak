@@ -11,6 +11,7 @@ export interface MenuStyle {
   cooking_time: number
   description?: string
   base_ingredients?: { [key: string]: number }
+  available?: boolean
 }
 
 // 메뉴 아이템 정보

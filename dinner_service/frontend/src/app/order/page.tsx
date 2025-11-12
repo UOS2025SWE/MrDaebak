@@ -15,6 +15,19 @@ const ingredientNames: { [key: string]: string } = {
   heart_plate: '하트 모양 접시',
   cupid_decoration: '큐피드 장식',
   napkin: '냅킨',
+  paper_napkin: '종이 냅킨',
+  cotton_napkin: '면 냅킨',
+  linen_napkin: '린넨 냅킨',
+  plastic_tray: '플라스틱 쟁반',
+  wooden_tray: '나무 쟁반',
+  plastic_plate: '플라스틱 접시',
+  plastic_cup: '플라스틱 컵',
+  ceramic_plate: '도자기 접시',
+  ceramic_cup: '도자기 컵',
+  plastic_wine_glass: '플라스틱 와인잔',
+  glass_wine_glass: '유리 와인잔',
+  cake_board: '케이크 보드',
+  vase_with_flowers: '꽃병 장식',
   wine: '와인',
   premium_steak: '프리미엄 스테이크',
   // French 디너 구성품
@@ -29,6 +42,25 @@ const ingredientNames: { [key: string]: string } = {
   baguette: '바게트빵',
   coffee_pot: '커피 포트'
 }
+
+const tablewareCodes = new Set([
+  'heart_plate',
+  'cupid_decoration',
+  'paper_napkin',
+  'napkin',
+  'cotton_napkin',
+  'linen_napkin',
+  'plastic_tray',
+  'wooden_tray',
+  'plastic_plate',
+  'plastic_cup',
+  'ceramic_plate',
+  'ceramic_cup',
+  'plastic_wine_glass',
+  'glass_wine_glass',
+  'cake_board',
+  'vase_with_flowers'
+])
 
 const styleEnglishToKorean: Record<string, string> = {
   simple: '심플',
@@ -248,6 +280,22 @@ export default function OrderPage() {
   const discountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
   const finalPrice = Math.max(0, originalPrice - discountAmount)
 
+  const baseForCurrentStyle = useMemo(() => {
+    if (!orderData) return {}
+    return baseIngredients[orderData.styleCode] || {}
+  }, [orderData, baseIngredients])
+
+  const ingredientGroups = useMemo(() => {
+    if (!orderData) {
+      return { food: [] as Array<[string, number]>, tableware: [] as Array<[string, number]> }
+    }
+    const entries = Object.entries(orderData.ingredients)
+    return {
+      food: entries.filter(([code]) => !tablewareCodes.has(code)),
+      tableware: entries.filter(([code]) => tablewareCodes.has(code))
+    }
+  }, [orderData])
+
   if (!orderData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -275,12 +323,28 @@ export default function OrderPage() {
 
   // 재료 수량 변경 핸들러
   const handleIngredientChange = (ingredient: string, change: number) => {
-    const newQuantity = Math.max(0, orderData.ingredients[ingredient] + change)
+    if (!orderData) return
+
+    const baseForStyle = baseIngredients[orderData.styleCode] || {}
+    const baseQty = baseForStyle[ingredient] ?? 0
+    const currentQty = orderData.ingredients[ingredient] ?? baseQty
+    let nextQty = currentQty + change
+
+    if (change < 0) {
+      nextQty = Math.max(baseQty, nextQty)
+    }
+
+    if (change > 0 && nextQty < baseQty) {
+      nextQty = baseQty
+    }
+
+    const safeQuantity = Math.max(baseQty, nextQty)
+
     setOrderData({
       ...orderData,
       ingredients: {
         ...orderData.ingredients,
-        [ingredient]: newQuantity
+        [ingredient]: safeQuantity
       }
     })
   }
@@ -432,31 +496,97 @@ export default function OrderPage() {
               {/* 재료 커스터마이징 */}
               <div>
                 <h3 className="text-xl font-bold text-stone-900 mb-4">재료 커스터마이징</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Object.entries(orderData.ingredients).map(([ingredient, quantity]) => (
-                    <div key={ingredient} className="flex items-center justify-between p-4 bg-stone-50 rounded-xl">
-                      <span className="font-semibold text-stone-800">
-                        {ingredientNames[ingredient] || ingredient}
-                      </span>
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => handleIngredientChange(ingredient, -1)}
-                          className="w-8 h-8 rounded-full bg-stone-300 hover:bg-stone-400 flex items-center justify-center text-stone-700 font-bold transition-colors"
-                        >
-                          -
-                        </button>
-                        <span className="font-bold text-stone-900 min-w-[2rem] text-center">
-                          {quantity}
-                        </span>
-                        <button
-                          onClick={() => handleIngredientChange(ingredient, 1)}
-                          className="w-8 h-8 rounded-full bg-amber-600 hover:bg-amber-700 flex items-center justify-center text-white font-bold transition-colors"
-                        >
-                          +
-                        </button>
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-lg font-semibold text-stone-800 mb-3">요리 재료</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {ingredientGroups.food.map(([ingredient, quantity]) => {
+                        const baseQty = baseForCurrentStyle[ingredient] ?? 0
+                        const canDecrease = quantity > baseQty
+                        return (
+                        <div key={ingredient} className="flex items-center justify-between p-4 bg-stone-50 border border-stone-200 rounded-xl">
+                          <div>
+                            <span className="font-semibold text-stone-800">
+                              {ingredientNames[ingredient] || ingredient}
+                            </span>
+                            <p className="text-xs text-stone-500 mt-1">최소 {baseQty}개 유지</p>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <button
+                              onClick={() => handleIngredientChange(ingredient, -1)}
+                              disabled={!canDecrease}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${
+                                canDecrease
+                                  ? 'bg-stone-300 hover:bg-stone-400 text-stone-700'
+                                  : 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                              }`}
+                            >
+                              -
+                            </button>
+                            <span className="font-bold text-stone-900 min-w-[2rem] text-center">
+                              {quantity}
+                            </span>
+                            <button
+                              onClick={() => handleIngredientChange(ingredient, 1)}
+                              className="w-8 h-8 rounded-full bg-amber-600 hover:bg-amber-700 flex items-center justify-center text-white font-bold transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        )
+                      })}
+                      {ingredientGroups.food.length === 0 && (
+                        <div className="p-4 border border-dashed border-stone-200 rounded-xl text-sm text-stone-500">
+                          조정 가능한 요리 재료가 없습니다.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {ingredientGroups.tableware.length > 0 && (
+                    <div>
+                      <h4 className="text-lg font-semibold text-pink-800 mb-3">테이블웨어 · 데코 옵션</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {ingredientGroups.tableware.map(([ingredient, quantity]) => {
+                          const baseQty = baseForCurrentStyle[ingredient] ?? 0
+                          const canDecrease = quantity > baseQty
+                          return (
+                          <div key={ingredient} className="flex items-center justify-between p-4 bg-pink-50 border border-pink-200 rounded-xl">
+                            <div>
+                              <span className="font-semibold text-pink-900">
+                                {ingredientNames[ingredient] || ingredient}
+                              </span>
+                              <p className="text-xs text-pink-600 mt-1">최소 {baseQty}개 유지</p>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={() => handleIngredientChange(ingredient, -1)}
+                                disabled={!canDecrease}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${
+                                  canDecrease
+                                    ? 'bg-pink-200 hover:bg-pink-300 text-pink-800'
+                                    : 'bg-pink-100 text-pink-300 cursor-not-allowed'
+                                }`}
+                              >
+                                -
+                              </button>
+                              <span className="font-bold text-pink-900 min-w-[2rem] text-center">
+                                {quantity}
+                              </span>
+                              <button
+                                onClick={() => handleIngredientChange(ingredient, 1)}
+                                className="w-8 h-8 rounded-full bg-pink-500 hover:bg-pink-600 flex items-center justify-center text-white font-bold transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          )
+                        })}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
