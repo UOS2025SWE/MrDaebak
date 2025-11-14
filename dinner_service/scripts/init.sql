@@ -40,6 +40,20 @@ CREATE TABLE IF NOT EXISTS staff_details (
     CONSTRAINT fk_staff_user FOREIGN KEY (staff_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS staff_termination_logs (
+    log_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID NOT NULL,
+    staff_name TEXT,
+    staff_email TEXT,
+    position TEXT,
+    termination_reason TEXT,
+    terminated_at TIMESTAMP DEFAULT NOW(),
+    terminated_by UUID REFERENCES users(user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_termination_logs_staff_id ON staff_termination_logs(staff_id);
+CREATE INDEX IF NOT EXISTS idx_staff_termination_logs_terminated_at ON staff_termination_logs(terminated_at);
+
 CREATE TABLE IF NOT EXISTS ingredient_intake_batches (
     batch_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     store_id UUID NOT NULL REFERENCES stores(store_id) ON DELETE CASCADE,

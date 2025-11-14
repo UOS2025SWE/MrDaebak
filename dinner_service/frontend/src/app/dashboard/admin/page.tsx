@@ -1443,6 +1443,42 @@ function AdminDashboardContent() {
     }
   }
 
+  const handleTerminateStaff = async (staffId: string) => {
+    if (!token) return
+
+    const confirmed = window.confirm('이 직원과의 계약을 종료하고 계정을 삭제하시겠습니까?')
+    if (!confirmed) return
+
+    const reason = window.prompt('계약 종료 사유를 입력하세요 (선택 사항)', '')
+    const payload: { reason?: string } = {}
+    if (reason && reason.trim().length > 0) {
+      payload.reason = reason.trim()
+    }
+
+    try {
+      const response = await fetch(`/api/staff/${staffId}/terminate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        alert(data.message || '직원과의 계약이 종료되었습니다')
+        await Promise.all([fetchStaffData(), fetchPendingStaff()])
+      } else {
+        alert(data.error || data.detail || '직원 계약 종료에 실패했습니다')
+      }
+    } catch (error) {
+      console.error('직원 계약 종료 실패:', error)
+      alert('직원 계약 종료 중 오류가 발생했습니다')
+    }
+  }
+
   const fetchCategorizedIngredientsData = useCallback(async () => {
     if (!token) return
 
@@ -2823,15 +2859,32 @@ function AdminDashboardContent() {
                             : 'bg-red-50 border-red-200'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-bold text-gray-900">{staff.name}</h3>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusClasses}`}>
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <div>
+                            <h3 className="font-bold text-gray-900">{staff.name}</h3>
+                            <p className="text-xs text-gray-500">{staff.id}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusClasses}`}>
                             {statusLabel}
                           </span>
                         </div>
                         {staff.currentTask && (
                           <p className="text-sm text-gray-600">{staff.currentTask}</p>
                         )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => toggleStaffStatus(staff.id)}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
+                          >
+                            출퇴근 토글
+                          </button>
+                          <button
+                            onClick={() => handleTerminateStaff(staff.id)}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          >
+                            계약 종료
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -2868,15 +2921,32 @@ function AdminDashboardContent() {
                             : 'bg-blue-50 border-blue-200'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-bold text-gray-900">{staff.name}</h3>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusClasses}`}>
+                        <div className="flex items-center justify-between gap-4 mb-2">
+                          <div>
+                            <h3 className="font-bold text-gray-900">{staff.name}</h3>
+                            <p className="text-xs text-gray-500">{staff.id}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusClasses}`}>
                             {statusLabel}
                           </span>
                         </div>
                         {staff.currentTask && (
                           <p className="text-sm text-gray-600">{staff.currentTask}</p>
                         )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => toggleStaffStatus(staff.id)}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+                          >
+                            출퇴근 토글
+                          </button>
+                          <button
+                            onClick={() => handleTerminateStaff(staff.id)}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          >
+                            계약 종료
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

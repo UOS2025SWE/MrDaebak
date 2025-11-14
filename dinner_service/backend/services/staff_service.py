@@ -421,8 +421,13 @@ class StaffService:
                 last_payday = row[8] if len(row) > 8 else None
                 next_payday = row[9] if len(row) > 9 else None
 
+                # 포지션이 확정되지 않은 직원은 조리/배달 현황에서 제외
+                if position not in ('COOK', 'DELIVERY'):
+                    logger.debug("Skipping staff %s with pending position", staff_id)
+                    continue
+
                 # position을 type으로 매핑
-                staff_type = 'cook' if position == 'COOK' else 'delivery' if position == 'DELIVERY' else 'cook'
+                staff_type = 'cook' if position == 'COOK' else 'delivery'
 
                 staff_info: dict[str, Any] = {
                     'id': staff_id,
