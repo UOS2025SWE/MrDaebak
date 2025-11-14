@@ -25,3 +25,18 @@ export interface PaymentModalProps {
   orderData: OrderItem
   finalPrice: number
 }
+
+export interface EventMenuDiscount {
+  event_id: string
+  title: string
+  discount_label?: string | null
+  discount_type: 'PERCENT' | 'FIXED'
+  discount_value: number
+  start_date?: string | null
+  end_date?: string | null
+  target_type?: 'MENU' | 'SIDE_DISH'
+  menu_item_id?: string
+  side_dish_id?: string
+  menu_name?: string
+  side_dish_name?: string
+}

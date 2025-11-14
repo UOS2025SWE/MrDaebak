@@ -8,12 +8,13 @@ import logging
 import traceback
 from typing import Any
 from datetime import datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .discount_service import DiscountService
+from .event_service import event_service
 from .menu_service import MenuService
 from .side_dish_service import side_dish_service
 from .websocket_manager import manager as ws_manager
@@ -403,26 +404,212 @@ class OrderService:
 
             side_dish_total_decimal = side_dish_summary["total_price"]
             total_price_before_discount_decimal = base_total_decimal + customization_cost_decimal + side_dish_total_decimal
-            total_price_before_discount = int(total_price_before_discount_decimal)
             unit_price = int(unit_price_decimal)
 
-            # 할인 기능 활성화 (discount_service.py 업데이트 완료)
+            event_discounts = event_service.get_active_menu_discounts(db, str(menu_item_id), target_type="MENU")
+            menu_event_discounts = [discount for discount in event_discounts if (discount.get("target_type") or "MENU") == "MENU"]
+            side_event_discount_cache: dict[str, list[dict[str, Any]]] = {}
+            if side_dish_summary.get("items"):
+                unique_side_ids: set[str] = set()
+                for item in side_dish_summary["items"]:
+                    side_id_value = str(item.get("side_dish_id") or "").strip()
+                    if side_id_value:
+                        unique_side_ids.add(side_id_value)
+                for side_id in unique_side_ids:
+                    side_event_discount_cache[side_id] = event_service.get_active_menu_discounts(
+                        db,
+                        side_id,
+                        target_type="SIDE_DISH",
+                    )
+
+            menu_discount_total_decimal = Decimal("0")
+            side_dish_discount_total_decimal = Decimal("0")
+            event_discount_details: list[dict[str, Any]] = []
+
+            if base_total_decimal > Decimal("0"):
+                for discount in menu_event_discounts:
+                    try:
+                        discount_value = Decimal(str(discount.get("discount_value", 0)))
+                    except (InvalidOperation, TypeError):
+                        continue
+
+                    discount_type = str(discount.get("discount_type", "PERCENT")).upper()
+                    if discount_type not in {"PERCENT", "FIXED"}:
+                        continue
+
+                    if discount_type == "PERCENT":
+                        calculated = (base_total_decimal * discount_value) / Decimal("100")
+                    else:
+                        calculated = discount_value * Decimal(quantity)
+
+                    if calculated <= Decimal("0"):
+                        continue
+
+                    remaining_cap = max(Decimal("0"), base_total_decimal - menu_discount_total_decimal)
+                    applied_amount = min(calculated, remaining_cap)
+                    if applied_amount <= Decimal("0"):
+                        continue
+
+                    applied_amount = applied_amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                    menu_discount_total_decimal += applied_amount
+
+                    event_discount_details.append(
+                        {
+                            "event_id": discount.get("event_id"),
+                            "title": discount.get("title"),
+                            "discount_label": discount.get("discount_label"),
+                            "discount_type": discount_type,
+                            "discount_value": float(discount_value),
+                            "applied_amount": int(applied_amount),
+                            "target_type": "MENU",
+                            "target_id": discount.get("menu_item_id"),
+                            "target_name": discount.get("menu_name"),
+                        }
+                    )
+
+            if side_dish_summary.get("items"):
+                side_item_tracker: dict[str, dict[str, Decimal]] = {}
+                for item in side_dish_summary["items"]:
+                    side_id = str(item.get("side_dish_id") or "").strip()
+                    if not side_id:
+                        continue
+                    try:
+                        total_price = Decimal(str(item.get("total_price", 0)))
+                        quantity_decimal = Decimal(str(item.get("quantity", 0)))
+                    except (InvalidOperation, TypeError):
+                        continue
+                    if total_price <= Decimal("0") or quantity_decimal <= Decimal("0"):
+                        continue
+                    side_item_tracker[side_id] = {
+                        "remaining": total_price,
+                        "quantity": quantity_decimal,
+                    }
+
+                for side_dish_id, tracker in side_item_tracker.items():
+                    side_discounts = side_event_discount_cache.get(side_dish_id, [])
+                    if not side_discounts:
+                        continue
+
+                    for discount in side_discounts:
+                        remaining_total = tracker["remaining"]
+                        if remaining_total <= Decimal("0"):
+                            break
+
+                        try:
+                            discount_value = Decimal(str(discount.get("discount_value", 0)))
+                        except (InvalidOperation, TypeError):
+                            continue
+
+                        discount_type = str(discount.get("discount_type", "PERCENT")).upper()
+                        if discount_type not in {"PERCENT", "FIXED"}:
+                            continue
+
+                        if discount_type == "PERCENT":
+                            calculated = (remaining_total * discount_value) / Decimal("100")
+                        else:
+                            calculated = discount_value * tracker["quantity"]
+
+                        if calculated <= Decimal("0"):
+                            continue
+
+                        applied_amount = min(calculated, remaining_total)
+                        if applied_amount <= Decimal("0"):
+                            continue
+
+                        applied_amount = applied_amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+                        tracker["remaining"] = max(Decimal("0"), tracker["remaining"] - applied_amount)
+                        side_dish_discount_total_decimal += applied_amount
+
+                        event_discount_details.append(
+                            {
+                                "event_id": discount.get("event_id"),
+                                "title": discount.get("title"),
+                                "discount_label": discount.get("discount_label"),
+                                "discount_type": discount_type,
+                                "discount_value": float(discount_value),
+                                "applied_amount": int(applied_amount),
+                                "target_type": "SIDE_DISH",
+                                "target_id": side_dish_id,
+                                "target_name": discount.get("side_dish_name"),
+                            }
+                        )
+
+            event_discount_total_decimal = menu_discount_total_decimal + side_dish_discount_total_decimal
+            if event_discount_total_decimal > total_price_before_discount_decimal:
+                event_discount_total_decimal = total_price_before_discount_decimal
+            price_after_event_decimal = total_price_before_discount_decimal - event_discount_total_decimal
+            if price_after_event_decimal < Decimal("0"):
+                price_after_event_decimal = Decimal("0")
+
+            price_after_event_int = int(price_after_event_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            total_price_before_discount_int = int(total_price_before_discount_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            event_discount_total_int = int(event_discount_total_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            event_menu_discount_total_int = int(menu_discount_total_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            event_side_dish_discount_total_int = int(side_dish_discount_total_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
             if customer_id:
-                pricing_info = DiscountService.calculate_order_pricing(customer_id, total_price_before_discount, db)
+                loyalty_pricing = DiscountService.calculate_order_pricing(
+                    customer_id,
+                    float(total_price_before_discount_decimal),
+                    db,
+                )
             else:
-                pricing_info = {
-                    "original_price": total_price_before_discount,
+                loyalty_pricing = {
+                    "original_price": total_price_before_discount_int,
                     "discount_rate": 0.0,
                     "discount_amount": 0,
-                    "final_price": total_price_before_discount,
+                    "final_price": total_price_before_discount_int,
                     "customer_type": "비회원",
                     "discount_message": "",
-                    "savings": 0
+                    "savings": 0,
                 }
 
-            pricing_info["base_price_total"] = int(base_total_decimal)
-            pricing_info["customization_cost"] = int(customization_cost_decimal)
-            pricing_info["side_dish_total"] = int(side_dish_total_decimal)
+            loyalty_discount_amount_decimal = Decimal(str(loyalty_pricing.get("discount_amount", 0)))
+            if loyalty_discount_amount_decimal < Decimal("0"):
+                loyalty_discount_amount_decimal = Decimal("0")
+            loyalty_discount_amount_decimal = loyalty_discount_amount_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            loyalty_discount_amount = int(loyalty_discount_amount_decimal)
+
+            price_after_loyalty_decimal = total_price_before_discount_decimal - loyalty_discount_amount_decimal
+            if price_after_loyalty_decimal < Decimal("0"):
+                price_after_loyalty_decimal = Decimal("0")
+            price_after_loyalty_int = int(price_after_loyalty_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+            final_price_decimal = price_after_loyalty_decimal - event_discount_total_decimal
+            if final_price_decimal < Decimal("0"):
+                final_price_decimal = Decimal("0")
+            final_price_decimal = final_price_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            final_price = int(final_price_decimal)
+
+            loyalty_savings = int(loyalty_pricing.get("savings", loyalty_discount_amount))
+
+            total_savings_decimal = loyalty_discount_amount_decimal + event_discount_total_decimal
+            total_savings_decimal = total_savings_decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            total_savings_int = int(total_savings_decimal)
+
+            pricing_info = {
+                "original_price": total_price_before_discount_int,
+                "base_price_total": int(base_total_decimal),
+                "customization_cost": int(customization_cost_decimal),
+                "side_dish_total": int(side_dish_total_decimal),
+                "event_discount_total": event_discount_total_int,
+                "event_discounts": event_discount_details,
+                "event_menu_discount_total": event_menu_discount_total_int,
+                "event_side_dish_discount_total": event_side_dish_discount_total_int,
+                "price_after_event": price_after_event_int,
+                "price_after_loyalty": price_after_loyalty_int,
+                "discount_rate": loyalty_pricing.get("discount_rate", 0.0),
+                "discount_amount": loyalty_discount_amount,
+                "final_price": final_price,
+                "customer_type": loyalty_pricing.get("customer_type", "비회원"),
+                "discount_message": loyalty_pricing.get("discount_message", ""),
+                "loyalty_discount_amount": loyalty_discount_amount,
+                "loyalty_discount_rate": loyalty_pricing.get("discount_rate", 0.0),
+                "loyalty_savings": loyalty_savings,
+                "event_savings": event_discount_total_int,
+                "savings": total_savings_int,
+                "total_savings": total_savings_int,
+            }
 
             # 재고 확인 및 차감
             inventory_result = OrderService._check_and_consume_ingredients(

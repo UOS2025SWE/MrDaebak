@@ -21,6 +21,14 @@ import {
 import type { DeliveryInfo, PaymentInfo, CheckoutRequest } from '../../types/checkout'
 import type { DiscountInfo } from '../../types/common'
 
+type MenuEventDiscountInfo = {
+  eventId: string
+  title: string
+  discountType: 'PERCENT' | 'FIXED'
+  discountValue: number
+  targetName?: string
+}
+
 // 재료 한글 이름 매핑 (order 페이지와 동일)
 const ingredientNames: { [key: string]: string } = {
   heart_plate: '하트 모양 접시',
@@ -364,6 +372,8 @@ export default function CheckoutPage() {
   const [cakeImagePreview, setCakeImagePreview] = useState<string | null>(null)
   const [isUploadingCakeImage, setIsUploadingCakeImage] = useState(false)
   const [discountInfo, setDiscountInfo] = useState<DiscountInfo | null>(null)
+  const [menuEventDiscountMap, setMenuEventDiscountMap] = useState<Record<string, MenuEventDiscountInfo[]>>({})
+  const [sideDishEventDiscountMap, setSideDishEventDiscountMap] = useState<Record<string, MenuEventDiscountInfo[]>>({})
 
   // 배송 정보
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo>(() => {
@@ -452,6 +462,7 @@ export default function CheckoutPage() {
           headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
         })
         const data = await response.json()
+
         if (data.success && Array.isArray(data.data)) {
           const mappedDishes: SideDishOption[] = data.data.map(createSideDishOptionFromResponse)
 
@@ -479,6 +490,153 @@ export default function CheckoutPage() {
 
     fetchSideDishes()
   }, [token])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchEventDiscounts = async () => {
+      const hasMenuCode = typeof menuCode === 'string' && menuCode.length > 0
+      if (!hasMenuCode && (!sideDishOptions || sideDishOptions.length === 0)) {
+        if (isMounted) {
+          setMenuEventDiscountMap({})
+          setSideDishEventDiscountMap({})
+        }
+        return
+      }
+
+      try {
+        const response = await fetch('/api/events')
+        if (!response.ok) {
+          if (isMounted) {
+            setMenuEventDiscountMap({})
+            setSideDishEventDiscountMap({})
+          }
+          return
+        }
+
+        const data = await response.json().catch(() => null)
+        if (!data || !Array.isArray(data.events)) {
+          if (isMounted) {
+            setMenuEventDiscountMap({})
+            setSideDishEventDiscountMap({})
+          }
+          return
+        }
+
+        const normalizedMenuCode = hasMenuCode ? menuCode.toLowerCase() : ''
+        const sideDishLookup = new Map<string, SideDishOption>()
+        ;(sideDishOptions || []).forEach((option) => {
+          const codeKey = option.code ? option.code.toLowerCase() : ''
+          const idKey = option.side_dish_id ? option.side_dish_id.toLowerCase() : ''
+          if (codeKey) {
+            sideDishLookup.set(codeKey, option)
+          }
+          if (idKey) {
+            sideDishLookup.set(idKey, option)
+          }
+        })
+        if (customCakeOption) {
+          const cakeCodeKey = customCakeOption.code ? customCakeOption.code.toLowerCase() : ''
+          const cakeIdKey = customCakeOption.side_dish_id ? customCakeOption.side_dish_id.toLowerCase() : ''
+          if (cakeCodeKey) {
+            sideDishLookup.set(cakeCodeKey, customCakeOption)
+          }
+          if (cakeIdKey) {
+            sideDishLookup.set(cakeIdKey, customCakeOption)
+          }
+        }
+
+        const menuMap: Record<string, MenuEventDiscountInfo[]> = {}
+        const sideMap: Record<string, MenuEventDiscountInfo[]> = {}
+
+        data.events.forEach((event: any) => {
+          const discounts = Array.isArray(event?.menu_discounts) ? event.menu_discounts : []
+          discounts.forEach((discount: any) => {
+            const targetType = String(discount?.target_type ?? discount?.targetType ?? 'MENU').toUpperCase()
+            const rawDiscountValue = Number(discount?.discount_value ?? discount?.discountValue ?? 0)
+            if (!Number.isFinite(rawDiscountValue) || rawDiscountValue <= 0) {
+              return
+            }
+
+            const discountType: 'PERCENT' | 'FIXED' = (discount?.discount_type ?? discount?.discountType ?? 'PERCENT') === 'FIXED' ? 'FIXED' : 'PERCENT'
+            const normalizedDiscount: MenuEventDiscountInfo = {
+              eventId: String(discount?.event_id ?? discount?.eventId ?? event?.event_id ?? event?.id ?? ''),
+              title: String(discount?.title ?? event?.title ?? '이벤트 할인'),
+              discountType,
+              discountValue: rawDiscountValue,
+              targetName: undefined,
+            }
+
+            if (targetType === 'MENU') {
+              const codeRaw = String(discount?.menu_code ?? discount?.menuCode ?? '').toLowerCase()
+              if (!codeRaw) {
+                return
+              }
+              if (hasMenuCode && codeRaw !== normalizedMenuCode) {
+                return
+              }
+
+              normalizedDiscount.targetName = String(discount?.menu_name ?? discount?.menuName ?? event?.title ?? '') || undefined
+
+              if (!menuMap[codeRaw]) {
+                menuMap[codeRaw] = []
+              }
+              menuMap[codeRaw].push(normalizedDiscount)
+            } else if (targetType === 'SIDE_DISH') {
+              const identifierCandidates = [
+                discount?.side_dish_code ?? discount?.sideDishCode,
+                discount?.side_dish_id ?? discount?.sideDishId,
+              ]
+                .map((value) => (value ? String(value).toLowerCase() : ''))
+                .filter(Boolean)
+
+              const matchedOption = identifierCandidates
+                .map((identifier) => sideDishLookup.get(identifier))
+                .find(Boolean)
+
+              if (!matchedOption && identifierCandidates.length === 0) {
+                return
+              }
+
+              const canonicalKey = matchedOption?.code
+                ? matchedOption.code.toLowerCase()
+                : identifierCandidates[0]
+
+              if (!canonicalKey) {
+                return
+              }
+
+              normalizedDiscount.targetName = matchedOption?.name
+                || String(discount?.side_dish_name ?? discount?.sideDishName ?? '')
+                || undefined
+
+              if (!sideMap[canonicalKey]) {
+                sideMap[canonicalKey] = []
+              }
+              sideMap[canonicalKey].push(normalizedDiscount)
+            }
+          })
+        })
+
+        if (isMounted) {
+          setMenuEventDiscountMap(menuMap)
+          setSideDishEventDiscountMap(sideMap)
+        }
+      } catch (error) {
+        console.error('이벤트 할인 정보를 불러오는데 실패했습니다:', error)
+        if (isMounted) {
+          setMenuEventDiscountMap({})
+          setSideDishEventDiscountMap({})
+        }
+      }
+    }
+
+    fetchEventDiscounts()
+
+    return () => {
+      isMounted = false
+    }
+  }, [menuCode, sideDishOptions, customCakeOption])
 
   useEffect(() => {
     fetchCustomCakeRecipes()
@@ -563,6 +721,163 @@ export default function CheckoutPage() {
     setOriginalPrice(basePrice + customizationCost + sideDishCost + customCakeCost)
   }, [basePrice, customizationCost, sideDishCost, customCakeCost])
 
+  const calculateSequentialDiscounts = useCallback(
+    (baseAmount: number, quantityValue: number, discounts: MenuEventDiscountInfo[]) => {
+      const normalizedBase = Math.max(0, Math.round(Number(baseAmount) || 0))
+      const normalizedQuantity = Math.max(1, Math.round(Number(quantityValue) || 0))
+
+      if (normalizedBase <= 0 || !Array.isArray(discounts) || discounts.length === 0) {
+        return { total: 0, breakdown: [] as Array<{ info: MenuEventDiscountInfo; amount: number }> }
+      }
+
+      let remaining = normalizedBase
+      const breakdown: Array<{ info: MenuEventDiscountInfo; amount: number }> = []
+
+      discounts.forEach((discount) => {
+        if (!discount) return
+        const value = Number(discount.discountValue)
+        if (!Number.isFinite(value) || value <= 0 || remaining <= 0) return
+
+        let calculated = 0
+        if (discount.discountType === 'PERCENT') {
+          calculated = Math.round(normalizedBase * (value / 100))
+        } else {
+          calculated = Math.round(value * normalizedQuantity)
+        }
+
+        if (calculated <= 0) return
+
+        const applied = Math.min(calculated, remaining)
+        if (applied <= 0) return
+
+        breakdown.push({ info: discount, amount: applied })
+        remaining = Math.max(0, remaining - applied)
+      })
+
+      const total = breakdown.reduce((sum, entry) => sum + entry.amount, 0)
+      return { total, breakdown }
+    },
+    []
+  )
+
+  type EventDiscountBreakdownEntry = {
+    info: MenuEventDiscountInfo
+    amount: number
+    targetType: 'MENU' | 'SIDE_DISH'
+    targetCode?: string
+    targetName?: string
+  }
+
+  const normalizedMenuCode = useMemo(() => (menuCode ? menuCode.toLowerCase() : ''), [menuCode])
+
+  const menuEventDiscountBreakdown = useMemo<EventDiscountBreakdownEntry[]>(() => {
+    if (!normalizedMenuCode) return []
+    const discounts = menuEventDiscountMap[normalizedMenuCode] || []
+    if (!discounts.length) return []
+
+    const { breakdown } = calculateSequentialDiscounts(basePrice, quantity, discounts)
+    return breakdown.map((entry) => ({
+      info: entry.info,
+      amount: entry.amount,
+      targetType: 'MENU',
+      targetCode: normalizedMenuCode,
+      targetName: entry.info.targetName || menuInfo?.name,
+    }))
+  }, [normalizedMenuCode, menuEventDiscountMap, calculateSequentialDiscounts, basePrice, quantity, menuInfo?.name])
+
+  const sideDishEventDiscountSummary = useMemo(() => {
+    const byCode: Record<string, number> = {}
+    const breakdown: EventDiscountBreakdownEntry[] = []
+    let total = 0
+
+    const selectionEntries: Array<{ code: string; quantity: number }> = Object.entries(sideDishSelections).map(
+      ([code, qty]) => ({
+        code,
+        quantity: Number(qty) || 0,
+      })
+    )
+
+    if (includeCustomCake && customCakeOption) {
+      selectionEntries.push({
+        code: customCakeOption.code,
+        quantity: 1,
+      })
+    }
+
+    selectionEntries.forEach(({ code, quantity }) => {
+      const safeQty = Math.max(0, Math.round(Number(quantity) || 0))
+      if (safeQty <= 0) return
+
+      const normalizedCode = String(code || '').toLowerCase()
+      const discounts = sideDishEventDiscountMap[normalizedCode] || []
+      if (!discounts.length) return
+
+      const dish =
+        sideDishOptions.find((option) => option.code === code) ||
+        (customCakeOption && customCakeOption.code === code ? customCakeOption : undefined)
+      if (!dish) return
+
+      const baseAmount = Math.max(0, Math.round(dish.unit_price * safeQty))
+      if (baseAmount <= 0) return
+
+      const { breakdown: dishBreakdown, total: dishTotal } = calculateSequentialDiscounts(baseAmount, safeQty, discounts)
+      if (dishTotal <= 0) return
+
+      byCode[normalizedCode] = dishTotal
+      total += dishTotal
+
+      dishBreakdown.forEach((entry) => {
+        breakdown.push({
+          info: entry.info,
+          amount: entry.amount,
+          targetType: 'SIDE_DISH',
+          targetCode: normalizedCode,
+          targetName: dish.name,
+        })
+      })
+    })
+
+    return { total, breakdown, byCode }
+  }, [sideDishSelections, sideDishEventDiscountMap, sideDishOptions, calculateSequentialDiscounts, includeCustomCake, customCakeOption])
+
+  const menuEventDiscountAmount = useMemo(
+    () => menuEventDiscountBreakdown.reduce((sum, entry) => sum + entry.amount, 0),
+    [menuEventDiscountBreakdown]
+  )
+
+  const sideDishEventDiscountAmount = sideDishEventDiscountSummary.total
+  const sideDishEventDiscountByCode = sideDishEventDiscountSummary.byCode
+  const sideDishEventDiscountBreakdown = sideDishEventDiscountSummary.breakdown
+
+  const combinedEventDiscountBreakdown = useMemo(
+    () => [...menuEventDiscountBreakdown, ...sideDishEventDiscountBreakdown],
+    [menuEventDiscountBreakdown, sideDishEventDiscountBreakdown]
+  )
+
+  const totalEventDiscountAmount = menuEventDiscountAmount + sideDishEventDiscountAmount
+  const priceAfterEvent = Math.max(0, originalPrice - totalEventDiscountAmount)
+  const loyaltyDiscountAmount = discountInfo?.eligible
+    ? Math.round(originalPrice * discountInfo.discount_rate)
+    : 0
+  const finalPrice = Math.max(0, originalPrice - totalEventDiscountAmount - loyaltyDiscountAmount)
+  const totalSavings = totalEventDiscountAmount + loyaltyDiscountAmount
+  const loyaltyRatePercent = discountInfo?.eligible ? Math.round(discountInfo.discount_rate * 100) : 0
+
+  const totalSideDishOriginalCost = sideDishCost + customCakeCost
+  const totalSideDishFinalCost = Math.max(0, totalSideDishOriginalCost - sideDishEventDiscountAmount)
+
+  const customCakeEventDiscountAmount = useMemo(() => {
+    if (!includeCustomCake || !customCakeOption) return 0
+    const key = customCakeOption.code ? customCakeOption.code.toLowerCase() : ''
+    if (!key) return 0
+    return sideDishEventDiscountByCode?.[key] || 0
+  }, [includeCustomCake, customCakeOption, sideDishEventDiscountByCode])
+
+  const customCakeFinalAddition = useMemo(() => {
+    if (!includeCustomCake || !customCakeOption) return 0
+    return Math.max(0, customCakeOption.unit_price - customCakeEventDiscountAmount)
+  }, [includeCustomCake, customCakeOption, customCakeEventDiscountAmount])
+
   const fetchMenuInfo = async () => {
     try {
       const response = await fetch(`/api/menu/${menuCode}`)
@@ -609,9 +924,6 @@ export default function CheckoutPage() {
       setIsEditingAddress(true) // 에러 발생 시 입력 모드
     }
   }
-
-  const discountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
-  const finalPrice = Math.max(0, originalPrice - discountAmount)
 
   const validateForm = (): { isValid: boolean; errors: Record<string, string> } => {
     const newErrors: Record<string, string> = {}
@@ -737,6 +1049,11 @@ export default function CheckoutPage() {
           payment_status: data.payment_status ?? 'PAID',
           payment_id: data.payment_id
         }))
+        if (data.pricing) {
+          const serializedPricing = JSON.stringify(data.pricing)
+          sessionStorage.setItem('lastOrderPricing', serializedPricing)
+          sessionStorage.setItem('lastPricingInfo', serializedPricing)
+        }
 
         // 결제 성공 → 주문 완료 페이지로 이동
         router.push(`/order-complete/${data.order_id}`)
@@ -924,33 +1241,108 @@ export default function CheckoutPage() {
                       {(Object.keys(sideDishSelections).length > 0 || (includeCustomCake && customCakeOption)) && (
                         <div className="mt-4 pt-4 border-t border-gray-200">
                           <h4 className="text-sm font-bold text-gray-800 mb-2">🍽️ 추가 사이드 디시</h4>
-                          <div className="space-y-1">
+                          <div className="space-y-2">
                             {Object.entries(sideDishSelections).map(([code, qty]) => {
                               const dish = sideDishOptions.find(d => d.code === code)
                               if (!dish) return null
+
+                              const normalizedCode = String(code || '').toLowerCase()
+                              const originalAddition = Math.max(0, Math.round(dish.unit_price * (Number(qty) || 0)))
+                              const discountAmountForDish = sideDishEventDiscountByCode?.[normalizedCode] || 0
+                              const finalAddition = Math.max(0, originalAddition - discountAmountForDish)
+
                               return (
-                                <div key={code} className="flex justify-between text-xs">
-                                  <span className="text-gray-700">{dish.name}</span>
-                                  <span className="font-medium text-purple-600">
-                                    {qty}개
-                                    <span className="text-xs ml-1 text-gray-500">(+{(dish.unit_price * qty).toLocaleString()}원)</span>
-                                  </span>
+                                <div key={code} className="flex justify-between text-xs items-start gap-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-gray-700 font-medium">{dish.name}</span>
+                                    {discountAmountForDish > 0 && (
+                                      <span className="text-[11px] text-blue-600 font-semibold mt-1">
+                                        이벤트 할인 -{discountAmountForDish.toLocaleString()}원
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-xs text-purple-600 font-medium">
+                                      {Number(qty) || 0}개
+                                    </div>
+                                    {discountAmountForDish > 0 ? (
+                                      <div className="mt-0.5">
+                                        <div className="text-[11px] text-gray-400 line-through">
+                                          +{originalAddition.toLocaleString()}원
+                                        </div>
+                                        <div className="text-xs font-semibold text-purple-700">
+                                          +{finalAddition.toLocaleString()}원
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs font-semibold text-purple-700 mt-0.5">
+                                        +{originalAddition.toLocaleString()}원
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               )
                             })}
                             {includeCustomCake && customCakeOption && (
-                              <div className="flex justify-between text-xs">
-                                <span className="text-gray-700">
-                                  {customCakeOption.name}
+                              <div className="flex justify-between text-xs items-start gap-3">
+                                <div className="text-gray-700">
+                                  <span className="font-medium">{customCakeOption.name}</span>
                                   <span className="ml-2 text-pink-500">{selectedFlavorLabel} · {selectedSizeLabel}</span>
-                                </span>
-                                <span className="font-medium text-pink-600">
-                                  1개
-                                  <span className="text-xs ml-1 text-gray-500">(+{customCakeOption.unit_price.toLocaleString()}원)</span>
-                                </span>
+                                  {customCakeEventDiscountAmount > 0 && (
+                                    <div className="text-[11px] text-pink-600 font-semibold mt-1">
+                                      이벤트 할인 -{customCakeEventDiscountAmount.toLocaleString()}원
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs text-pink-600 font-medium">1개</div>
+                                  {customCakeEventDiscountAmount > 0 ? (
+                                    <div className="mt-0.5">
+                                      <div className="text-[11px] text-gray-400 line-through">
+                                        +{customCakeOption.unit_price.toLocaleString()}원
+                                      </div>
+                                      <div className="text-xs font-semibold text-pink-700">
+                                        +{customCakeFinalAddition.toLocaleString()}원
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs font-semibold text-pink-700 mt-0.5">
+                                      +{customCakeOption.unit_price.toLocaleString()}원
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
+                        </div>
+                      )}
+
+                      {combinedEventDiscountBreakdown.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-blue-100">
+                          <h4 className="text-sm font-bold text-blue-800 mb-2">🎉 이벤트 할인 적용 내역</h4>
+                          <ul className="space-y-1 text-xs text-blue-700">
+                            {combinedEventDiscountBreakdown.map((entry) => (
+                              <li
+                                key={`${entry.info.eventId}-${entry.targetType}-${entry.targetCode}-${entry.amount}`}
+                                className="flex justify-between items-center gap-3"
+                              >
+                                <span className="flex-1">
+                                  {entry.info.title}
+                                  {entry.targetType === 'SIDE_DISH' && (
+                                    <span className="text-[11px] text-blue-500 ml-1">(사이드: {entry.targetName || '사이드 메뉴'})</span>
+                                  )}
+                                  <span className="ml-1 text-[11px] text-blue-500">
+                                    {entry.info.discountType === 'PERCENT'
+                                      ? `(${entry.info.discountValue}% 할인)`
+                                      : `(${entry.info.discountValue.toLocaleString()}원 할인)`}
+                                  </span>
+                                </span>
+                                <span className="font-semibold text-blue-900">
+                                  -{entry.amount.toLocaleString()}원
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
 
@@ -1017,33 +1409,41 @@ export default function CheckoutPage() {
                       </div>
                     )}
                     {(customizationCost > 0 || sideDishCost > 0 || customCakeCost > 0) && <div className="h-px bg-gray-200" />}
-                    {discountInfo?.eligible ? (
+
+                    {totalSavings > 0 ? (
                       <>
-                        {/* 할인 적용된 경우 */}
                         <div className="flex justify-between text-sm text-gray-600">
                           <span>원가</span>
                           <span className="line-through">{originalPrice.toLocaleString()}원</span>
                         </div>
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-red-600 font-medium">
-                            {discountInfo.customer_type} 할인
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium">
-                              {Math.round(discountInfo.discount_rate * 100)}% 할인
-                            </span>
-                            <span className="text-red-600 font-medium">
-                              -{discountAmount.toLocaleString()}원
-                            </span>
+                        {totalEventDiscountAmount > 0 && (
+                          <div className="flex justify-between text-sm text-blue-600">
+                            <span>이벤트 할인</span>
+                            <span>-{totalEventDiscountAmount.toLocaleString()}원</span>
                           </div>
-                        </div>
+                        )}
+                        {loyaltyDiscountAmount > 0 && (
+                          <div className="flex justify-between items-center text-sm text-red-600">
+                            <span>{discountInfo?.customer_type || '단골'} 할인</span>
+                            <div className="flex items-center gap-2">
+                              {loyaltyRatePercent > 0 && (
+                                <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-medium">
+                                  {loyaltyRatePercent}% 할인
+                                </span>
+                              )}
+                              <span>-{loyaltyDiscountAmount.toLocaleString()}원</span>
+                            </div>
+                          </div>
+                        )}
                         <div className="flex justify-between text-lg font-bold border-t pt-3">
                           <span>최종 결제 금액</span>
                           <span className="text-blue-600">{finalPrice.toLocaleString()}원</span>
                         </div>
+                        <div className="text-right text-xs text-green-600 font-medium">
+                          총 {totalSavings.toLocaleString()}원 절약!
+                        </div>
                       </>
                     ) : (
-                      /* 할인 없는 경우 */
                       <div className="flex justify-between text-lg font-bold">
                         <span>총 결제 금액</span>
                         <span className="text-blue-600">{finalPrice.toLocaleString()}원</span>
@@ -1263,10 +1663,15 @@ export default function CheckoutPage() {
               <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold">사이드 디시 추가</h2>
-                  {sideDishCost + customCakeCost > 0 && (
-                    <span className="text-sm font-medium text-purple-600">
-                      +{(sideDishCost + customCakeCost).toLocaleString()}원
-                    </span>
+                  {totalSideDishOriginalCost > 0 && (
+                    <div className="text-right text-sm font-medium text-purple-600">
+                      {sideDishEventDiscountAmount > 0 && (
+                        <div className="text-xs text-gray-400 line-through">
+                          +{totalSideDishOriginalCost.toLocaleString()}원
+                        </div>
+                      )}
+                      <div>+{totalSideDishFinalCost.toLocaleString()}원</div>
+                    </div>
                   )}
                 </div>
                 {sideDishOptions.length === 0 && !customCakeOption ? (
@@ -1327,6 +1732,11 @@ export default function CheckoutPage() {
                             <p className="text-sm text-pink-600 mt-1">
                               1개당 {customCakeOption.unit_price.toLocaleString()}원
                             </p>
+                            {customCakeEventDiscountAmount > 0 && (
+                              <p className="text-xs text-pink-700 mt-1 font-semibold">
+                                이벤트 할인 -{customCakeEventDiscountAmount.toLocaleString()}원 → +{customCakeFinalAddition.toLocaleString()}원
+                              </p>
+                            )}
                             <p className="text-xs text-pink-600 mt-1">현재 선택: {selectedFlavorLabel} · {selectedSizeLabel}</p>
                             {customCakeOption.base_price <= 0 && (
                               <p className="text-xs text-pink-500 mt-1">※ 재료 원가를 기준으로 산출한 예상 금액입니다.</p>

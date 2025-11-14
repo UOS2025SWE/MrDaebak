@@ -75,10 +75,13 @@ export default function Header({ currentPage }: HeaderProps) {
               </Link>
             )}
             <Link
-              href="#events"
-              className={`text-stone-700 font-medium rounded-md hover:bg-amber-50 hover:text-amber-700 transition-all duration-300 whitespace-nowrap ${isScrolled ? 'text-sm px-3 py-2' : 'text-base px-5 py-3'}`}
+              href="/events"
+              className={`text-stone-700 font-medium rounded-md hover:bg-amber-50 hover:text-amber-700 transition-all duration-300 relative whitespace-nowrap ${isScrolled ? 'text-sm px-3 py-2' : 'text-base px-5 py-3'}`}
             >
               이벤트
+              {currentPage === 'events' && (
+                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-amber-600 rounded-full"></span>
+              )}
             </Link>
             <Link
               href="/about"

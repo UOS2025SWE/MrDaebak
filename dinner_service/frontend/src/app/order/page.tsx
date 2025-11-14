@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import Header from '../../components/Header'
 import Footer from '../../components/Footer'
-import type { OrderItem, PaymentModalProps } from '@/types/order'
+import type { EventMenuDiscount, OrderItem, PaymentModalProps } from '@/types/order'
 import type { MenuStyle } from '@/types/menu'
 import type { DiscountInfo } from '@/types/common'
 
@@ -72,6 +72,11 @@ const styleKoreanToEnglish: Record<string, string> = {
   '심플': 'simple',
   '그랜드': 'grand',
   '디럭스': 'deluxe'
+}
+
+type EventDiscountBreakdownEntry = {
+  info: EventMenuDiscount
+  amount: number
 }
 
 const calculateCustomizationCostPerSet = (
@@ -146,6 +151,7 @@ export default function OrderPage() {
   const [availableStyles, setAvailableStyles] = useState<MenuStyle[]>([])
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [discountInfo, setDiscountInfo] = useState<DiscountInfo | null>(null)
+  const [eventDiscounts, setEventDiscounts] = useState<EventMenuDiscount[]>([])
   const [baseIngredients, setBaseIngredients] = useState<Record<string, Record<string, number>>>({})
   const [ingredientPrices, setIngredientPrices] = useState<Record<string, number>>({})
 
@@ -203,6 +209,56 @@ export default function OrderPage() {
 
     fetchDiscountInfo()
   }, [isAuthenticated, user?.id])
+
+  useEffect(() => {
+    const fetchEventDiscounts = async () => {
+      if (!orderData?.menuId) {
+        setEventDiscounts([])
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/events/menu-discounts/${orderData.menuId}?target_type=MENU`)
+        if (!response.ok) {
+          setEventDiscounts([])
+          return
+        }
+
+        const result = await response.json()
+        if (result.success && Array.isArray(result.discounts)) {
+          const sanitized: EventMenuDiscount[] = (result.discounts as any[])
+            .map((item) => {
+              const discountValue = Number(item?.discount_value ?? 0)
+              const targetType: 'MENU' | 'SIDE_DISH' =
+                (item?.target_type ?? item?.targetType ?? 'MENU') === 'SIDE_DISH' ? 'SIDE_DISH' : 'MENU'
+              return {
+                event_id: String(item?.event_id ?? ''),
+                title: String(item?.title ?? '이벤트 할인'),
+                discount_label: item?.discount_label ?? null,
+                discount_type: item?.discount_type === 'FIXED' ? 'FIXED' as const : 'PERCENT' as const,
+                discount_value: Number.isFinite(discountValue) ? discountValue : 0,
+                start_date: item?.start_date ?? null,
+                end_date: item?.end_date ?? null,
+                target_type: targetType,
+                menu_item_id: item?.menu_item_id ?? item?.menuItemId ?? undefined,
+                side_dish_id: item?.side_dish_id ?? item?.sideDishId ?? undefined,
+                menu_name: item?.menu_name ?? item?.menuName ?? undefined,
+                side_dish_name: item?.side_dish_name ?? item?.sideDishName ?? undefined
+              }
+            })
+            .filter((item) => item.event_id && item.discount_value > 0)
+          setEventDiscounts(sanitized)
+        } else {
+          setEventDiscounts([])
+        }
+      } catch (error) {
+        console.error('이벤트 할인 정보를 불러오는데 실패했습니다:', error)
+        setEventDiscounts([])
+      }
+    }
+
+    fetchEventDiscounts()
+  }, [orderData?.menuId])
 
   // 메뉴 상세 정보 및 기본 재료 구성 로드
   useEffect(() => {
@@ -277,8 +333,55 @@ export default function OrderPage() {
   const customizationCost = orderData ? customizationCostPerSet * orderData.quantity : 0
   const basePriceWithoutCustomization = orderData ? orderData.stylePrice * orderData.quantity : 0
   const originalPrice = basePriceWithoutCustomization + customizationCost
-  const discountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
-  const finalPrice = Math.max(0, originalPrice - discountAmount)
+
+  const menuEventDiscounts = useMemo(
+    () => eventDiscounts.filter(discount => (discount.target_type ?? 'MENU') !== 'SIDE_DISH'),
+    [eventDiscounts]
+  )
+
+  const sideDishEventDiscounts = useMemo(
+    () => eventDiscounts.filter(discount => (discount.target_type ?? 'MENU') === 'SIDE_DISH'),
+    [eventDiscounts]
+  )
+
+  const eventDiscountBreakdown = useMemo<EventDiscountBreakdownEntry[]>(() => {
+    if (!orderData) return []
+    const baseAmount = Math.max(0, orderData.stylePrice * orderData.quantity)
+    if (baseAmount <= 0) return []
+
+    let remaining = baseAmount
+    const breakdown: EventDiscountBreakdownEntry[] = []
+
+    for (const discount of menuEventDiscounts) {
+      if (!Number.isFinite(discount.discount_value) || discount.discount_value <= 0) continue
+
+      let calculated = 0
+      if (discount.discount_type === 'PERCENT') {
+        calculated = Math.round(baseAmount * (discount.discount_value / 100))
+      } else {
+        calculated = Math.round(discount.discount_value * orderData.quantity)
+      }
+
+      if (calculated <= 0) continue
+
+      const applied = Math.min(calculated, remaining)
+      if (applied <= 0) continue
+
+      breakdown.push({ info: discount, amount: applied })
+      remaining = Math.max(0, remaining - applied)
+      if (remaining <= 0) break
+    }
+
+    return breakdown
+  }, [menuEventDiscounts, orderData])
+
+  const eventDiscountAmount = eventDiscountBreakdown.reduce<number>((sum, item) => sum + item.amount, 0)
+
+  const priceAfterEvent = Math.max(0, originalPrice - eventDiscountAmount)
+  const loyaltyDiscountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
+  const finalPrice = Math.max(0, originalPrice - eventDiscountAmount - loyaltyDiscountAmount)
+  const totalSavings = eventDiscountAmount + loyaltyDiscountAmount
+  const loyaltyRatePercent = discountInfo?.eligible ? Math.round(discountInfo.discount_rate * 100) : 0
 
   const baseForCurrentStyle = useMemo(() => {
     if (!orderData) return {}
@@ -400,24 +503,30 @@ export default function OrderPage() {
                         기본 {basePriceWithoutCustomization.toLocaleString()}원 + 커스터마이징 {customizationCost.toLocaleString()}원
                       </div>
                     )}
-                    {discountInfo?.eligible ? (
-                      <>
-                        {/* 할인 적용된 경우 */}
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg text-stone-500 line-through">
+                    {totalSavings > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-lg text-stone-500 line-through mr-2">
                             {originalPrice.toLocaleString()}원
                           </span>
-                          <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-sm font-medium">
-                            {Math.round(discountInfo.discount_rate * 100)}% 할인
-                          </span>
+                          {eventDiscountAmount > 0 && (
+                            <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded-full text-xs font-semibold">
+                              이벤트 -{eventDiscountAmount.toLocaleString()}원
+                            </span>
+                          )}
+                          {loyaltyDiscountAmount > 0 && (
+                            <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
+                              단골 {loyaltyRatePercent}% 할인
+                            </span>
+                          )}
                         </div>
-                        <div className="text-2xl font-bold text-red-600">
+                        <div className="text-2xl font-bold text-amber-700">
                           {finalPrice.toLocaleString()}원
                         </div>
                         <div className="text-sm text-green-600 font-medium">
-                          💰 {discountAmount.toLocaleString()}원 절약!
+                          💰 총 {totalSavings.toLocaleString()}원 절약!
                         </div>
-                      </>
+                      </div>
                     ) : (
                       <div className="text-2xl font-bold text-amber-600">
                         {finalPrice.toLocaleString()}원
@@ -429,6 +538,40 @@ export default function OrderPage() {
             </div>
 
             <div className="p-8 space-y-8">
+              {/* 이벤트 할인 정보 */}
+              {(eventDiscountBreakdown.length > 0 || sideDishEventDiscounts.length > 0) && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xl">🎉</span>
+                    <h4 className="font-bold text-blue-800">현재 적용 가능한 이벤트 할인</h4>
+                  </div>
+                  {eventDiscountBreakdown.length > 0 && (
+                    <ul className="space-y-1 text-sm text-blue-700">
+                      {eventDiscountBreakdown.map(({ info, amount }: EventDiscountBreakdownEntry) => (
+                        <li key={`${info.event_id}-${info.discount_type}`} className="flex justify-between">
+                          <span>
+                            {info.title}
+                            {info.discount_type === 'PERCENT'
+                              ? ` (${info.discount_value}% 할인)`
+                              : ` (${info.discount_value.toLocaleString()}원 할인)`}
+                          </span>
+                          <span className="font-semibold text-blue-900">-{amount.toLocaleString()}원</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {sideDishEventDiscounts.length > 0 && (
+                    <p className="mt-3 text-xs text-blue-600">
+                      사이드 메뉴 할인도 결제 시 자동 적용됩니다:{' '}
+                      {sideDishEventDiscounts
+                        .map(discount => discount.side_dish_name ?? discount.menu_name ?? '사이드 메뉴')
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* 할인 정보 표시 */}
               {isAuthenticated && discountInfo && (
                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200">
@@ -591,14 +734,36 @@ export default function OrderPage() {
               </div>
 
 
-              {/* 결제 버튼 */}
+              {/* 결제 요약 및 버튼 */}
               <div className="pt-4 border-t">
-                {customizationCost > 0 && (
-                  <div className="flex justify-between text-sm text-stone-600 mb-4">
-                    <span>커스터마이징 추가금</span>
-                    <span className="text-blue-600">+{customizationCost.toLocaleString()}원</span>
+                <div className="space-y-2 text-sm text-stone-600 mb-4">
+                  <div className="flex justify-between">
+                    <span>기본 금액</span>
+                    <span>{basePriceWithoutCustomization.toLocaleString()}원</span>
                   </div>
-                )}
+                  {customizationCost > 0 && (
+                    <div className="flex justify-between">
+                      <span>커스터마이징 추가금</span>
+                      <span className="text-blue-600">+{customizationCost.toLocaleString()}원</span>
+                    </div>
+                  )}
+                  {eventDiscountAmount > 0 && (
+                    <div className="flex justify-between text-blue-600">
+                      <span>이벤트 할인</span>
+                      <span>-{eventDiscountAmount.toLocaleString()}원</span>
+                    </div>
+                  )}
+                  {loyaltyDiscountAmount > 0 && (
+                    <div className="flex justify-between text-red-600">
+                      <span>단골 할인</span>
+                      <span>-{loyaltyDiscountAmount.toLocaleString()}원</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base font-semibold text-stone-800 pt-2 border-t border-dashed border-stone-200">
+                    <span>예상 결제 금액</span>
+                    <span className="text-amber-700">{finalPrice.toLocaleString()}원</span>
+                  </div>
+                </div>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button
                     onClick={() => router.back()}

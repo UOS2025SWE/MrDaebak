@@ -16,6 +16,7 @@ export default function OrderCompletePage() {
 
   const [orderInfo, setOrderInfo] = useState<any>(null)
   const [paymentInfo, setPaymentInfo] = useState<any>(null)
+  const [pricingInfo, setPricingInfo] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const paymentStatusLabel = paymentInfo?.payment_status === 'FAILED' ? '결제 실패' : '결제 완료'
@@ -30,6 +31,11 @@ export default function OrderCompletePage() {
         setPaymentInfo(JSON.parse(savedPaymentInfo))
         // 사용 후 삭제
         sessionStorage.removeItem('lastPaymentInfo')
+      }
+      const savedPricingInfo = sessionStorage.getItem('lastOrderPricing')
+      if (savedPricingInfo) {
+        setPricingInfo(JSON.parse(savedPricingInfo))
+        sessionStorage.removeItem('lastOrderPricing')
       }
     }
   }, [orderId])
@@ -111,6 +117,70 @@ export default function OrderCompletePage() {
             </div>
           </div>
         </div>
+
+        {pricingInfo && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-bold mb-4">가격 내역</h2>
+            <div className="space-y-2 text-sm text-gray-700">
+              <div className="flex justify-between">
+                <span>기본 금액</span>
+                <span>{Number(pricingInfo.base_price_total ?? 0).toLocaleString()}원</span>
+              </div>
+              {Number(pricingInfo.customization_cost ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span>커스터마이징 추가금</span>
+                  <span>+{Number(pricingInfo.customization_cost ?? 0).toLocaleString()}원</span>
+                </div>
+              )}
+              {Number(pricingInfo.side_dish_total ?? 0) > 0 && (
+                <div className="flex justify-between">
+                  <span>사이드 메뉴 추가</span>
+                  <span>+{Number(pricingInfo.side_dish_total ?? 0).toLocaleString()}원</span>
+                </div>
+              )}
+              {Number(pricingInfo.event_discount_total ?? 0) > 0 && (
+                <div className="flex justify-between text-blue-700">
+                  <span>이벤트 할인</span>
+                  <span>-{Number(pricingInfo.event_discount_total ?? 0).toLocaleString()}원</span>
+                </div>
+              )}
+              {Number(pricingInfo.discount_amount ?? 0) > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>단골 할인</span>
+                  <span>-{Number(pricingInfo.discount_amount ?? 0).toLocaleString()}원</span>
+                </div>
+              )}
+            </div>
+
+            {Array.isArray(pricingInfo.event_discounts) && pricingInfo.event_discounts.length > 0 && (
+              <div className="mt-4 border-t pt-3">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">적용된 이벤트</h3>
+                <ul className="space-y-1 text-sm text-gray-600">
+                  {pricingInfo.event_discounts.map((discount: any) => (
+                    <li key={`${discount.event_id}-${discount.discount_type}`} className="flex justify-between">
+                      <span>
+                        {discount.title ?? '이벤트 할인'}
+                        {discount.discount_type === 'PERCENT'
+                          ? ` (${discount.discount_value}% 할인)`
+                          : ` (${Number(discount.discount_value ?? 0).toLocaleString()}원 할인)`}
+                      </span>
+                      <span className="font-medium text-blue-700">
+                        -{Number(discount.applied_amount ?? 0).toLocaleString()}원
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-between items-center border-t pt-3">
+              <span className="text-base font-semibold text-gray-800">최종 결제 금액</span>
+              <span className="text-2xl font-bold text-blue-600">
+                {Number(pricingInfo.final_price ?? orderInfo.total_price ?? 0).toLocaleString()}원
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* 배송 정보 카드 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">

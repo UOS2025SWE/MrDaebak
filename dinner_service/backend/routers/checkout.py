@@ -240,6 +240,7 @@ async def process_checkout(
             "payment_id": payment_result["payment_id"],
             "transaction_id": payment_result["transaction_id"],
             "total_price": total_price,
+            "pricing": order_result["order"]["pricing"],
             "delivery_address": request.delivery.address,
             "masked_card_number": payment_result["masked_card_number"],
             "payment_status": payment_result.get("payment_status", "PAID"),

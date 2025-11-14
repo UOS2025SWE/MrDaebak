@@ -97,6 +97,14 @@ export default function MenuPage() {
   const [error, setError] = useState<string | null>(null)
   const [discountInfo, setDiscountInfo] = useState<DiscountInfo | null>(null)
   const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(null)
+  type MenuEventDiscountInfo = {
+    eventId: string
+    title: string
+    discountType: 'PERCENT' | 'FIXED'
+    discountValue: number
+  }
+
+  const [eventDiscountsByMenu, setEventDiscountsByMenu] = useState<Record<string, MenuEventDiscountInfo[]>>({})
 
   // 직원 및 매니저는 메뉴 페이지 접근 불가
   useEffect(() => {
@@ -119,6 +127,72 @@ export default function MenuPage() {
     }
   }, [isAuthenticated, user])
 
+  const fetchMenuEventDiscounts = async (menus: MenuItem[]) => {
+    if (!menus || menus.length === 0) {
+      setEventDiscountsByMenu({})
+      return
+    }
+
+    try {
+      const response = await fetch('/api/events')
+      if (!response.ok) {
+        setEventDiscountsByMenu({})
+        return
+      }
+
+      const data = await response.json().catch(() => null)
+      if (!data || !Array.isArray(data.events)) {
+        setEventDiscountsByMenu({})
+        return
+      }
+
+      const codeSet = new Set(menus.map((menu) => String(menu.code).toLowerCase()))
+      const map: Record<string, MenuEventDiscountInfo[]> = {}
+
+      data.events.forEach((event: any) => {
+        if (!Array.isArray(event?.menu_discounts)) {
+          return
+        }
+
+        event.menu_discounts.forEach((discount: any) => {
+          const targetType = String(discount?.target_type ?? discount?.targetType ?? 'MENU').toUpperCase()
+          if (targetType === 'SIDE_DISH') {
+            return
+          }
+
+          const codeRaw = String(discount?.menu_code ?? discount?.menuCode ?? '').toLowerCase()
+          if (!codeRaw || !codeSet.has(codeRaw)) {
+            return
+          }
+
+          const discountValue = Number(discount?.discount_value ?? discount?.discountValue ?? 0)
+          if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            return
+          }
+
+          const discountType: 'PERCENT' | 'FIXED' = (discount?.discount_type ?? discount?.discountType ?? 'PERCENT') === 'FIXED' ? 'FIXED' : 'PERCENT'
+
+          const normalized: MenuEventDiscountInfo = {
+            eventId: String(discount?.event_id ?? discount?.eventId ?? event?.event_id ?? event?.id ?? ''),
+            title: String(discount?.title ?? event?.title ?? '이벤트 할인'),
+            discountType,
+            discountValue,
+          }
+
+          if (!map[codeRaw]) {
+            map[codeRaw] = []
+          }
+          map[codeRaw].push(normalized)
+        })
+      })
+
+      setEventDiscountsByMenu(map)
+    } catch (error) {
+      console.error('메뉴 이벤트 할인 정보를 불러오는데 실패했습니다:', error)
+      setEventDiscountsByMenu({})
+    }
+  }
+
   const fetchMenuData = async () => {
     try {
       setLoading(true)
@@ -126,7 +200,9 @@ export default function MenuPage() {
       const result = await response.json()
       
       if (result.success) {
-        setMenuItems(result.data)
+        const menuData: MenuItem[] = Array.isArray(result.data) ? result.data : []
+        setMenuItems(menuData)
+        fetchMenuEventDiscounts(menuData)
       } else {
         setError('메뉴를 불러올 수 없습니다.')
       }
@@ -232,6 +308,42 @@ export default function MenuPage() {
     router.push(`/order?${params.toString()}`)
   }
 
+  const calculateMenuEventDiscount = (menuCode: string, basePrice: number): number => {
+    const price = Number(basePrice)
+    if (!Number.isFinite(price) || price <= 0) return 0
+
+    const key = String(menuCode).toLowerCase()
+    const discounts = eventDiscountsByMenu[key] ?? []
+    if (!discounts.length) return 0
+
+    let remaining = price
+    let total = 0
+
+    discounts.forEach((discount) => {
+      if (remaining <= 0) return
+
+      const value = Number(discount.discountValue)
+      if (!Number.isFinite(value) || value <= 0) return
+
+      let calculated = 0
+      if (discount.discountType === 'PERCENT') {
+        calculated = Math.round(price * (value / 100))
+      } else {
+        calculated = Math.round(value)
+      }
+
+      if (calculated <= 0) return
+
+      const applied = Math.min(calculated, remaining)
+      if (applied <= 0) return
+
+      total += applied
+      remaining = Math.max(0, remaining - applied)
+    })
+
+    return Math.min(total, price)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -292,6 +404,15 @@ export default function MenuPage() {
                         <h4 className="font-bold text-stone-800 text-sm mb-2">스타일 선택:</h4>
                         {menu.styles.map((style) => {
                           const isAvailable = style.available !== false
+                          const originalStylePrice = style.price
+                          const menuEventDiscountAmount = calculateMenuEventDiscount(menu.code, originalStylePrice)
+                          const loyaltyEligible = Boolean(discountInfo?.eligible)
+                          const loyaltyRate = discountInfo?.discount_rate ?? 0
+                          const loyaltyDiscountAmount = loyaltyEligible ? Math.round(originalStylePrice * loyaltyRate) : 0
+                          const totalDiscount = menuEventDiscountAmount + loyaltyDiscountAmount
+                          const finalPrice = Math.max(0, originalStylePrice - totalDiscount)
+                          const hasEventDiscount = menuEventDiscountAmount > 0
+                          const hasLoyaltyDiscount = loyaltyDiscountAmount > 0
                           return (
                             <div
                               key={style.name}
@@ -325,18 +446,32 @@ export default function MenuPage() {
                               </div>
                               <div className="text-right">
                                 <div className="flex flex-col items-end gap-0.5">
-                                  {discountInfo?.eligible ? (
+                                  {hasEventDiscount || hasLoyaltyDiscount ? (
                                     <>
                                       <div className="text-xs text-stone-500 line-through">{style.price.toLocaleString()}원</div>
-                                      <div className="text-lg font-bold text-red-600">
-                                        {Math.round(style.price * (1 - discountInfo.discount_rate)).toLocaleString()}원
-                                      </div>
-                                      <div className="text-xs text-red-500 font-medium">
-                                        {Math.round(discountInfo.discount_rate * 100)}% 할인
+                                      {hasEventDiscount && (
+                                        <div className="text-xs text-blue-600 font-medium">
+                                          이벤트 -{menuEventDiscountAmount.toLocaleString()}원
+                                        </div>
+                                      )}
+                                      {hasLoyaltyDiscount && (
+                                        <div className="text-xs text-red-600 font-medium">
+                                          단골 -{loyaltyDiscountAmount.toLocaleString()}원
+                                        </div>
+                                      )}
+                                      {hasEventDiscount && (
+                                        <div className="text-[11px] text-blue-500 font-semibold uppercase tracking-wide">
+                                          이벤트 할인 적용중
+                                        </div>
+                                      )}
+                                      <div className="text-lg font-bold text-amber-700">
+                                        {finalPrice.toLocaleString()}원
                                       </div>
                                     </>
                                   ) : (
-                                    <div className="text-lg font-bold bg-gradient-to-r from-amber-600 to-amber-800 text-transparent bg-clip-text">{style.price.toLocaleString()}원</div>
+                                    <div className="text-lg font-bold bg-gradient-to-r from-amber-600 to-amber-800 text-transparent bg-clip-text">
+                                      {style.price.toLocaleString()}원
+                                    </div>
                                   )}
                                 </div>
                                 <button

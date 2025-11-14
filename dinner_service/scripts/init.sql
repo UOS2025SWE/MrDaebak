@@ -540,6 +540,73 @@ CREATE TABLE IF NOT EXISTS store_inventory (
     PRIMARY KEY (store_id, ingredient_id)
 );
 
+CREATE TABLE IF NOT EXISTS customer_inquiries (
+    inquiry_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+    manager_note TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_inquiries_status
+    ON customer_inquiries(status);
+
+CREATE TABLE IF NOT EXISTS event_promotions (
+    event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    image_path TEXT,
+    discount_label TEXT,
+    start_date DATE,
+    end_date DATE,
+    tags JSONB DEFAULT '[]'::jsonb,
+    is_published BOOLEAN DEFAULT TRUE,
+    created_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_promotions_published
+    ON event_promotions(is_published);
+
+CREATE TABLE IF NOT EXISTS event_menu_discounts (
+    event_id UUID NOT NULL REFERENCES event_promotions(event_id) ON DELETE CASCADE,
+    menu_item_id UUID NOT NULL REFERENCES menu_items(menu_item_id) ON DELETE CASCADE,
+    discount_type VARCHAR(16) NOT NULL CHECK (discount_type IN ('PERCENT', 'FIXED')),
+    discount_value NUMERIC(10, 2) NOT NULL CHECK (discount_value >= 0),
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (event_id, menu_item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_menu_discounts_menu
+    ON event_menu_discounts(menu_item_id);
+
+INSERT INTO event_promotions (title, description, image_path, discount_label, start_date, end_date, tags, is_published)
+VALUES (
+    '미스터 대박 크리스마스 갈라',
+    '프리미엄 크리스마스 코스와 커스텀 케이크를 결합한 연말 한정 이벤트입니다. 전 메뉴 20% 할인과 샴페인 업그레이드를 제공합니다.',
+    '/images/christmas_event.jpg',
+    'Holiday 20% 할인',
+    DATE '2024-12-01',
+    DATE '2024-12-31',
+    '["시즌한정", "연말", "프리미엄"]'::jsonb,
+    TRUE
+)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO customer_inquiries (name, email, topic, message, status)
+VALUES (
+    'Demo User',
+    'demo@example.com',
+    '서비스 문의',
+    '이것은 초기화 시 삽입되는 샘플 문의입니다.',
+    'RESOLVED'
+)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO store_inventory (store_id, ingredient_id, quantity_on_hand)
 SELECT s.store_id, i.ingredient_id, 50

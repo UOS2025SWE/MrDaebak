@@ -29,9 +29,8 @@ class DiscountService:
         취소된 주문(RECEIVED 상태에서 취소)은 제외됩니다.
         """
         try:
-            # 사용자의 실제 주문 횟수 조회 (COOK이 조리 시작한 주문만)
-            # PREPARING, DELIVERING, COMPLETED 상태만 카운트 (결제실패/취소 제외)
-            query = text("""
+            order_query = text(
+                """
                 SELECT
                     COUNT(o.order_id) as order_count,
                     u.name,
@@ -42,19 +41,27 @@ class DiscountService:
                     AND o.order_status NOT IN ('PAYMENT_FAILED', 'CANCELLED')
                 WHERE u.user_id = CAST(:user_id AS uuid)
                 GROUP BY u.user_id, u.name, u.email
-            """)
+                """
+            )
+            order_result = db.execute(order_query, {"user_id": user_id}).fetchone()
 
-            result = db.execute(query, {"user_id": user_id}).fetchone()
+            loyalty_query = text(
+                """
+                SELECT order_count, total_spent, vip_level
+                FROM customer_loyalty
+                WHERE customer_id = CAST(:user_id AS uuid)
+                """
+            )
+            loyalty_result = db.execute(loyalty_query, {"user_id": user_id}).fetchone()
 
-            if not result:
-                # 사용자 정보만 조회
+            if not order_result and not loyalty_result:
                 user_query = text("""
                     SELECT name, email
                     FROM users
                     WHERE user_id = CAST(:user_id AS uuid)
                 """)
                 user_result = db.execute(user_query, {"user_id": user_id}).fetchone()
-                
+
                 if not user_result:
                     return {
                         "eligible": False,
@@ -63,21 +70,30 @@ class DiscountService:
                         "total_orders": 0,
                         "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
                     }
-                
+
                 return {
                     "eligible": False,
                     "discount_rate": 0.0,
                     "customer_type": "신규고객",
                     "total_orders": 0,
-                    "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD,
-                    "customer_name": user_result[0] or "고객"
+                    "customer_name": user_result[0] or "고객",
+                    "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
                 }
 
-            total_orders = result[0] or 0
-            customer_name = result[1] or "고객"
-            
-            # 할인 등급 결정
-            if total_orders >= cls.VIP_CUSTOMER_THRESHOLD:
+            total_orders_from_orders = (order_result[0] if order_result else 0) or 0
+            customer_name = (order_result[1] if order_result else None) or "고객"
+
+            loyalty_order_count = 0
+            loyalty_vip_level = None
+            if loyalty_result:
+                loyalty_order_count = int(loyalty_result[0] or 0)
+                loyalty_vip_level = (loyalty_result[2] or "").upper() or None
+
+            total_orders = max(total_orders_from_orders, loyalty_order_count)
+            is_vip = loyalty_vip_level == "VIP" or total_orders >= cls.VIP_CUSTOMER_THRESHOLD
+            is_regular = total_orders >= cls.REGULAR_CUSTOMER_THRESHOLD
+
+            if is_vip:
                 return {
                     "eligible": True,
                     "discount_rate": cls.VIP_DISCOUNT_RATE,
@@ -87,7 +103,7 @@ class DiscountService:
                     "next_tier_orders": None,  # 최고 등급
                     "discount_message": f"🌟 VIP 단골 고객님, {int(cls.VIP_DISCOUNT_RATE * 100)}% 할인 적용!"
                 }
-            elif total_orders >= cls.REGULAR_CUSTOMER_THRESHOLD:
+            elif is_regular:
                 vip_remaining = cls.VIP_CUSTOMER_THRESHOLD - total_orders
                 
                 # 8번 이상 구매한 단골 고객만 VIP 혜택 메시지 표시

@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
-import { useWebSocket } from '@/hooks/useWebSocket'
+
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import { useAuth } from '@/contexts/AuthContext'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import type { Staff, Ingredient, IngredientCategory } from '@/types/manage'
 import type { WebSocketMessage } from '@/hooks/useWebSocket'
 
-type TabType = 'accounting' | 'staff' | 'inventory' | 'menu'
+type TabType = 'accounting' | 'staff' | 'inventory' | 'menu' | 'events' | 'inquiries'
 
 interface AccountingStats {
   total_orders: number
@@ -152,6 +154,93 @@ const CUSTOM_CAKE_SIZES = [
 
 type CustomCakeRecipeMap = Record<string, Record<string, Array<{ ingredient_code: string; quantity: number }>>>;
 
+type InquiryStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'ARCHIVED'
+
+type InquiryItem = {
+  id: string
+  name: string
+  email: string
+  topic: string
+  message: string
+  status: InquiryStatus
+  managerNote: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+type DiscountType = 'PERCENT' | 'FIXED'
+
+type EventMenuDiscount = {
+  menuItemId: string
+  menuCode?: string
+  menuName?: string
+  sideDishCode?: string
+  sideDishName?: string
+  discountType: DiscountType
+  discountValue: number
+  targetType: 'MENU' | 'SIDE_DISH'
+}
+
+type EventMenuDiscountDraft = {
+  menuItemId: string
+  targetType: 'MENU' | 'SIDE_DISH'
+  discountType: DiscountType
+  discountValue: number
+}
+
+type DiscountTargetOption =
+  | { kind: 'MENU'; id: string; display: string; price?: number | null }
+  | { kind: 'SIDE_DISH'; id: string; display: string; price?: number | null }
+
+type EventDiscountPayload = {
+  target_type: 'MENU' | 'SIDE_DISH'
+  target_id: string
+  discount_type: DiscountType
+  discount_value: number
+  menu_item_id?: string
+  side_dish_id?: string
+}
+
+const createDefaultEventDiscount = (): EventMenuDiscountDraft => ({
+  menuItemId: '',
+  targetType: 'MENU',
+  discountType: 'PERCENT',
+  discountValue: 0
+})
+
+type AdminEventItem = {
+  id: string
+  title: string
+  description: string
+  imagePath: string | null
+  discountLabel: string | null
+  startDate: string | null
+  endDate: string | null
+  tags: string[]
+  isPublished: boolean
+  createdAt: string
+  updatedAt: string
+  menuDiscounts: EventMenuDiscount[]
+}
+
+type EventDraft = {
+  title: string
+  description: string
+  discountLabel: string
+  startDate: string
+  endDate: string
+  tags: string
+  isPublished: boolean
+}
+
+const INQUIRY_STATUS_OPTIONS: InquiryStatus[] = ['NEW', 'IN_PROGRESS', 'RESOLVED', 'ARCHIVED']
+const INQUIRY_STATUS_LABELS: Record<InquiryStatus, string> = {
+  NEW: '신규',
+  IN_PROGRESS: '처리 중',
+  RESOLVED: '완료',
+  ARCHIVED: '보관'
+}
+
 function AdminDashboardContent() {
   const { user, token } = useAuth()
   const router = useRouter()
@@ -225,6 +314,49 @@ function AdminDashboardContent() {
   const [customCakeRecipeDraft, setCustomCakeRecipeDraft] = useState<{ ingredient_code: string; quantity: number }>({ ingredient_code: '', quantity: 0 })
   const [customCakeRecipeActionLoading, setCustomCakeRecipeActionLoading] = useState<Record<string, boolean>>({})
   const [sideDishDeleteLoading, setSideDishDeleteLoading] = useState<Record<string, boolean>>({})
+
+  const [inquiries, setInquiries] = useState<InquiryItem[]>([])
+  const [inquiriesLoading, setInquiriesLoading] = useState(false)
+  const [inquiriesError, setInquiriesError] = useState<string | null>(null)
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<'ALL' | InquiryStatus>('ALL')
+  const [inquiryNotes, setInquiryNotes] = useState<Record<string, string>>({})
+  const [inquiryStatusDrafts, setInquiryStatusDrafts] = useState<Record<string, InquiryStatus>>({})
+  const [inquiryActionLoading, setInquiryActionLoading] = useState<Record<string, boolean>>({})
+
+  const [managerEvents, setManagerEvents] = useState<AdminEventItem[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsError, setEventsError] = useState<string | null>(null)
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    description: '',
+    discountLabel: '',
+    startDate: '',
+    endDate: '',
+    tags: '',
+    isPublished: true,
+  })
+  const [eventDiscountForm, setEventDiscountForm] = useState<EventMenuDiscountDraft[]>([createDefaultEventDiscount()])
+  const [eventImageFile, setEventImageFile] = useState<File | null>(null)
+  const [eventSubmitting, setEventSubmitting] = useState(false)
+  const [eventActionLoading, setEventActionLoading] = useState<Record<string, boolean>>({})
+  const [eventEditDrafts, setEventEditDrafts] = useState<Record<string, EventDraft>>({})
+  const [eventDiscountDrafts, setEventDiscountDrafts] = useState<Record<string, EventMenuDiscountDraft[]>>({})
+  const [eventImageUploading, setEventImageUploading] = useState<Record<string, boolean>>({})
+  const discountTargetOptions = useMemo<DiscountTargetOption[]>(() => {
+    const menuOptions: DiscountTargetOption[] = menuList.map((menu) => ({
+      kind: 'MENU',
+      id: menu.id,
+      display: `메뉴 · ${menu.name} (${Number(menu.base_price ?? 0).toLocaleString()}원)`,
+      price: Number(menu.base_price ?? 0)
+    }))
+    const sideDishOptions: DiscountTargetOption[] = sideDishList.map((dish) => ({
+      kind: 'SIDE_DISH',
+      id: dish.side_dish_id,
+      display: `사이드 · ${dish.name} (${Number(dish.base_price ?? 0).toLocaleString()}원)`,
+      price: Number(dish.base_price ?? 0)
+    }))
+    return [...menuOptions, ...sideDishOptions].sort((a, b) => a.display.localeCompare(b.display, 'ko'))
+  }, [menuList, sideDishList])
 
   const isCategoryKey = useCallback((value: string | undefined): value is CategoryKey => {
     if (!value) return false
@@ -394,7 +526,7 @@ function AdminDashboardContent() {
 
   const fetchSideDishes = useCallback(async () => {
     try {
-      const response = await fetch('/api/side-dishes', {
+      const response = await fetch('/api/side-dishes?include_inactive=true', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
       })
       if (!response.ok) return
@@ -516,7 +648,7 @@ function AdminDashboardContent() {
     } finally {
       setMenuLoading(false)
     }
-  }, [token])
+  }, [token, fetchAllIngredients, fetchIngredientPricing, fetchSideDishes])
 
   const buildMenuIngredientKey = (menuCode: string, styleCode: string, ingredientCode: string) => `${menuCode}::${styleCode}::${ingredientCode}`
   const buildMenuStyleKey = (menuCode: string, styleCode: string) => `${menuCode}::${styleCode}`
@@ -1518,60 +1650,6 @@ function AdminDashboardContent() {
     })
   }, [sideDishList])
 
-  const loadTabData = useCallback(async () => {
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    try {
-    if (activeTab === 'accounting') {
-        await fetchAccountingStats()
-    } else if (activeTab === 'staff') {
-        await Promise.all([fetchStaffData(), fetchPendingStaff()])
-    } else if (activeTab === 'inventory') {
-        await Promise.all([
-          fetchIntakeHistory(),
-          fetchPendingIntakes(),
-          fetchCategorizedIngredientsData(),
-          fetchIngredientPricing(),
-      fetchAllIngredients()
-        ])
-      } else if (activeTab === 'menu') {
-        await Promise.all([
-          fetchAllIngredients(),
-          fetchIngredientPricing(),
-          fetchSideDishes(),
-          fetchCustomCakeRecipes()
-        ])
-        await refreshMenuData()
-      }
-    } catch (error) {
-      console.error('탭 데이터 로드 실패:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [
-    activeTab,
-    token,
-    fetchAccountingStats,
-    fetchStaffData,
-    fetchPendingStaff,
-    fetchIntakeHistory,
-    fetchPendingIntakes,
-    fetchCategorizedIngredientsData,
-    fetchIngredientPricing,
-    fetchAllIngredients,
-    fetchSideDishes,
-    fetchCustomCakeRecipes,
-    refreshMenuData
-  ])
-
-  useEffect(() => {
-    loadTabData()
-  }, [loadTabData])
-
   const visibleMenuList = useMemo(() => menuList.filter((menu) => menu.code !== 'cake'), [menuList])
 
   const handleCustomCakeRecipeQuantityChange = useCallback((ingredientCode: string, value: number) => {
@@ -1731,6 +1809,706 @@ function AdminDashboardContent() {
     setCustomCakeRecipeDraft({ ingredient_code: '', quantity: 0 })
   }, [selectedCakeFlavor, selectedCakeSize])
 
+  const fetchInquiries = useCallback(async () => {
+    if (!token) return
+
+    setInquiriesLoading(true)
+    setInquiriesError(null)
+    try {
+      const params = new URLSearchParams()
+      if (inquiryStatusFilter !== 'ALL') {
+        params.set('status', inquiryStatusFilter)
+      }
+
+      const response = await fetch(`/api/inquiries?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '문의 목록을 불러오지 못했습니다.')
+      }
+
+      const items: InquiryItem[] = Array.isArray(data.items)
+        ? data.items.map((item: any) => ({
+            id: item.inquiry_id ?? item.id ?? '',
+            name: item.name ?? '익명',
+            email: item.email ?? '',
+            topic: item.topic ?? '',
+            message: item.message ?? '',
+            status: (item.status ?? 'NEW') as InquiryStatus,
+            managerNote: item.manager_note ?? null,
+            createdAt: item.created_at ?? '',
+            updatedAt: item.updated_at ?? ''
+          })).filter((item) => item.id)
+        : []
+
+      setInquiries(items)
+
+      const noteMap: Record<string, string> = {}
+      const statusMap: Record<string, InquiryStatus> = {}
+      items.forEach((item) => {
+        noteMap[item.id] = item.managerNote ?? ''
+        statusMap[item.id] = item.status
+      })
+      setInquiryNotes(noteMap)
+      setInquiryStatusDrafts(statusMap)
+      setInquiryActionLoading({})
+    } catch (error: any) {
+      console.error('문의 목록 조회 실패:', error)
+      setInquiriesError(error?.message || '문의 목록을 불러오지 못했습니다.')
+    } finally {
+      setInquiriesLoading(false)
+    }
+  }, [token, inquiryStatusFilter])
+
+  const fetchManagerEvents = useCallback(async () => {
+    if (!token) return
+
+    setEventsLoading(true)
+    setEventsError(null)
+    try {
+      const response = await fetch('/api/events/manage', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '이벤트 목록을 불러오지 못했습니다.')
+      }
+
+      const items: AdminEventItem[] = Array.isArray(data.events)
+        ? data.events.map((event: any) => ({
+            id: event.event_id ?? event.id ?? '',
+            title: event.title ?? '',
+            description: event.description ?? '',
+            imagePath: event.image_path ?? null,
+            discountLabel: event.discount_label ?? null,
+            startDate: event.start_date ?? null,
+            endDate: event.end_date ?? null,
+            tags: Array.isArray(event.tags) ? event.tags : [],
+            isPublished: Boolean(event.is_published ?? true),
+            createdAt: event.created_at ?? '',
+            updatedAt: event.updated_at ?? '',
+            menuDiscounts: Array.isArray(event.menu_discounts)
+              ? event.menu_discounts
+                  .map((discount: any) => {
+                    const targetType: 'MENU' | 'SIDE_DISH' =
+                      (discount.target_type ?? discount.targetType ?? 'MENU') === 'SIDE_DISH' ? 'SIDE_DISH' : 'MENU'
+                    const menuId = String(discount.menu_item_id ?? discount.menuItemId ?? discount.target_id ?? discount.targetId ?? '')
+                    const sideId = String(discount.side_dish_id ?? discount.sideDishId ?? '')
+                    const resolvedId = targetType === 'SIDE_DISH' ? (sideId || menuId) : menuId
+                    const mapped: EventMenuDiscount = {
+                      menuItemId: resolvedId,
+                      menuCode: discount.menu_code ?? discount.menuCode ?? undefined,
+                      menuName: discount.menu_name ?? discount.menuName ?? discount.side_dish_name ?? discount.sideDishName ?? '',
+                      sideDishCode: discount.side_dish_code ?? discount.sideDishCode ?? undefined,
+                      sideDishName: discount.side_dish_name ?? discount.sideDishName ?? undefined,
+                      discountType: (discount.discount_type ?? discount.discountType ?? 'PERCENT') as DiscountType,
+                      discountValue: Number(discount.discount_value ?? discount.discountValue ?? 0),
+                      targetType
+                    }
+                    return mapped
+                  })
+                  .filter((discount: EventMenuDiscount) => Boolean(discount.menuItemId))
+              : []
+          })).filter((event) => event.id)
+        : []
+
+      setManagerEvents(items)
+      const draftMap: Record<string, EventDraft> = {}
+
+      const discountDraftMap: Record<string, EventMenuDiscountDraft[]> = {}
+
+      items.forEach((event) => {
+        draftMap[event.id] = {
+          title: event.title,
+          description: event.description,
+          discountLabel: event.discountLabel ?? '',
+          startDate: event.startDate ?? '',
+          endDate: event.endDate ?? '',
+          tags: event.tags.join(', '),
+          isPublished: event.isPublished
+        }
+        const draftDiscounts = event.menuDiscounts.map(discount => ({
+          menuItemId: discount.menuItemId,
+          targetType: discount.targetType,
+          discountType: discount.discountType,
+          discountValue: discount.discountValue
+        }))
+        discountDraftMap[event.id] = draftDiscounts.length > 0 ? draftDiscounts : [createDefaultEventDiscount()]
+      })
+
+      setEventEditDrafts(draftMap)
+      setEventDiscountDrafts(discountDraftMap)
+      setEventActionLoading({})
+      setEventImageUploading({})
+    } catch (error: any) {
+      console.error('이벤트 목록 조회 실패:', error)
+      setEventsError(error?.message || '이벤트 목록을 불러오지 못했습니다.')
+    } finally {
+      setEventsLoading(false)
+    }
+  }, [token])
+
+  const loadTabData = useCallback(async () => {
+    if (!token) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    try {
+      if (activeTab === 'accounting') {
+        await fetchAccountingStats()
+      } else if (activeTab === 'staff') {
+        await Promise.all([fetchStaffData(), fetchPendingStaff()])
+      } else if (activeTab === 'inventory') {
+        await Promise.all([
+          fetchIntakeHistory(),
+          fetchPendingIntakes(),
+          fetchCategorizedIngredientsData(),
+          fetchIngredientPricing(),
+          fetchAllIngredients()
+        ])
+      } else if (activeTab === 'menu') {
+        await Promise.all([
+          fetchAllIngredients(),
+          fetchIngredientPricing(),
+          fetchSideDishes(),
+          fetchCustomCakeRecipes()
+        ])
+        await refreshMenuData()
+      } else if (activeTab === 'inquiries') {
+        await fetchInquiries()
+      } else if (activeTab === 'events') {
+        await Promise.all([fetchSideDishes(), refreshMenuData()])
+      }
+    } catch (error) {
+      console.error('탭 데이터 로드 실패:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [
+    activeTab,
+    token,
+    fetchAccountingStats,
+    fetchStaffData,
+    fetchPendingStaff,
+    fetchIntakeHistory,
+    fetchPendingIntakes,
+    fetchCategorizedIngredientsData,
+    fetchIngredientPricing,
+    fetchAllIngredients,
+    fetchSideDishes,
+    fetchCustomCakeRecipes,
+    refreshMenuData,
+    fetchInquiries,
+    fetchManagerEvents
+  ])
+
+  useEffect(() => {
+    loadTabData()
+  }, [loadTabData])
+
+  useEffect(() => {
+    if (activeTab === 'inquiries') {
+      fetchInquiries()
+    }
+  }, [activeTab, inquiryStatusFilter, fetchInquiries])
+
+  useEffect(() => {
+    if (activeTab === 'events') {
+      fetchManagerEvents()
+    }
+  }, [activeTab, fetchManagerEvents])
+
+  const handleInquiryNoteChange = useCallback((inquiryId: string, value: string) => {
+    setInquiryNotes(prev => ({ ...prev, [inquiryId]: value }))
+  }, [])
+
+  const handleInquiryStatusChange = useCallback((inquiryId: string, status: InquiryStatus) => {
+    setInquiryStatusDrafts(prev => ({ ...prev, [inquiryId]: status }))
+  }, [])
+
+  const handleSaveInquiry = useCallback(async (inquiryId: string) => {
+    if (!token) return
+
+    const payload: Record<string, any> = {}
+    if (inquiryStatusDrafts[inquiryId]) {
+      payload.status = inquiryStatusDrafts[inquiryId]
+    }
+    if (inquiryNotes[inquiryId] !== undefined) {
+      payload.manager_note = inquiryNotes[inquiryId]
+    }
+
+    if (Object.keys(payload).length === 0) {
+      alert('변경할 내용이 없습니다.')
+      return
+    }
+
+    setInquiryActionLoading(prev => ({ ...prev, [inquiryId]: true }))
+    try {
+      const response = await fetch(`/api/inquiries/${inquiryId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '문의 업데이트에 실패했습니다.')
+      }
+      await fetchInquiries()
+      alert('문의 상태를 업데이트했습니다.')
+    } catch (error: any) {
+      console.error('문의 업데이트 실패:', error)
+      alert(error?.message || '문의 업데이트 중 오류가 발생했습니다.')
+    } finally {
+      setInquiryActionLoading(prev => ({ ...prev, [inquiryId]: false }))
+    }
+  }, [token, inquiryNotes, inquiryStatusDrafts, fetchInquiries])
+
+  const handleEventFormChange = (field: keyof typeof eventForm, value: string | boolean) => {
+    setEventForm(prev => ({
+      ...prev,
+      [field]: field === 'isPublished' ? Boolean(value) : String(value)
+    }))
+  }
+
+  const handleAddNewEventDiscountRow = () => {
+    setEventDiscountForm(prev => [...prev, createDefaultEventDiscount()])
+  }
+
+  const handleRemoveNewEventDiscountRow = (index: number) => {
+    setEventDiscountForm(prev => {
+      const next = prev.filter((_, idx) => idx !== index)
+      return next.length > 0 ? next : [createDefaultEventDiscount()]
+    })
+  }
+
+  const handleChangeNewEventDiscountRow = (
+    index: number,
+    field: keyof EventMenuDiscountDraft,
+    value: string | number
+  ) => {
+    setEventDiscountForm(prev =>
+      prev.map((row, idx) => {
+        if (idx !== index) {
+          return row
+        }
+
+        if (field === 'menuItemId') {
+          const raw = String(value)
+          if (!raw) {
+            return { ...row, menuItemId: '', targetType: 'MENU' }
+          }
+          const [kind, id] = raw.split('|')
+          const normalizedKind: 'MENU' | 'SIDE_DISH' = kind === 'SIDE_DISH' ? 'SIDE_DISH' : 'MENU'
+          return { ...row, menuItemId: id ?? '', targetType: normalizedKind }
+        }
+
+        if (field === 'discountType') {
+          const nextType: DiscountType = value === 'FIXED' ? 'FIXED' : 'PERCENT'
+          const adjustedValue = sanitizeDiscountValue(row.discountValue, nextType)
+          return { ...row, discountType: nextType, discountValue: adjustedValue }
+        }
+
+        if (field === 'discountValue') {
+          let nextValue = typeof value === 'number' ? value : Number(value)
+          if (!Number.isFinite(nextValue)) {
+            nextValue = 0
+          }
+          return { ...row, discountValue: sanitizeDiscountValue(nextValue, row.discountType) }
+        }
+
+        return row
+      })
+    )
+  }
+
+  const handleEventImageInput = (file: File | null) => {
+    setEventImageFile(file)
+  }
+
+  const handleCreateEvent = async () => {
+    if (!token) return
+    if (!eventForm.title.trim() || !eventForm.description.trim()) {
+      alert('이벤트 제목과 설명을 입력해주세요.')
+      return
+    }
+
+    setEventSubmitting(true)
+    try {
+      const payload = {
+        title: eventForm.title.trim(),
+        description: eventForm.description.trim(),
+        discount_label: eventForm.discountLabel?.trim() || null,
+        start_date: eventForm.startDate?.trim() || null,
+        end_date: eventForm.endDate?.trim() || null,
+        tags: eventForm.tags
+          .split(',')
+          .map(tag => tag.trim())
+          .filter(Boolean),
+        is_published: eventForm.isPublished,
+        menu_discounts: buildDiscountPayload(eventDiscountForm),
+      }
+
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success || !data.event?.event_id) {
+        throw new Error(data.detail || data.error || '이벤트 생성에 실패했습니다.')
+      }
+
+      const eventId: string = data.event.event_id
+
+      if (eventImageFile) {
+        const formData = new FormData()
+        formData.append('file', eventImageFile)
+
+        const imageResponse = await fetch(`/api/events/${eventId}/image`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        })
+
+        const imageData = await imageResponse.json()
+        if (!imageResponse.ok || !imageData.success) {
+          throw new Error(imageData.detail || imageData.error || '이벤트 이미지를 업로드하지 못했습니다.')
+        }
+      }
+
+      setEventForm({
+        title: '',
+        description: '',
+        discountLabel: '',
+        startDate: '',
+        endDate: '',
+        tags: '',
+        isPublished: true
+      })
+      setEventDiscountForm([createDefaultEventDiscount()])
+      setEventImageFile(null)
+      await fetchManagerEvents()
+      alert('새 이벤트를 등록했습니다.')
+    } catch (error: any) {
+      console.error('이벤트 생성 실패:', error)
+      alert(error?.message || '이벤트 생성 중 오류가 발생했습니다.')
+    } finally {
+      setEventSubmitting(false)
+    }
+  }
+
+  const handleEventDraftChange = (eventId: string, field: keyof EventDraft, value: string | boolean) => {
+    setEventEditDrafts(prev => ({
+      ...prev,
+      [eventId]: {
+        ...(prev[eventId] ?? {
+          title: '',
+          description: '',
+          discountLabel: '',
+          startDate: '',
+          endDate: '',
+          tags: '',
+          isPublished: true
+        }),
+        [field]: field === 'isPublished' ? Boolean(value) : String(value)
+      }
+    }))
+  }
+
+  const updateEventDiscountDraftState = (
+    eventId: string,
+    updater: (rows: EventMenuDiscountDraft[]) => EventMenuDiscountDraft[]
+  ) => {
+    setEventDiscountDrafts(prev => {
+      const current = prev[eventId] && prev[eventId]!.length > 0 ? prev[eventId]! : [createDefaultEventDiscount()]
+      return {
+        ...prev,
+        [eventId]: updater(current)
+      }
+    })
+  }
+
+  const handleAddEventDiscountDraftRow = (eventId: string) => {
+    updateEventDiscountDraftState(eventId, rows => [...rows, createDefaultEventDiscount()])
+  }
+
+  const handleRemoveEventDiscountDraftRow = (eventId: string, index: number) => {
+    updateEventDiscountDraftState(eventId, rows => {
+      const next = rows.filter((_, idx) => idx !== index)
+      return next.length > 0 ? next : [createDefaultEventDiscount()]
+    })
+  }
+
+  const handleChangeEventDiscountDraftRow = (
+    eventId: string,
+    index: number,
+    field: keyof EventMenuDiscountDraft,
+    value: string | number
+  ) => {
+    updateEventDiscountDraftState(eventId, rows =>
+      rows.map((row, idx) => {
+        if (idx !== index) {
+          return row
+        }
+
+        if (field === 'menuItemId') {
+          const raw = String(value)
+          if (!raw) {
+            return { ...row, menuItemId: '', targetType: 'MENU' }
+          }
+          const [kind, id] = raw.split('|')
+          const normalizedKind: 'MENU' | 'SIDE_DISH' = kind === 'SIDE_DISH' ? 'SIDE_DISH' : 'MENU'
+          return { ...row, menuItemId: id ?? '', targetType: normalizedKind }
+        }
+
+        if (field === 'discountType') {
+          const nextType: DiscountType = value === 'FIXED' ? 'FIXED' : 'PERCENT'
+          const adjustedValue = sanitizeDiscountValue(row.discountValue, nextType)
+          return { ...row, discountType: nextType, discountValue: adjustedValue }
+        }
+
+        if (field === 'discountValue') {
+          let nextValue = typeof value === 'number' ? value : Number(value)
+          if (!Number.isFinite(nextValue)) {
+            nextValue = 0
+          }
+          return { ...row, discountValue: sanitizeDiscountValue(nextValue, row.discountType) }
+        }
+
+        return row
+      })
+    )
+  }
+
+  const sanitizeDiscountValue = (value: number, type: DiscountType): number => {
+    const numeric = Number.isFinite(value) ? value : 0
+    if (type === 'PERCENT') {
+      return Math.min(Math.max(numeric, 0), 100)
+    }
+    return Math.max(numeric, 0)
+  }
+
+  const buildDiscountPayload = (rows: EventMenuDiscountDraft[]): EventDiscountPayload[] => {
+    return rows
+      .filter(row => row.menuItemId && row.discountValue > 0)
+      .map(row => {
+        const sanitizedValue = sanitizeDiscountValue(row.discountValue, row.discountType)
+        const payload: EventDiscountPayload = {
+          target_type: row.targetType,
+          target_id: row.menuItemId,
+          discount_type: row.discountType,
+          discount_value: sanitizedValue
+        }
+        if (row.targetType === 'SIDE_DISH') {
+          payload.side_dish_id = row.menuItemId
+        } else {
+          payload.menu_item_id = row.menuItemId
+        }
+        return payload
+      })
+  }
+
+  const normalizeDiscountsForCompare = (payload: EventDiscountPayload[]) => {
+    return payload
+      .map(item => ({
+        target_type: item.target_type,
+        target_id: item.target_id,
+        discount_type: item.discount_type,
+        // round to 2 decimal places for comparison
+        discount_value: Math.round(item.discount_value * 100) / 100
+      }))
+      .sort((a, b) => {
+        const typeCompare = a.target_type.localeCompare(b.target_type)
+        if (typeCompare !== 0) return typeCompare
+        const idCompare = a.target_id.localeCompare(b.target_id)
+        if (idCompare !== 0) return idCompare
+        return a.discount_type.localeCompare(b.discount_type)
+      })
+  }
+
+  const handleSaveEvent = async (eventId: string) => {
+    if (!token) return
+    const draft = eventEditDrafts[eventId]
+    const original = managerEvents.find(event => event.id === eventId)
+    if (!draft || !original) return
+
+    const tagsArray = draft.tags
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean)
+
+    const payload: Record<string, any> = {}
+    if (draft.title.trim() && draft.title.trim() !== original.title) {
+      payload.title = draft.title.trim()
+    }
+    if (draft.description.trim() && draft.description.trim() !== original.description) {
+      payload.description = draft.description.trim()
+    }
+    if ((draft.discountLabel || '') !== (original.discountLabel || '')) {
+      payload.discount_label = draft.discountLabel.trim() || null
+    }
+    if ((draft.startDate || '') !== (original.startDate || '')) {
+      payload.start_date = draft.startDate.trim() || null
+    }
+    if ((draft.endDate || '') !== (original.endDate || '')) {
+      payload.end_date = draft.endDate.trim() || null
+    }
+    if (JSON.stringify(tagsArray) !== JSON.stringify(original.tags)) {
+      payload.tags = tagsArray
+    }
+    if (draft.isPublished !== original.isPublished) {
+      payload.is_published = draft.isPublished
+    }
+
+    const currentDiscountDrafts = eventDiscountDrafts[eventId] ?? [createDefaultEventDiscount()]
+    const draftDiscountPayload = buildDiscountPayload(currentDiscountDrafts)
+    const originalDiscountPayload = (original.menuDiscounts ?? []).map(discount => ({
+      target_type: discount.targetType ?? 'MENU',
+      target_id: discount.menuItemId,
+      discount_type: discount.discountType,
+      discount_value: sanitizeDiscountValue(discount.discountValue, discount.discountType)
+    }))
+
+    const hasDiscountChanged =
+      JSON.stringify(normalizeDiscountsForCompare(draftDiscountPayload)) !==
+      JSON.stringify(normalizeDiscountsForCompare(originalDiscountPayload))
+
+    if (hasDiscountChanged) {
+      payload.menu_discounts = draftDiscountPayload
+    }
+
+    if (Object.keys(payload).length === 0) {
+      alert('변경된 내용이 없습니다.')
+      return
+    }
+
+    setEventActionLoading(prev => ({ ...prev, [eventId]: true }))
+    try {
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '이벤트 정보를 업데이트하지 못했습니다.')
+      }
+      await fetchManagerEvents()
+      alert('이벤트 정보를 저장했습니다.')
+    } catch (error: any) {
+      console.error('이벤트 업데이트 실패:', error)
+      alert(error?.message || '이벤트 업데이트 중 오류가 발생했습니다.')
+    } finally {
+      setEventActionLoading(prev => ({ ...prev, [eventId]: false }))
+    }
+  }
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!token) return
+    if (!confirm('선택한 이벤트를 삭제하시겠습니까?')) return
+
+    setEventActionLoading(prev => ({ ...prev, [eventId]: true }))
+    try {
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '이벤트 삭제에 실패했습니다.')
+      }
+      await fetchManagerEvents()
+      alert('이벤트를 삭제했습니다.')
+    } catch (error: any) {
+      console.error('이벤트 삭제 실패:', error)
+      alert(error?.message || '이벤트 삭제 중 오류가 발생했습니다.')
+    } finally {
+      setEventActionLoading(prev => ({ ...prev, [eventId]: false }))
+    }
+  }
+
+  const handleToggleEventPublish = async (eventId: string, nextValue: boolean) => {
+    if (!token) return
+
+    setEventActionLoading(prev => ({ ...prev, [eventId]: true }))
+    try {
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_published: nextValue })
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '이벤트 공개 상태를 변경하지 못했습니다.')
+      }
+      await fetchManagerEvents()
+    } catch (error: any) {
+      console.error('이벤트 공개 상태 변경 실패:', error)
+      alert(error?.message || '이벤트 공개 상태 변경 중 오류가 발생했습니다.')
+    } finally {
+      setEventActionLoading(prev => ({ ...prev, [eventId]: false }))
+    }
+  }
+
+  const handleUploadEventImage = async (eventId: string, file: File) => {
+    if (!token) return
+
+    setEventImageUploading(prev => ({ ...prev, [eventId]: true }))
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch(`/api/events/${eventId}/image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '이벤트 이미지를 업로드하지 못했습니다.')
+      }
+      await fetchManagerEvents()
+      alert('이벤트 이미지를 업데이트했습니다.')
+    } catch (error: any) {
+      console.error('이벤트 이미지 업로드 실패:', error)
+      alert(error?.message || '이벤트 이미지 업로드 중 오류가 발생했습니다.')
+    } finally {
+      setEventImageUploading(prev => ({ ...prev, [eventId]: false }))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-stone-100">
       <Header currentPage="dashboard" />
@@ -1813,6 +2591,32 @@ function AdminDashboardContent() {
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">🍽️</span>
                   <span>메뉴 관리</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('events')}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+                  activeTab === 'events'
+                    ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-md'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xl">🎉</span>
+                  <span>이벤트</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('inquiries')}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+                  activeTab === 'inquiries'
+                    ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-md'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xl">📨</span>
+                  <span>문의</span>
                 </div>
               </button>
             </div>
@@ -2395,11 +3199,11 @@ function AdminDashboardContent() {
                                               제거
                                 </button>
                               </div>
-                                        </div>
-                                      </div>
-                                    )
-                                  })
-                                )}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
                               </div>
 
                               <div className="mt-4 bg-white border border-dashed border-gray-300 rounded-lg p-4">
@@ -2920,7 +3724,7 @@ function AdminDashboardContent() {
                           }}
                           className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                         />
-                        </div>
+                          </div>
                       </div>
                       <button
                         onClick={() => handleQuickCategoryRestock(categoryKey)}
@@ -2953,7 +3757,7 @@ function AdminDashboardContent() {
                                 }`}>
                                   {item.currentStock}{item.korean_unit || item.unit}
                                 </span>
-                  </div>
+                          </div>
                 )
               })}
                           {options.length > sampleItems.length && (
@@ -2995,10 +3799,10 @@ function AdminDashboardContent() {
                             </p>
                           </div>
                           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                            <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                               <label className="text-sm text-gray-600">단가</label>
-                              <input
-                                type="number"
+                        <input
+                          type="number"
                                 min={0}
                                 value={editedPrice}
                                 onChange={(e) => handlePriceChange(ingredient.name, Number(e.target.value))}
@@ -3115,6 +3919,682 @@ function AdminDashboardContent() {
                     )}
                   </div>
                 ))}
+            </div>
+          )}
+
+          {!loading && activeTab === 'events' && (
+            <div className="space-y-6">
+              {eventsError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl">
+                  {eventsError}
+                </div>
+              )}
+
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📝</span>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-800">신규 이벤트 등록</h2>
+                      <p className="text-sm text-gray-500">제목, 기간, 태그, 이미지를 등록하여 고객에게 노출할 이벤트를 관리하세요.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">이벤트 제목</label>
+                      <input
+                        type="text"
+                        value={eventForm.title}
+                        onChange={(e) => handleEventFormChange('title', e.target.value)}
+                        placeholder="예: 미스터 대박 크리스마스 갈라"
+                        className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                      <textarea
+                        value={eventForm.description}
+                        onChange={(e) => handleEventFormChange('description', e.target.value)}
+                        rows={4}
+                        placeholder="이벤트 상세 내용을 입력하세요."
+                        className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">할인/배지 문구</label>
+                        <input
+                          type="text"
+                          value={eventForm.discountLabel}
+                          onChange={(e) => handleEventFormChange('discountLabel', e.target.value)}
+                          placeholder="예: Holiday 20% 할인"
+                          className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">태그</label>
+                        <input
+                          type="text"
+                          value={eventForm.tags}
+                          onChange={(e) => handleEventFormChange('tags', e.target.value)}
+                          placeholder="예: 시즌한정, 프리미엄"
+                          className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">쉼표(,)로 구분하여 여러 태그를 입력하세요.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">시작일</label>
+                        <input
+                          type="date"
+                          value={eventForm.startDate}
+                          onChange={(e) => handleEventFormChange('startDate', e.target.value)}
+                          className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">종료일</label>
+                        <input
+                          type="date"
+                          value={eventForm.endDate}
+                          onChange={(e) => handleEventFormChange('endDate', e.target.value)}
+                          className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={eventForm.isPublished}
+                          onChange={(e) => handleEventFormChange('isPublished', e.target.checked)}
+                          className="w-4 h-4 text-amber-600 border-gray-300 rounded"
+                        />
+                        공개 상태로 등록
+                      </label>
+                    </div>
+
+                    <div className="border border-amber-100 rounded-xl p-4 bg-amber-50/60 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">이벤트 할인 구성</span>
+                        <button
+                          type="button"
+                          onClick={handleAddNewEventDiscountRow}
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-800"
+                        >
+                          + 할인 항목 추가
+                        </button>
+                      </div>
+
+                      {eventDiscountForm.map((row, index) => {
+                        const takenTargets = new Set(
+                          eventDiscountForm
+                            .filter((_, idx) => idx !== index && eventDiscountForm[idx].menuItemId)
+                            .map(item => `${item.targetType}|${item.menuItemId}`)
+                        )
+                        const selectValue = row.menuItemId ? `${row.targetType}|${row.menuItemId}` : ''
+                        const optionList = discountTargetOptions
+                        const activeTarget = optionList.find(
+                          option => option.id === row.menuItemId && option.kind === row.targetType
+                        )
+
+                        return (
+                          <div
+                            key={`new-event-discount-${index}`}
+                            className="grid grid-cols-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.2fr)_auto] gap-3 items-end border border-amber-100 rounded-lg p-3 bg-white shadow-sm"
+                          >
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">할인 대상</label>
+                              <select
+                                value={selectValue}
+                                onChange={(e) => handleChangeNewEventDiscountRow(index, 'menuItemId', e.target.value)}
+                                className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                              >
+                                <option value="">할인 대상을 선택하세요</option>
+                                {optionList.map((option) => (
+                                  <option
+                                    key={`${option.kind}|${option.id}`}
+                                    value={`${option.kind}|${option.id}`}
+                                    disabled={takenTargets.has(`${option.kind}|${option.id}`)}
+                                  >
+                                    {option.display}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">할인 유형</label>
+                                <select
+                                  value={row.discountType}
+                                  onChange={(e) => handleChangeNewEventDiscountRow(index, 'discountType', e.target.value)}
+                                  className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                                >
+                                  <option value="PERCENT">퍼센트 (%)</option>
+                                  <option value="FIXED">금액 (원)</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">할인 값</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={row.discountType === 'PERCENT' ? 100 : undefined}
+                                  step={row.discountType === 'PERCENT' ? 0.1 : 1000}
+                                  value={row.discountValue}
+                                  onChange={(e) => handleChangeNewEventDiscountRow(index, 'discountValue', e.target.value)}
+                                  className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+                                />
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveNewEventDiscountRow(index)}
+                              className="self-start px-3 py-2 text-xs font-semibold text-gray-600 hover:text-red-600 transition-colors"
+                            >
+                              제거
+                            </button>
+
+                            {activeTarget && typeof activeTarget.price === 'number' && !Number.isNaN(activeTarget.price) && (
+                              <p className="md:col-span-3 text-xs text-gray-500">
+                                기준가 {Number(activeTarget.price).toLocaleString()}원
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+
+                      {menuList.length === 0 && (
+                        <p className="text-xs text-amber-700">
+                          메뉴 데이터를 불러오는 중입니다. 잠시 후 다시 시도하거나 메뉴 탭에서 데이터를 갱신하세요.
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        퍼센트 할인은 0~100 사이 값을 입력하고, 금액 할인은 원 단위 금액을 입력하세요. 메뉴와 할인 값이 모두 채워진 항목만 적용됩니다.
+                      </p>
+                    </div>
+
+                     <div>
+                       <label className="block text-sm font-medium text-gray-700 mb-1">대표 이미지 (최대 5MB)</label>
+                       <input
+                         type="file"
+                         accept="image/*"
+                         onChange={(e) => handleEventImageInput(e.target.files?.[0] ?? null)}
+                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                       />
+                       {eventImageFile && (
+                         <p className="text-xs text-gray-500 mt-1">선택한 파일: {eventImageFile.name}</p>
+                       )}
+                     </div>
+
+                    <button
+                      onClick={handleCreateEvent}
+                      disabled={eventSubmitting}
+                      className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {eventSubmitting ? '등록 중...' : '이벤트 등록'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">📅</span>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">등록된 이벤트</h2>
+                    <p className="text-sm text-gray-500">현재 등록된 이벤트의 노출 여부와 내용을 관리하세요.</p>
+                  </div>
+                  <button
+                    onClick={() => fetchManagerEvents()}
+                    className="ml-auto px-3 py-1 text-sm font-medium text-pink-700 bg-pink-100 hover:bg-pink-200 rounded-lg transition-colors"
+                  >
+                    새로고침
+                  </button>
+                </div>
+
+                {eventsLoading ? (
+                  <div className="flex justify-center items-center py-16">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-pink-600"></div>
+                  </div>
+                ) : managerEvents.length === 0 ? (
+                  <p className="text-center text-gray-500 py-12">등록된 이벤트가 없습니다. 새로운 이벤트를 추가해보세요.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {managerEvents.map((event) => {
+                      const draft = eventEditDrafts[event.id] ?? {
+                        title: event.title,
+                        description: event.description,
+                        discountLabel: event.discountLabel ?? '',
+                        startDate: event.startDate ?? '',
+                        endDate: event.endDate ?? '',
+                        tags: event.tags.join(', '),
+                        isPublished: event.isPublished
+                      }
+                      const discountDraft = eventDiscountDrafts[event.id] && eventDiscountDrafts[event.id]!.length > 0
+                        ? eventDiscountDrafts[event.id]!
+                        : [createDefaultEventDiscount()]
+
+                      return (
+                        <div key={event.id} className="border border-gray-200 rounded-2xl p-6 bg-white">
+                          <div className="flex flex-col lg:flex-row gap-6">
+                            <div className="lg:w-1/3 space-y-3">
+                              <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 aspect-video">
+                                {event.imagePath ? (
+                                  <img src={event.imagePath} alt={event.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 text-sm">
+                                    <span className="text-2xl mb-2">🖼️</span>
+                                    이미지가 없습니다
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">이미지 변경</label>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                          onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    if (file) {
+                                      handleUploadEventImage(event.id, file)
+                                      e.target.value = ''
+                                    }
+                                  }}
+                                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100"
+                                  disabled={Boolean(eventImageUploading[event.id])}
+                                />
+                                {eventImageUploading[event.id] && (
+                                  <p className="text-xs text-pink-600 mt-1">이미지를 업로드하는 중입니다...</p>
+                                )}
+                      </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span>생성: {event.createdAt ? new Date(event.createdAt).toLocaleString('ko-KR') : '-'}</span>
+                                <span>·</span>
+                                <span>수정: {event.updatedAt ? new Date(event.updatedAt).toLocaleString('ko-KR') : '-'}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex-1 space-y-4">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${draft.isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'}`}>
+                                  {draft.isPublished ? '공개 중' : '비공개'}
+                                </span>
+                                {event.discountLabel && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                    {event.discountLabel}
+                                  </span>
+                                )}
+                                {(event.startDate || event.endDate) && (
+                                  <span className="text-xs text-gray-500 ml-auto">
+                                    {event.startDate ? new Date(event.startDate).toLocaleDateString('ko-KR') : '미정'}
+                                    {' '}~{' '}
+                                    {event.endDate ? new Date(event.endDate).toLocaleDateString('ko-KR') : '미정'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">제목</label>
+                                <input
+                                  type="text"
+                                  value={draft.title}
+                                  onChange={(e) => handleEventDraftChange(event.id, 'title', e.target.value)}
+                                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                                <textarea
+                                  value={draft.description}
+                                  onChange={(e) => handleEventDraftChange(event.id, 'description', e.target.value)}
+                                  rows={4}
+                                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">할인 문구</label>
+                                  <input
+                                    type="text"
+                                    value={draft.discountLabel}
+                                    onChange={(e) => handleEventDraftChange(event.id, 'discountLabel', e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">태그</label>
+                                  <input
+                                    type="text"
+                                    value={draft.tags}
+                                    onChange={(e) => handleEventDraftChange(event.id, 'tags', e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                  />
+                                  <p className="text-xs text-gray-500 mt-1">쉼표로 구분된 태그 목록</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">시작일</label>
+                                  <input
+                                    type="date"
+                                    value={draft.startDate}
+                                    onChange={(e) => handleEventDraftChange(event.id, 'startDate', e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">종료일</label>
+                                  <input
+                                    type="date"
+                                    value={draft.endDate}
+                                    onChange={(e) => handleEventDraftChange(event.id, 'endDate', e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="border border-pink-100 rounded-xl p-4 bg-pink-50/60 space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium text-gray-700">이벤트 할인 구성</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddEventDiscountDraftRow(event.id)}
+                                    className="text-xs font-semibold text-pink-600 hover:text-pink-700"
+                                  >
+                                    + 할인 항목 추가
+                                  </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {discountDraft.map((row, index) => {
+                                    const takenTargets = new Set(
+                                      discountDraft
+                                        .filter((_, idx) => idx !== index && discountDraft[idx].menuItemId)
+                                        .map(item => `${item.targetType}|${item.menuItemId}`)
+                                    )
+                                    const selectValue = row.menuItemId ? `${row.targetType}|${row.menuItemId}` : ''
+                                    const optionList = (() => {
+                                      const baseOptions = [...discountTargetOptions]
+                                      if (row.menuItemId) {
+                                        const exists = baseOptions.some(
+                                          option => option.id === row.menuItemId && option.kind === row.targetType
+                                        )
+                                        if (!exists) {
+                                          const existingDiscount = event.menuDiscounts.find(
+                                            discount => discount.menuItemId === row.menuItemId && discount.targetType === row.targetType
+                                          )
+                                          const displayName =
+                                            row.targetType === 'SIDE_DISH'
+                                              ? `사이드 · ${existingDiscount?.sideDishName ?? existingDiscount?.menuName ?? '사이드 메뉴'}`
+                                              : `메뉴 · ${existingDiscount?.menuName ?? '메뉴'}`
+                                          baseOptions.push({
+                                            kind: row.targetType,
+                                            id: row.menuItemId,
+                                            display: displayName,
+                                          })
+                                        }
+                                      }
+                                      return baseOptions
+                                    })()
+                                    const activeTarget = optionList.find(
+                                      option => option.id === row.menuItemId && option.kind === row.targetType
+                                    )
+
+                                    return (
+                                      <div
+                                        key={`event-${event.id}-discount-${index}`}
+                                        className="border border-pink-100 rounded-lg bg-white shadow-sm p-3 space-y-3"
+                                      >
+                                        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.2fr)_auto] md:gap-3 md:items-end">
+                                          <div className="mb-3 md:mb-0">
+                                            <label className="block text-xs font-medium text-gray-600 mb-1">할인 대상</label>
+                                            <select
+                                              value={selectValue}
+                                              onChange={(e) => handleChangeEventDiscountDraftRow(event.id, index, 'menuItemId', e.target.value)}
+                                              className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+                                            >
+                                              <option value="">할인 대상을 선택하세요</option>
+                                              {optionList.map((option) => (
+                                                <option
+                                                  key={`${option.kind}|${option.id}`}
+                                                  value={`${option.kind}|${option.id}`}
+                                                  disabled={takenTargets.has(`${option.kind}|${option.id}`)}
+                                                >
+                                                  {option.display}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          <div className="grid grid-cols-2 gap-2 mb-3 md:mb-0">
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">할인 유형</label>
+                                              <select
+                                                value={row.discountType}
+                                                onChange={(e) => handleChangeEventDiscountDraftRow(event.id, index, 'discountType', e.target.value)}
+                                                className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+                                              >
+                                                <option value="PERCENT">퍼센트 (%)</option>
+                                                <option value="FIXED">금액 (원)</option>
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-600 mb-1">할인 값</label>
+                                              <input
+                                                type="number"
+                                                min={0}
+                                                max={row.discountType === 'PERCENT' ? 100 : undefined}
+                                                step={row.discountType === 'PERCENT' ? 0.1 : 1000}
+                                                value={row.discountValue}
+                                                onChange={(e) => handleChangeEventDiscountDraftRow(event.id, index, 'discountValue', e.target.value)}
+                                                className="w-full px-3 py-2 border border-pink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          <div className="flex md:block">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveEventDiscountDraftRow(event.id, index)}
+                                              className="md:self-start px-3 py-2 text-xs font-semibold text-gray-600 hover:text-red-600 transition-colors"
+                                            >
+                                              제거
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {activeTarget && typeof activeTarget.price === 'number' && !Number.isNaN(activeTarget.price) && (
+                                          <p className="text-xs text-gray-500">
+                                            기준가 {Number(activeTarget.price).toLocaleString()}원
+                                          </p>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+
+                                {discountTargetOptions.length === 0 && (
+                                  <p className="text-xs text-pink-700">
+                                    할인 대상 데이터를 불러오는 중입니다. 잠시 후 다시 시도하거나 메뉴/사이드 메뉴 정보를 갱신하세요.
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                  퍼센트 할인은 0~100 사이 값을 입력하고, 금액 할인은 원 단위 금액을 입력하세요. 할인 대상과 할인 값이 모두 채워진 항목만 적용됩니다.
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  id={`event-publish-${event.id}`}
+                                  type="checkbox"
+                                  checked={draft.isPublished}
+                                  onChange={(e) => handleEventDraftChange(event.id, 'isPublished', e.target.checked)}
+                                  className="w-4 h-4 text-pink-600 border-gray-300 rounded"
+                                />
+                                <label htmlFor={`event-publish-${event.id}`} className="text-sm text-gray-700">공개 상태</label>
+                              </div>
+
+                              <div className="flex flex-wrap gap-3 justify-end">
+                                <button
+                                  onClick={() => handleSaveEvent(event.id)}
+                                  disabled={Boolean(eventActionLoading[event.id])}
+                                  className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {eventActionLoading[event.id] ? '저장 중...' : '변경사항 저장'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteEvent(event.id)}
+                                  disabled={Boolean(eventActionLoading[event.id])}
+                                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-sm font-semibold text-gray-700 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            </div>
+                           </div>
+                         </div>
+                       )
+                     })}
+                   </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!loading && activeTab === 'inquiries' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📨</span>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-800">고객 문의 관리</h2>
+                      <p className="text-sm text-gray-500">고객이 남긴 문의에 메모를 남기고 상태를 업데이트하세요.</p>
+                    </div>
+                  </div>
+                  <div className="md:ml-auto flex items-center gap-2">
+                    <button
+                      onClick={() => fetchInquiries()}
+                      className="px-3 py-1 text-sm font-medium text-teal-700 bg-teal-100 hover:bg-teal-200 rounded-lg transition-colors"
+                    >
+                      새로고침
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {(['ALL', ...INQUIRY_STATUS_OPTIONS] as Array<'ALL' | InquiryStatus>).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setInquiryStatusFilter(option)}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+                        inquiryStatusFilter === option
+                          ? 'bg-teal-600 border-teal-600 text-white'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {option === 'ALL' ? '전체' : INQUIRY_STATUS_LABELS[option]}
+                    </button>
+                  ))}
+                </div>
+
+                {inquiriesError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl mb-4">
+                    {inquiriesError}
+                  </div>
+                )}
+
+                {inquiriesLoading ? (
+                  <div className="flex justify-center items-center py-16">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600"></div>
+                  </div>
+                ) : inquiries.length === 0 ? (
+                  <p className="text-center text-gray-500 py-12">조건에 맞는 문의가 없습니다.</p>
+                ) : (
+                  <div className="space-y-5">
+                    {inquiries.map((inquiry) => (
+                      <div key={inquiry.id} className="border border-gray-200 rounded-2xl p-6 bg-white shadow-sm">
+                        <div className="flex flex-col md:flex-row md:items-start gap-3 justify-between mb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-semibold text-gray-900">{inquiry.name}</h3>
+                              <a href={`mailto:${inquiry.email}`} className="text-sm text-teal-600 hover:underline">{inquiry.email}</a>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {inquiry.createdAt ? new Date(inquiry.createdAt).toLocaleString('ko-KR') : '시간 정보 없음'}
+                            </p>
+                            <p className="text-sm text-gray-600 mt-2">주제: <span className="font-medium text-gray-800">{inquiry.topic}</span></p>
+                          </div>
+                          <span className={`self-start px-3 py-1 rounded-full text-xs font-semibold ${
+                            inquiry.status === 'NEW'
+                              ? 'bg-red-100 text-red-700'
+                              : inquiry.status === 'IN_PROGRESS'
+                              ? 'bg-amber-100 text-amber-700'
+                              : inquiry.status === 'RESOLVED'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {INQUIRY_STATUS_LABELS[inquiry.status]}
+                          </span>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+                          <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{inquiry.message}</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">처리 상태</label>
+                            <select
+                              value={inquiryStatusDrafts[inquiry.id] ?? inquiry.status}
+                              onChange={(e) => handleInquiryStatusChange(inquiry.id, e.target.value as InquiryStatus)}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            >
+                              {INQUIRY_STATUS_OPTIONS.map((status) => (
+                                <option key={status} value={status}>{INQUIRY_STATUS_LABELS[status]}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">관리자 메모</label>
+                            <textarea
+                              value={inquiryNotes[inquiry.id] ?? ''}
+                              onChange={(e) => handleInquiryNoteChange(inquiry.id, e.target.value)}
+                              rows={4}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              placeholder="고객 응대 기록이나 전달 사항을 입력하세요."
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-4">
+                          <button
+                            onClick={() => handleSaveInquiry(inquiry.id)}
+                            disabled={Boolean(inquiryActionLoading[inquiry.id])}
+                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {inquiryActionLoading[inquiry.id] ? '저장 중...' : '변경사항 저장'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

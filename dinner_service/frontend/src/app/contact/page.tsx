@@ -12,15 +12,49 @@ export default function ContactPage() {
     message: ''
   })
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const handleChange = (field: string, value: string) => {
     setFormState(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    // 실제 문의 처리를 위한 API 연동은 추후 구현 예정입니다.
-    setSubmitted(true)
+    setSubmitError(null)
+    setSubmitted(false)
+    setSubmitting(true)
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formState)
+      })
+
+      const raw = await response.text()
+      const data = raw ? JSON.parse(raw) : {}
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.detail || data.error || '문의 접수에 실패했습니다.')
+      }
+
+      setSubmitted(true)
+      setFormState({ name: '', email: '', topic: 'general', message: '' })
+    } catch (error: any) {
+      console.error('문의 접수 실패:', error)
+      let message = '문의 접수 중 오류가 발생했습니다.'
+      if (error instanceof SyntaxError) {
+        message = '서버 응답을 해석할 수 없습니다. 잠시 후 다시 시도해주세요.'
+      } else if (error?.message) {
+        message = error.message
+      }
+      setSubmitError(message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -131,14 +165,20 @@ export default function ContactPage() {
 
               <button
                 type="submit"
-                className="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold rounded-xl hover:from-amber-700 hover:to-amber-800 transition-colors"
+                disabled={submitting}
+                className="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold rounded-xl hover:from-amber-700 hover:to-amber-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                문의 보내기
+                {submitting ? '전송 중...' : '문의 보내기'}
               </button>
 
               {submitted && (
                 <div className="mt-4 p-4 text-sm rounded-xl bg-green-50 text-green-700 border border-green-200">
                   문의가 접수되었습니다. 빠른 시일 내에 연락드리겠습니다.
+                </div>
+              )}
+              {submitError && (
+                <div className="mt-4 p-4 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">
+                  {submitError}
                 </div>
               )}
             </div>
