@@ -1,8 +1,18 @@
+'use client';
+
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const redirect = searchParams?.get('redirect');
+  
+  // redirect 파라미터가 있으면 URL에 포함
+  const customerLoginUrl = redirect ? `/login/customer?redirect=${encodeURIComponent(redirect)}` : '/login/customer';
+  const staffLoginUrl = redirect ? `/login/staff?redirect=${encodeURIComponent(redirect)}` : '/login/staff';
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-stone-100">
       <Header currentPage="login" />
@@ -29,7 +39,7 @@ export default function LoginPage() {
                   메뉴를 주문하고 배달받을 수 있습니다
                 </p>
                 <Link
-                  href="/login/customer"
+                  href={customerLoginUrl}
                   className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
                 >
                   고객 로그인하기
@@ -51,7 +61,7 @@ export default function LoginPage() {
                   주문 관리 및 배달 업무를 수행합니다
                 </p>
                 <Link
-                  href="/login/staff"
+                  href={staffLoginUrl}
                   className="inline-block w-full bg-gray-700 hover:bg-gray-800 text-white font-semibold px-6 py-3 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
                 >
                   직원 로그인하기

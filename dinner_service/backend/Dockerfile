@@ -10,11 +10,14 @@ RUN apt-get update \
 # uv 설치
 RUN pip install --upgrade pip uv
 
+
 # uv가 CPython 3.11을 사용하도록 강제 (미리 릴리스 버전 다운로드 방지)
 ENV UV_PYTHON=3.11
 
 COPY pyproject.toml uv.lock /app/
 RUN uv sync --no-dev --python 3.11
+
+RUN uv pip install -q -U google-genai
 
 COPY backend /app/backend
 

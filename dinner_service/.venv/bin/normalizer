@@ -1,4 +1,4 @@
-#!/home/jepetolee/PycharmProjects/softwareEngineering/dinner_service/.venv/bin/python
+#!/home/jepetolee/PycharmProjects/softwareEngineering/dinner_service/.venv/bin/python3
 # -*- coding: utf-8 -*-
 import sys
 from charset_normalizer.cli import cli_detect

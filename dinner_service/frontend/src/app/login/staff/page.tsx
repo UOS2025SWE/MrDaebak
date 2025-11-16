@@ -34,12 +34,13 @@ export default function StaffLoginPage() {
     setIsLoading(true);
 
     try {
-      const success = await login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password);
 
-      if (success) {
+      if (result.success) {
         router.push('/dashboard/staff');
       } else {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        const fallback = '이메일 또는 비밀번호가 올바르지 않습니다.';
+        setError(result.error ?? fallback);
       }
     } catch (error) {
       console.error('Login error:', error);

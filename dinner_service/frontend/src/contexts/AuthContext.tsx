@@ -12,6 +12,35 @@ interface User {
   position?: 'COOK' | 'RIDER' | 'STAFF';  // 직원 직종 (요리사/배달원)
 }
 
+interface LoginResult {
+  success: boolean;
+  error?: string;
+  status?: number;
+}
+
+const normalizeErrorMessage = (input: unknown): string | undefined => {
+  if (!input) return undefined;
+  if (typeof input === 'string') return input.trim() || undefined;
+  if (typeof input === 'number' || typeof input === 'boolean') {
+    return String(input);
+  }
+  if (typeof input === 'object') {
+    const record = input as Record<string, unknown>;
+    if (typeof record.message === 'string') {
+      return record.message.trim() || undefined;
+    }
+    if (typeof record.error === 'string') {
+      return record.error.trim() || undefined;
+    }
+    try {
+      return JSON.stringify(record);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -19,7 +48,7 @@ interface AuthContextType {
   isStaff: boolean;
   isManager: boolean;
   isCustomer: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   loading: boolean;
 }
@@ -86,7 +115,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // 로그인 함수
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<LoginResult> => {
     try {
       setLoading(true);
       const response = await fetch('/api/auth/login', {
@@ -111,7 +140,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.setItem('auth_token', newToken);
           localStorage.setItem('user_info', JSON.stringify(newUser));
           
-          return true;
+          return { success: true };
         }
       }
       
@@ -121,7 +150,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (errorText) {
           try {
             const errorData = JSON.parse(errorText);
-            errorMessage = errorData.detail || errorData.error || errorMessage;
+            errorMessage =
+              normalizeErrorMessage(errorData.detail) ??
+              normalizeErrorMessage(errorData.error) ??
+              normalizeErrorMessage(errorData.message) ??
+              errorMessage;
           } catch {
             errorMessage = errorText;
           }
@@ -129,11 +162,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (parseError) {
         console.error('Failed to parse login error response:', parseError);
       }
-      console.error('Login failed:', errorMessage);
-      return false;
+      if (errorMessage === 'Unknown error') {
+        const statusText = response.statusText ? ` ${response.statusText}` : '';
+        errorMessage = `요청이 실패했습니다. (HTTP ${response.status}${statusText})`.trim();
+      }
+      console.error(
+        'Login failed:',
+        `status=${response.status} statusText=${response.statusText} message=${errorMessage}`
+      );
+      return {
+        success: false,
+        error: errorMessage,
+        status: response.status
+      };
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      const message =
+        error instanceof Error
+          ? error.message || '로그인 중 오류가 발생했습니다.'
+          : '로그인 중 알 수 없는 오류가 발생했습니다.';
+
+      return {
+        success: false,
+        error: message
+      };
     } finally {
       setLoading(false);
     }

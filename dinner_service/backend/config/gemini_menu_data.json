@@ -56,6 +56,36 @@
         "features": ["프리미엄 재료", "화려한 플레이팅", "최고급 코스"]
       }
     },
+    "base_ingredients": {
+      "simple": {
+        "heart_plate": 1,
+        "cupid_decoration": 1,
+        "paper_napkin": 1,
+        "plastic_tray": 1,
+        "plastic_wine_glass": 1,
+        "wine": 1,
+        "premium_steak": 1
+      },
+      "grand": {
+        "heart_plate": 1,
+        "cupid_decoration": 2,
+        "cotton_napkin": 1,
+        "wooden_tray": 1,
+        "plastic_wine_glass": 1,
+        "wine": 1,
+        "premium_steak": 1
+      },
+      "deluxe": {
+        "heart_plate": 1,
+        "cupid_decoration": 3,
+        "linen_napkin": 2,
+        "wooden_tray": 1,
+        "vase_with_flowers": 1,
+        "glass_wine_glass": 1,
+        "wine": 1,
+        "premium_steak": 1
+      }
+    },
 
     "base_price": 30000
   },
@@ -115,6 +145,42 @@
         "price": 50000,
         "best_for": "최고급 프렌치 경험을 원할 때",
         "features": ["프리미엄 재료", "완벽한 코스", "최상급"]
+      }
+    },
+    "base_ingredients": {
+      "simple": {
+        "plastic_plate": 1,
+        "plastic_cup": 1,
+        "paper_napkin": 1,
+        "plastic_tray": 1,
+        "plastic_wine_glass": 1,
+        "coffee": 1,
+        "wine": 1,
+        "fresh_salad": 1,
+        "premium_steak": 1
+      },
+      "grand": {
+        "ceramic_plate": 1,
+        "ceramic_cup": 1,
+        "cotton_napkin": 1,
+        "wooden_tray": 1,
+        "plastic_wine_glass": 1,
+        "coffee": 1,
+        "wine": 1,
+        "fresh_salad": 1,
+        "premium_steak": 1
+      },
+      "deluxe": {
+        "ceramic_plate": 1,
+        "ceramic_cup": 1,
+        "linen_napkin": 1,
+        "wooden_tray": 1,
+        "vase_with_flowers": 1,
+        "glass_wine_glass": 1,
+        "coffee": 1,
+        "wine": 1,
+        "fresh_salad": 1,
+        "premium_steak": 1
       }
     },
 
@@ -178,6 +244,39 @@
         "features": ["프리미엄 재료", "완벽한 코스", "고급형"]
       }
     },
+    "base_ingredients": {
+      "simple": {
+        "plastic_plate": 1,
+        "plastic_cup": 1,
+        "paper_napkin": 1,
+        "plastic_tray": 1,
+        "scrambled_eggs": 1,
+        "bacon": 2,
+        "bread": 1,
+        "premium_steak": 1
+      },
+      "grand": {
+        "ceramic_plate": 1,
+        "ceramic_cup": 1,
+        "cotton_napkin": 1,
+        "wooden_tray": 1,
+        "scrambled_eggs": 2,
+        "bacon": 3,
+        "bread": 1,
+        "premium_steak": 1
+      },
+      "deluxe": {
+        "ceramic_plate": 1,
+        "ceramic_cup": 1,
+        "linen_napkin": 1,
+        "wooden_tray": 1,
+        "vase_with_flowers": 1,
+        "scrambled_eggs": 2,
+        "bacon": 4,
+        "bread": 2,
+        "premium_steak": 1
+      }
+    },
 
     "base_price": 45000
   },
@@ -231,6 +330,33 @@
         "price": 60000,
         "best_for": "최고급 샴페인 축제를 원할 때",
         "features": ["프리미엄 샴페인", "화려한 구성", "최상급"]
+      }
+    },
+    "base_ingredients": {
+      "grand": {
+        "ceramic_plate": 2,
+        "ceramic_cup": 2,
+        "cotton_napkin": 2,
+        "wooden_tray": 1,
+        "plastic_wine_glass": 2,
+        "champagne_bottle": 1,
+        "baguette": 4,
+        "coffee_pot": 1,
+        "wine": 1,
+        "premium_steak": 2
+      },
+      "deluxe": {
+        "ceramic_plate": 2,
+        "ceramic_cup": 2,
+        "linen_napkin": 2,
+        "wooden_tray": 1,
+        "vase_with_flowers": 1,
+        "glass_wine_glass": 2,
+        "champagne_bottle": 1,
+        "baguette": 4,
+        "coffee_pot": 1,
+        "wine": 1,
+        "premium_steak": 2
       }
     },
 

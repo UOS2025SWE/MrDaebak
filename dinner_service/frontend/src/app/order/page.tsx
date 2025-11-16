@@ -646,13 +646,15 @@ export default function OrderPage() {
                       {ingredientGroups.food.map(([ingredient, quantity]) => {
                         const baseQty = baseForCurrentStyle[ingredient] ?? 0
                         const canDecrease = quantity > baseQty
+                        const displayedQty = quantity * orderData.quantity
+                        const displayedBase = baseQty * orderData.quantity
                         return (
                         <div key={ingredient} className="flex items-center justify-between p-4 bg-stone-50 border border-stone-200 rounded-xl">
                           <div>
                             <span className="font-semibold text-stone-800">
                               {ingredientNames[ingredient] || ingredient}
                             </span>
-                            <p className="text-xs text-stone-500 mt-1">최소 {baseQty}개 유지</p>
+                            <p className="text-xs text-stone-500 mt-1">최소 {displayedBase}개 유지</p>
                           </div>
                           <div className="flex items-center space-x-3">
                             <button
@@ -667,7 +669,7 @@ export default function OrderPage() {
                               -
                             </button>
                             <span className="font-bold text-stone-900 min-w-[2rem] text-center">
-                              {quantity}
+                              {displayedQty}
                             </span>
                             <button
                               onClick={() => handleIngredientChange(ingredient, 1)}
@@ -694,13 +696,15 @@ export default function OrderPage() {
                         {ingredientGroups.tableware.map(([ingredient, quantity]) => {
                           const baseQty = baseForCurrentStyle[ingredient] ?? 0
                           const canDecrease = quantity > baseQty
+                          const displayedQty = quantity * orderData.quantity
+                          const displayedBase = baseQty * orderData.quantity
                           return (
                           <div key={ingredient} className="flex items-center justify-between p-4 bg-pink-50 border border-pink-200 rounded-xl">
                             <div>
                               <span className="font-semibold text-pink-900">
                                 {ingredientNames[ingredient] || ingredient}
                               </span>
-                              <p className="text-xs text-pink-600 mt-1">최소 {baseQty}개 유지</p>
+                              <p className="text-xs text-pink-600 mt-1">최소 {displayedBase}개 유지</p>
                             </div>
                             <div className="flex items-center space-x-3">
                               <button
@@ -715,7 +719,7 @@ export default function OrderPage() {
                                 -
                               </button>
                               <span className="font-bold text-pink-900 min-w-[2rem] text-center">
-                                {quantity}
+                                {displayedQty}
                               </span>
                               <button
                                 onClick={() => handleIngredientChange(ingredient, 1)}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -16,6 +16,7 @@ export default function CustomerLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -34,12 +35,15 @@ export default function CustomerLoginPage() {
     setIsLoading(true);
 
     try {
-      const success = await login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password);
 
-      if (success) {
-        router.push('/');
+      if (result.success) {
+        // redirect 파라미터가 있으면 해당 경로로, 없으면 홈으로 이동
+        const redirectPath = searchParams?.get('redirect') || '/';
+        router.push(redirectPath);
       } else {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        const fallback = '이메일 또는 비밀번호가 올바르지 않습니다.';
+        setError(result.error ?? fallback);
       }
     } catch (error) {
       console.error('Login error:', error);

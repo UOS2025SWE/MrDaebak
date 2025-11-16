@@ -84,6 +84,11 @@ app.include_router(checkout.router, prefix="/api/checkout")
 app.include_router(events.router, prefix="/api")
 app.include_router(inquiries.router, prefix="/api")
 
+# 간단 헬스체크 엔드포인트 (무인증)
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
 
 # React 프록시 함수
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
