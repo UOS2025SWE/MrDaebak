@@ -9,59 +9,7 @@ import Footer from '../../components/Footer'
 import type { EventMenuDiscount, OrderItem, PaymentModalProps } from '@/types/order'
 import type { MenuStyle } from '@/types/menu'
 import type { DiscountInfo } from '@/types/common'
-
-// 재료 한글 이름 매핑
-const ingredientNames: { [key: string]: string } = {
-  // Valentine 디너 구성품
-  heart_plate: '하트 모양 접시',
-  cupid_decoration: '큐피드 장식',
-  napkin: '냅킨',
-  paper_napkin: '종이 냅킨',
-  cotton_napkin: '면 냅킨',
-  linen_napkin: '린넨 냅킨',
-  plastic_tray: '플라스틱 쟁반',
-  wooden_tray: '나무 쟁반',
-  plastic_plate: '플라스틱 접시',
-  plastic_cup: '플라스틱 컵',
-  ceramic_plate: '도자기 접시',
-  ceramic_cup: '도자기 컵',
-  plastic_wine_glass: '플라스틱 와인잔',
-  glass_wine_glass: '유리 와인잔',
-  cake_board: '케이크 보드',
-  vase_with_flowers: '꽃병 장식',
-  wine: '와인',
-  premium_steak: '프리미엄 스테이크',
-  // French 디너 구성품
-  coffee: '커피',
-  fresh_salad: '신선한 샐러드',
-  // English 디너 구성품
-  scrambled_eggs: '에그 스크램블',
-  bacon: '베이컨',
-  bread: '빵',
-  // Champagne 디너 구성품
-  champagne_bottle: '샴페인',
-  baguette: '바게트빵',
-  coffee_pot: '커피 포트'
-}
-
-const tablewareCodes = new Set([
-  'heart_plate',
-  'cupid_decoration',
-  'paper_napkin',
-  'napkin',
-  'cotton_napkin',
-  'linen_napkin',
-  'plastic_tray',
-  'wooden_tray',
-  'plastic_plate',
-  'plastic_cup',
-  'ceramic_plate',
-  'ceramic_cup',
-  'plastic_wine_glass',
-  'glass_wine_glass',
-  'cake_board',
-  'vase_with_flowers'
-])
+import { INGREDIENT_DISPLAY_NAMES, MENU_INGREDIENTS, TABLEWARE_CODES } from '@/utils/ingredients'
 
 const styleEnglishToKorean: Record<string, string> = {
   simple: '심플',
@@ -377,8 +325,6 @@ function OrderPageContent() {
   }, [menuEventDiscounts, orderData])
 
   const eventDiscountAmount = eventDiscountBreakdown.reduce<number>((sum, item) => sum + item.amount, 0)
-
-  const priceAfterEvent = Math.max(0, originalPrice - eventDiscountAmount)
   const loyaltyDiscountAmount = discountInfo?.eligible ? Math.round(originalPrice * discountInfo.discount_rate) : 0
   const finalPrice = Math.max(0, originalPrice - eventDiscountAmount - loyaltyDiscountAmount)
   const totalSavings = eventDiscountAmount + loyaltyDiscountAmount
@@ -395,8 +341,8 @@ function OrderPageContent() {
     }
     const entries = Object.entries(orderData.ingredients)
     return {
-      food: entries.filter(([code]) => !tablewareCodes.has(code)),
-      tableware: entries.filter(([code]) => tablewareCodes.has(code))
+      food: entries.filter(([code]) => !TABLEWARE_CODES.has(code)),
+      tableware: entries.filter(([code]) => TABLEWARE_CODES.has(code))
     }
   }, [orderData])
 
@@ -653,7 +599,7 @@ function OrderPageContent() {
                         <div key={ingredient} className="flex items-center justify-between p-4 bg-stone-50 border border-stone-200 rounded-xl">
                           <div>
                             <span className="font-semibold text-stone-800">
-                              {ingredientNames[ingredient] || ingredient}
+                              {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
                             </span>
                             <p className="text-xs text-stone-500 mt-1">최소 {displayedBase}개 유지</p>
                           </div>
@@ -703,7 +649,7 @@ function OrderPageContent() {
                           <div key={ingredient} className="flex items-center justify-between p-4 bg-pink-50 border border-pink-200 rounded-xl">
                             <div>
                               <span className="font-semibold text-pink-900">
-                                {ingredientNames[ingredient] || ingredient}
+                                {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
                               </span>
                               <p className="text-xs text-pink-600 mt-1">최소 {displayedBase}개 유지</p>
                             </div>

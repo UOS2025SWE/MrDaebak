@@ -132,7 +132,7 @@ export default function VoicePage() {
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState(DEFAULT_TIME_SLOT)
 
   const formatDisplayDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-').map(Number)
+    const [, month, day] = dateStr.split('-').map(Number)
     return `${month}월 ${day}일`
   }
 
@@ -555,76 +555,74 @@ export default function VoicePage() {
   }
   
   // 메시지 전송 처리
-  const handleSendMessage = async (
-    text: string = transcript,
-    options?: { forceScheduling?: boolean }
-  ) => {
-    const forceScheduling = options?.forceScheduling ?? false
-    if (!text.trim() || isProcessing) return
-    
-    // 사용자 메시지 추가
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString()
-    }
-    setMessages(prev => [...prev, userMessage])
-    setTranscript('')
-    setIsProcessing(true)
-
-    if (awaitingSchedule && !forceScheduling) {
-      const parsed = parseScheduleInput(text)
-      const wantsCheckout = shouldProceedToCheckout(text)
-      if (parsed) {
-        setIsProcessing(false)
-        if (parsed.type === 'date') {
-          setDeliveryDate(parsed.value)
-          if (parsed.timeSlot) {
-            setDeliveryTimeSlot(parsed.timeSlot)
-          }
-          acknowledgeScheduleUpdate(parsed.value, parsed.timeSlot ?? deliveryTimeSlot)
-          if (wantsCheckout) {
-            await finalizeScheduleAndCheckout(parsed.value, parsed.timeSlot ?? deliveryTimeSlot)
-          }
-        } else if (parsed.type === 'time') {
-          setDeliveryTimeSlot(parsed.timeSlot)
-          acknowledgeScheduleUpdate(deliveryDate || null, parsed.timeSlot)
-          if (wantsCheckout && deliveryDate) {
-            await finalizeScheduleAndCheckout(deliveryDate, parsed.timeSlot)
-          }
-        } else {
-          setDeliveryDate('')
-          acknowledgeScheduleUpdate(null, null)
-          if (wantsCheckout) {
-            await finalizeScheduleAndCheckout(null, null)
-          }
-        }
-        return
-      }
-
-      if (wantsCheckout) {
-        setIsProcessing(false)
-        await finalizeScheduleAndCheckout(deliveryDate || null, deliveryTimeSlot)
-        return
-      }
-    }
-    
-    try {
-      // Gemini API로 음성 분석 요청 (user_id 포함)
-      const response = await fetch('/api/voice/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transcript: text,
-          user_id: user?.id || null,  // 로그인한 사용자 ID 전달
-          session_id: sessionId
-        })
-      })
+  const handleSendMessage = useCallback(
+    async (text: string = transcript, options?: { forceScheduling?: boolean }) => {
+      const forceScheduling = options?.forceScheduling ?? false
+      if (!text.trim() || isProcessing) return
       
-      if (response.ok) {
-        const data = await response.json()
+      // 사용자 메시지 추가
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString()
+      }
+      setMessages(prev => [...prev, userMessage])
+      setTranscript('')
+      setIsProcessing(true)
+
+      if (awaitingSchedule && !forceScheduling) {
+        const parsed = parseScheduleInput(text)
+        const wantsCheckout = shouldProceedToCheckout(text)
+        if (parsed) {
+          setIsProcessing(false)
+          if (parsed.type === 'date') {
+            setDeliveryDate(parsed.value)
+            if (parsed.timeSlot) {
+              setDeliveryTimeSlot(parsed.timeSlot)
+            }
+            acknowledgeScheduleUpdate(parsed.value, parsed.timeSlot ?? deliveryTimeSlot)
+            if (wantsCheckout) {
+              await finalizeScheduleAndCheckout(parsed.value, parsed.timeSlot ?? deliveryTimeSlot)
+            }
+          } else if (parsed.type === 'time') {
+            setDeliveryTimeSlot(parsed.timeSlot)
+            acknowledgeScheduleUpdate(deliveryDate || null, parsed.timeSlot)
+            if (wantsCheckout && deliveryDate) {
+              await finalizeScheduleAndCheckout(deliveryDate, parsed.timeSlot)
+            }
+          } else {
+            setDeliveryDate('')
+            acknowledgeScheduleUpdate(null, null)
+            if (wantsCheckout) {
+              await finalizeScheduleAndCheckout(null, null)
+            }
+          }
+          return
+        }
+
+        if (wantsCheckout) {
+          setIsProcessing(false)
+          await finalizeScheduleAndCheckout(deliveryDate || null, deliveryTimeSlot)
+          return
+        }
+      }
+      
+      try {
+        // Gemini API로 음성 분석 요청 (user_id 포함)
+        const response = await fetch('/api/voice/analyze', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            transcript: text,
+            user_id: user?.id || null,  // 로그인한 사용자 ID 전달
+            session_id: sessionId
+          })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
 
         // 메뉴/스타일/수량 선택 정보 업데이트 (상태 업데이트 전에 먼저 처리)
         let newMenuCode: string | null = null
@@ -805,33 +803,59 @@ export default function VoicePage() {
         }
         setMessages(prev => [...prev, assistantMessage])
         
-        // CHECKOUT_READY 상태면 주문 검증 모달 표시
-        if (data.state === 'CHECKOUT_READY' || data.order_state?.current_state === 'CHECKOUT_READY') {
-          // checkout-ready 신호가 와도 먼저 배송 일정을 확정하도록 안내
-          promptScheduleSelection()
-          return
+          // CHECKOUT_READY 상태면 주문 검증 모달 표시
+          if (data.state === 'CHECKOUT_READY' || data.order_state?.current_state === 'CHECKOUT_READY') {
+            // checkout-ready 신호가 와도 먼저 배송 일정을 확정하도록 안내
+            promptScheduleSelection()
+            return
+          }
+          
+          // TTS 기능 제거됨 - 음성 출력하지 않음
+        } else {
+          await response.json().catch(() => null)
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: '죄송합니다. 요청을 처리하는 중 오류가 발생했습니다.',
+            timestamp: new Date().toISOString()
+          }])
         }
-        
-        // TTS 기능 제거됨 - 음성 출력하지 않음
-      } else {
-        const errorData = await response.json()
+      } catch (error) {
+        console.error('메시지 전송 실패:', error)
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: '죄송합니다. 요청을 처리하는 중 오류가 발생했습니다.',
+          content: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
           timestamp: new Date().toISOString()
         }])
+      } finally {
+        setIsProcessing(false)
       }
-    } catch (error) {
-      console.error('메시지 전송 실패:', error)
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
-        timestamp: new Date().toISOString()
-      }])
-    } finally {
-      setIsProcessing(false)
-    }
-  }
+    },
+    [
+      transcript,
+      isProcessing,
+      awaitingSchedule,
+      parseScheduleInput,
+      shouldProceedToCheckout,
+      deliveryTimeSlot,
+      deliveryDate,
+      user?.id,
+      sessionId,
+      selectedMenuCode,
+      selectedStyleCode,
+      selectedQuantity,
+      menuConfirmed,
+      styleConfirmed,
+      quantityConfirmed,
+      ingredientOverrides,
+      baseIngredientMap,
+      orderState,
+      promptScheduleSelection,
+      finalizeScheduleAndCheckout,
+      acknowledgeScheduleUpdate,
+      DEFAULT_TIME_SLOT,
+      setMessages,
+    ]
+  )
   
   const processRecordedAudio = useCallback(async (audioBlob: Blob) => {
     try {

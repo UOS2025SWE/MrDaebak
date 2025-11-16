@@ -2,76 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import OrderStatusBadge from '@/components/orders/OrderStatusBadge'
+import { Card, CardHeader } from '@/components/layout/Card'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import Header from '../../components/Header'
 import Footer from '../../components/Footer'
 import type { Order } from '@/types/orders'
-
-// 재료 한글 이름 매핑
-const ingredientNames: { [key: string]: string } = {
-  heart_plate: '하트 모양 접시',
-  cupid_decoration: '큐피드 장식',
-  napkin: '냅킨',
-  paper_napkin: '종이 냅킨',
-  cotton_napkin: '면 냅킨',
-  linen_napkin: '린넨 냅킨',
-  plastic_tray: '플라스틱 쟁반',
-  wooden_tray: '나무 쟁반',
-  plastic_plate: '플라스틱 접시',
-  plastic_cup: '플라스틱 컵',
-  ceramic_plate: '도자기 접시',
-  ceramic_cup: '도자기 컵',
-  plastic_wine_glass: '플라스틱 와인잔',
-  glass_wine_glass: '유리 와인잔',
-  vase_with_flowers: '꽃병 장식',
-  wine: '와인',
-  premium_steak: '프리미엄 스테이크',
-  coffee: '커피',
-  fresh_salad: '신선한 샐러드',
-  scrambled_eggs: '에그 스크램블',
-  bacon: '베이컨',
-  bread: '빵',
-  champagne_bottle: '샴페인',
-  baguette: '바게트빵',
-  coffee_pot: '커피 포트',
-  cake_base: '케이크 시트',
-  buttercream_frosting: '버터크림',
-  fresh_berries: '신선한 베리',
-  fondant: '폰단트',
-  edible_gold_leaf: '식용 금박',
-  chocolate_ganache: '초콜릿 가나슈',
-  cake_board: '케이크 보드',
-  edible_flowers: '식용 꽃'
-}
-
-// 메뉴별/스타일별 기본 재료 수량 매핑
-const menuIngredients: Record<string, Record<string, Record<string, number>>> = {
-  valentine: {
-    simple: { heart_plate: 1, cupid_decoration: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
-    grand: { heart_plate: 1, cupid_decoration: 2, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
-    deluxe: { heart_plate: 1, cupid_decoration: 3, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, wine: 1, premium_steak: 1 }
-  },
-  french: {
-    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
-  },
-  english: {
-    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
-    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
-    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
-  },
-  champagne: {
-    grand: { ceramic_plate: 2, ceramic_cup: 2, cotton_napkin: 2, wooden_tray: 1, plastic_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
-    deluxe: { ceramic_plate: 2, ceramic_cup: 2, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
-  },
-  cake: {
-    simple: { cake_base: 1, buttercream_frosting: 1, fresh_berries: 1, cake_board: 1, plastic_plate: 1, plastic_tray: 1, paper_napkin: 1 },
-    grand: { cake_base: 1, buttercream_frosting: 1, fondant: 1, fresh_berries: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1 },
-    deluxe: { cake_base: 1, buttercream_frosting: 1, fondant: 1, edible_gold_leaf: 1, chocolate_ganache: 1, edible_flowers: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1 }
-  }
-}
+import { INGREDIENT_DISPLAY_NAMES, MENU_INGREDIENTS } from '@/utils/ingredients'
 
 export default function OrdersPage() {
   const router = useRouter()
@@ -163,63 +101,6 @@ export default function OrdersPage() {
   useEffect(() => {
     fetchOrders()
   }, [fetchOrders])
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'RECEIVED':
-        return 'bg-blue-100 text-blue-800'
-      case 'PREPARING':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'DELIVERING':
-        return 'bg-purple-100 text-purple-800'
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-800'
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-800'
-      case 'PAYMENT_FAILED':
-        return 'bg-orange-100 text-orange-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'RECEIVED':
-        return '📋'
-      case 'PREPARING':
-        return '👨‍🍳'
-      case 'DELIVERING':
-        return '🚗'
-      case 'COMPLETED':
-        return '✅'
-      case 'CANCELLED':
-        return '❌'
-      case 'PAYMENT_FAILED':
-        return '💳'
-      default:
-        return '📦'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'RECEIVED':
-        return '주문접수'
-      case 'PREPARING':
-        return '조리중'
-      case 'DELIVERING':
-        return '배달중'
-      case 'COMPLETED':
-        return '배달완료'
-      case 'CANCELLED':
-        return '취소'
-      case 'PAYMENT_FAILED':
-        return '결제실패'
-      default:
-        return '알 수 없음'
-    }
-  }
 
 
   // 주문 상세 모달 열기
@@ -329,7 +210,7 @@ export default function OrdersPage() {
           )}
 
           {orders.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
+            <Card className="text-center" padded>
               <div className="text-6xl mb-4">🍽️</div>
               <h2 className="text-2xl font-bold text-stone-900 mb-4">주문 내역이 없습니다</h2>
               <p className="text-stone-600 mb-8">
@@ -341,11 +222,11 @@ export default function OrdersPage() {
               >
                 메뉴 보러가기
               </button>
-            </div>
+            </Card>
           ) : (
             <div className="space-y-6">
                     {orders.map((order: Order) => (
-                <div key={order.id} className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all">
+                <Card key={order.id} className="overflow-hidden hover:shadow-2xl transition-all" padded={false}>
                   <div className="p-6">
                     {/* 주문 헤더 */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 pb-4 border-b border-stone-200">
@@ -358,9 +239,7 @@ export default function OrdersPage() {
                         </p>
                       </div>
                       <div className="flex items-center space-x-3 mt-3 sm:mt-0">
-                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(order.status)}`}>
-                          {getStatusIcon(order.status)} {getStatusText(order.status)}
-                        </span>
+                        <OrderStatusBadge status={order.status} />
                         {(order.status === 'PREPARING' || order.status === 'DELIVERING') && order.estimated_time_minutes > 0 && (
                           <span className="text-sm text-amber-600 font-semibold">
                             약 {order.estimated_time_minutes}분 남음
@@ -410,7 +289,7 @@ export default function OrdersPage() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
 
               {/* 더 많은 주문 보기 버튼 */}
@@ -467,9 +346,7 @@ export default function OrdersPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-stone-600">주문상태</span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(selectedOrder.status)}`}>
-                      {getStatusIcon(selectedOrder.status)} {getStatusText(selectedOrder.status)}
-                    </span>
+                    <OrderStatusBadge status={selectedOrder.status} />
                   </div>
                   {(selectedOrder.status === 'PREPARING' || selectedOrder.status === 'DELIVERING') && selectedOrder.estimated_time_minutes > 0 && (
                     <div className="flex justify-between">
@@ -506,7 +383,7 @@ export default function OrdersPage() {
                   {(() => {
                     const menuCode = selectedOrder.menu_code || ''
                     const style = selectedOrder.style
-                    const baseIngredients = menuIngredients[menuCode]?.[style] || {}
+                    const baseIngredients = MENU_INGREDIENTS[menuCode]?.[style] || {}
                     const customizations = selectedOrder.customizations || {}
 
                     // 기본 재료 + 커스터마이징 재료 합치기
@@ -524,7 +401,7 @@ export default function OrdersPage() {
                       return (
                         <div key={ingredient} className="flex justify-between items-center text-sm">
                           <span className="text-stone-700 font-medium">
-                            {ingredientNames[ingredient] || ingredient}
+                            {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
                           </span>
                           <div className="flex items-center gap-2">
                             {isChanged ? (

@@ -21,6 +21,30 @@ import {
 } from '../../lib/cardUtils'
 import type { DeliveryInfo, PaymentInfo, CheckoutRequest } from '../../types/checkout'
 import type { DiscountInfo } from '../../types/common'
+import { INGREDIENT_DISPLAY_NAMES, MENU_INGREDIENTS } from '@/utils/ingredients'
+
+// 공통 스케줄 유틸 함수들 (훅 의존성 경고 방지를 위해 컴포넌트 밖으로 분리)
+const SCHEDULE_TIME_SLOTS = ['17:00', '18:00', '19:00'] as const
+
+const normalizeScheduleDate = (value?: string | null) => {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().split('T')[0]
+}
+
+const normalizeScheduleTime = (value?: string | null) => {
+  if (!value) return null
+  return SCHEDULE_TIME_SLOTS.includes(value as (typeof SCHEDULE_TIME_SLOTS)[number]) ? value : null
+}
+
+const formatScheduleLabel = (dateStr?: string, timeStr?: string) => {
+  if (!dateStr) return ''
+  const dateObj = new Date(`${dateStr}T00:00:00`)
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+  const label = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]})`
+  return timeStr ? `${label} ${timeStr}` : label
+}
 
 type MenuEventDiscountInfo = {
   eventId: string
@@ -30,70 +54,7 @@ type MenuEventDiscountInfo = {
   targetName?: string
 }
 
-// 재료 한글 이름 매핑 (order 페이지와 동일)
-const ingredientNames: { [key: string]: string } = {
-  heart_plate: '하트 모양 접시',
-  cupid_decoration: '큐피드 장식',
-  napkin: '냅킨',
-  paper_napkin: '종이 냅킨',
-  cotton_napkin: '면 냅킨',
-  linen_napkin: '린넨 냅킨',
-  plastic_tray: '플라스틱 쟁반',
-  wooden_tray: '나무 쟁반',
-  plastic_plate: '플라스틱 접시',
-  plastic_cup: '플라스틱 컵',
-  ceramic_plate: '도자기 접시',
-  ceramic_cup: '도자기 컵',
-  plastic_wine_glass: '플라스틱 와인잔',
-  glass_wine_glass: '유리 와인잔',
-  vase_with_flowers: '꽃병 장식',
-  wine: '와인',
-  premium_steak: '프리미엄 스테이크',
-  coffee: '커피',
-  fresh_salad: '신선한 샐러드',
-  scrambled_eggs: '에그 스크램블',
-  bacon: '베이컨',
-  bread: '빵',
-  champagne_bottle: '샴페인',
-  baguette: '바게트빵',
-  coffee_pot: '커피 포트',
-  cake_base: '케이크 시트',
-  buttercream_frosting: '버터크림',
-  fresh_berries: '신선한 베리',
-  fondant: '폰단트',
-  edible_gold_leaf: '식용 금박',
-  chocolate_ganache: '초콜릿 가나슈',
-  cake_board: '케이크 보드',
-  edible_flowers: '식용 꽃'
-}
-
-// 메뉴별 기본 재료 구성 (order 페이지와 동일)
-const menuIngredients: { [key: string]: { [key: string]: { [key: string]: number } } } = {
-  valentine: {
-    simple: { heart_plate: 1, cupid_decoration: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
-    grand: { heart_plate: 1, cupid_decoration: 2, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
-    deluxe: { heart_plate: 1, cupid_decoration: 3, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, wine: 1, premium_steak: 1 }
-  },
-  french: {
-    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
-  },
-  english: {
-    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
-    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
-    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
-  },
-  champagne: {
-    grand: { ceramic_plate: 2, ceramic_cup: 2, cotton_napkin: 2, wooden_tray: 1, plastic_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
-    deluxe: { ceramic_plate: 2, ceramic_cup: 2, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
-  },
-  cake: {
-    simple: { cake_base: 1, buttercream_frosting: 1, fresh_berries: 1, cake_board: 1, plastic_plate: 1, plastic_tray: 1, paper_napkin: 1 },
-    grand: { cake_base: 1, buttercream_frosting: 1, fondant: 1, fresh_berries: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1 },
-    deluxe: { cake_base: 1, buttercream_frosting: 1, fondant: 1, edible_gold_leaf: 1, chocolate_ganache: 1, edible_flowers: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1 }
-  }
-}
+// 재료/메뉴 구성은 utils/ingredients에서 공통 관리
 
 const ingredientUnitPrices: Record<string, number> = {
   premium_steak: 18000,
@@ -181,7 +142,7 @@ const calculateCustomizationCost = (
 ): number => {
   if (!customizations || quantity <= 0) return 0
 
-  const baseIngredients = menuIngredients[menuCode]?.[style] || {}
+  const baseIngredients = MENU_INGREDIENTS[menuCode]?.[style] || {}
   let additionalCost = 0
 
   for (const [ingredient, value] of Object.entries(customizations)) {
@@ -220,7 +181,7 @@ type SideDishOption = {
 
 const getIngredientDisplayName = (code: string): string => {
   if (!code) return ''
-  return ingredientNames[code] || code.replace(/_/g, ' ')
+  return INGREDIENT_DISPLAY_NAMES[code] || code.replace(/_/g, ' ')
 }
 
 const toSideDishIngredients = (raw: any): SideDishIngredient[] => {
@@ -254,7 +215,7 @@ const deriveSideDishUnitPrice = (basePrice: number, ingredients: SideDishIngredi
 }
 
 const buildCustomCakeFallbackOption = (): SideDishOption => {
-  const deluxeIngredients = menuIngredients.cake?.deluxe || {}
+  const deluxeIngredients = MENU_INGREDIENTS.cake?.deluxe || {}
   const ingredientList = Object.entries(deluxeIngredients).map(([ingredientCode, quantity]) => ({
     ingredient_code: ingredientCode,
     ingredient_id: undefined,
@@ -326,28 +287,6 @@ function CheckoutPageContent() {
     })
   }, [])
 
-  const scheduleTimeSlots = ['17:00', '18:00', '19:00']
-
-  const normalizeScheduleDate = (value?: string | null) => {
-    if (!value) return null
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return null
-    return date.toISOString().split('T')[0]
-  }
-
-  const normalizeScheduleTime = (value?: string | null) => {
-    if (!value) return null
-    return scheduleTimeSlots.includes(value) ? value : null
-  }
-
-  const formatScheduleLabel = (dateStr?: string, timeStr?: string) => {
-    if (!dateStr) return ''
-    const dateObj = new Date(`${dateStr}T00:00:00`)
-    const dayNames = ['일', '월', '화', '수', '목', '금', '토']
-    const label = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일 (${dayNames[dateObj.getDay()]})`
-    return timeStr ? `${label} ${timeStr}` : label
-  }
-
   // URL에서 주문 정보 가져오기
   const menuCode = searchParams.get('menu') || ''
   const style = searchParams.get('style') || ''
@@ -364,7 +303,7 @@ function CheckoutPageContent() {
     : null
   const customizations = useMemo<Record<string, number> | null>(() => {
     if (!rawCustomizations) return null
-    const baseIngredientsForStyle = menuIngredients[menuCode]?.[style] || {}
+    const baseIngredientsForStyle = MENU_INGREDIENTS[menuCode]?.[style] || {}
     const adjusted: Record<string, number> = {}
     for (const [key, value] of Object.entries(rawCustomizations)) {
       const qty = Number(value)
@@ -524,11 +463,32 @@ function CheckoutPageContent() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   // 메뉴 정보 및 가격 가져오기
+  const fetchMenuInfo = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/menu/${menuCode}`)
+      const data = await response.json()
+
+      if (data.success && data.data) {
+        setMenuInfo(data.data)
+        const selectedStyle = data.data.styles?.find((s: any) => s.code === style)
+        const stylePrice = selectedStyle?.price || 0
+        const basePriceTotal = stylePrice * quantity
+        const customizationAddition = calculateCustomizationCost(menuCode, style, customizations, quantity)
+        setBasePrice(basePriceTotal)
+        setCustomizationCost(customizationAddition)
+      } else {
+        console.error('메뉴 정보 조회 실패:', data)
+      }
+    } catch (error) {
+      console.error('메뉴 정보 조회 실패:', error)
+    }
+  }, [menuCode, style, quantity, customizations])
+
   useEffect(() => {
     if (menuCode && style) {
       fetchMenuInfo()
     }
-  }, [menuCode, style])
+  }, [menuCode, style, fetchMenuInfo])
 
   const fetchCustomCakeRecipes = useCallback(async () => {
     try {
@@ -805,6 +765,31 @@ function CheckoutPageContent() {
     }
   }, [menuCode, customCakeOption])
 
+  const fetchDefaultDeliveryInfo = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/checkout/delivery-info/${user?.id}`)
+      const data = await response.json()
+
+      if (data.has_default && data.delivery_info && data.delivery_info.address) {
+        setDeliveryInfo(prev => ({
+          ...prev,
+          address: data.delivery_info.address || '',
+          recipient_name: data.delivery_info.recipient_name || '',
+          recipient_phone: data.delivery_info.recipient_phone || '',
+          delivery_notes: ''
+        }))
+        setHasDefaultAddress(true)
+        setIsEditingAddress(false) // 기본 주소가 있으면 편집 모드 off
+      } else {
+        setHasDefaultAddress(false)
+        setIsEditingAddress(true) // 기본 주소가 없으면 바로 입력 모드
+      }
+    } catch (error) {
+      console.error('기본 배송지 정보 불러오기 실패:', error)
+      setIsEditingAddress(true) // 에러 발생 시 입력 모드
+    }
+  }, [user?.id])
+
   // 기본 배송지 정보 가져오기
   useEffect(() => {
     if (user?.id) {
@@ -814,7 +799,7 @@ function CheckoutPageContent() {
       setIsEditingAddress(true)
       setHasDefaultAddress(false)
     }
-  }, [user])
+  }, [user?.id, fetchDefaultDeliveryInfo])
 
   // 할인 정보 가져오기
   useEffect(() => {
@@ -974,7 +959,6 @@ function CheckoutPageContent() {
   )
 
   const totalEventDiscountAmount = menuEventDiscountAmount + sideDishEventDiscountAmount
-  const priceAfterEvent = Math.max(0, originalPrice - totalEventDiscountAmount)
   const loyaltyDiscountAmount = discountInfo?.eligible
     ? Math.round(originalPrice * discountInfo.discount_rate)
     : 0
@@ -996,53 +980,6 @@ function CheckoutPageContent() {
     if (!includeCustomCake || !customCakeOption) return 0
     return Math.max(0, customCakeOption.unit_price - customCakeEventDiscountAmount)
   }, [includeCustomCake, customCakeOption, customCakeEventDiscountAmount])
-
-  const fetchMenuInfo = async () => {
-    try {
-      const response = await fetch(`/api/menu/${menuCode}`)
-      const data = await response.json()
-
-      if (data.success && data.data) {
-        setMenuInfo(data.data)
-        // 가격 계산 (스타일별) - styles 배열에서 찾기
-        const selectedStyle = data.data.styles?.find((s: any) => s.code === style)
-        const stylePrice = selectedStyle?.price || 0
-        const basePriceTotal = stylePrice * quantity
-        const customizationAddition = calculateCustomizationCost(menuCode, style, customizations, quantity)
-        setBasePrice(basePriceTotal)
-        setCustomizationCost(customizationAddition)
-      } else {
-        console.error('메뉴 정보 조회 실패:', data)
-      }
-    } catch (error) {
-      console.error('메뉴 정보 조회 실패:', error)
-    }
-  }
-
-  const fetchDefaultDeliveryInfo = async () => {
-    try {
-      const response = await fetch(`/api/checkout/delivery-info/${user?.id}`)
-      const data = await response.json()
-
-      if (data.has_default && data.delivery_info && data.delivery_info.address) {
-        setDeliveryInfo(prev => ({
-          ...prev,
-          address: data.delivery_info.address || '',
-          recipient_name: data.delivery_info.recipient_name || '',
-          recipient_phone: data.delivery_info.recipient_phone || '',
-          delivery_notes: ''
-        }))
-        setHasDefaultAddress(true)
-        setIsEditingAddress(false) // 기본 주소가 있으면 편집 모드 off
-      } else {
-        setHasDefaultAddress(false)
-        setIsEditingAddress(true) // 기본 주소가 없으면 바로 입력 모드
-      }
-    } catch (error) {
-      console.error('기본 배송지 정보 불러오기 실패:', error)
-      setIsEditingAddress(true) // 에러 발생 시 입력 모드
-    }
-  }
 
   const validateForm = (): { isValid: boolean; errors: Record<string, string> } => {
     const newErrors: Record<string, string> = {}
@@ -1102,7 +1039,7 @@ function CheckoutPageContent() {
 
     if (!validation.isValid) {
       // 어떤 필드가 문제인지 사용자에게 알려주기
-      const errorMessages = Object.entries(validation.errors).map(([field, message]) => `- ${message}`).join('\n')
+      const errorMessages = Object.entries(validation.errors).map(([, message]) => `- ${message}`).join('\n')
       alert(`입력 정보를 확인해주세요:\n\n${errorMessages}`)
       return
     }
@@ -1180,7 +1117,7 @@ function CheckoutPageContent() {
         alert(data.message || '결제 처리에 실패했습니다.')
         setIsProcessing(false)
       }
-    } catch (error) {
+    } catch {
       alert('결제 처리 중 오류가 발생했습니다.')
       setIsProcessing(false)
     }
@@ -1461,7 +1398,7 @@ function CheckoutPageContent() {
                       )}
 
                       {customizations && Object.keys(customizations).length > 0 && (() => {
-                        const baseIngredients = menuIngredients[menuCode]?.[style] || {}
+        const baseIngredients = MENU_INGREDIENTS[menuCode]?.[style] || {}
                         const changedItems = Object.entries(customizations).filter(([ingredient, qty]) => {
                           const baseQty = baseIngredients[ingredient] || 0
                           return baseQty !== Number(qty)
@@ -1480,7 +1417,7 @@ function CheckoutPageContent() {
 
                                 return (
                                   <div key={ingredient} className="flex justify-between text-xs">
-                                    <span className="text-gray-700">{ingredientNames[ingredient] || ingredient}</span>
+                                    <span className="text-gray-700">{INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}</span>
                                     <span className="font-medium text-blue-600">
                                       {baseQty}개 → {qtyNum}개
                                       <span className="text-xs ml-1 text-gray-500">
@@ -1884,7 +1821,7 @@ function CheckoutPageContent() {
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
                           <option value="">시간 선택</option>
-                          {scheduleTimeSlots.map((slot) => (
+                          {SCHEDULE_TIME_SLOTS.map((slot: (typeof SCHEDULE_TIME_SLOTS)[number]) => (
                             <option key={slot} value={slot}>{slot}</option>
                           ))}
                         </select>

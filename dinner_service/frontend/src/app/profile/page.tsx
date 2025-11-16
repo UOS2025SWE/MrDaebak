@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import OrderStatusBadge from '@/components/orders/OrderStatusBadge'
+import { Card, CardHeader } from '@/components/layout/Card'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageContainer, Section } from '../../components/layout/Responsive'
@@ -40,16 +42,7 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated, user, router, authLoading])
 
-  // 프로필 및 최근 주문 데이터 로드 (하이브리드 방식)
-  useEffect(() => {
-    if (authLoading) return
-    
-    if (isAuthenticated && user?.id) {
-      loadProfileData()
-    }
-  }, [isAuthenticated, user, authLoading])
-
-  const loadProfileData = async () => {
+  const loadProfileData = useCallback(async () => {
     try {
       const token = localStorage.getItem('auth_token')
       if (!token) {
@@ -142,23 +135,20 @@ export default function ProfilePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [authLoading, isAuthenticated, user?.id, isStaffAccount, isAdminAccount, router])
+
+  // 프로필 및 최근 주문 데이터 로드 (하이브리드 방식)
+  useEffect(() => {
+    if (authLoading) return
+    
+    if (isAuthenticated && user?.id) {
+      void loadProfileData()
+    }
+  }, [isAuthenticated, user?.id, authLoading, loadProfileData])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '정보 없음'
     return new Date(dateString).toLocaleString('ko-KR')
-  }
-
-  const getStatusText = (status: string) => {
-    const statusMap: {[key: string]: string} = {
-      'RECEIVED': '주문 접수',
-      'PREPARING': '조리 중',
-      'DELIVERING': '배달 중',
-      'COMPLETED': '배달 완료',
-      'CANCELLED': '취소됨',
-      'cancelled': '주문 취소'
-    }
-    return statusMap[status] || status
   }
 
   const getStyleKoreanName = (style: string) => {
@@ -168,17 +158,6 @@ export default function ProfilePage() {
       'deluxe': '디럭스'
     }
     return styleMap[style] || style
-  }
-
-  const getStatusColor = (status: string) => {
-    const colorMap: {[key: string]: string} = {
-      'pending': 'bg-yellow-100 text-yellow-800',
-      'cooking': 'bg-blue-100 text-blue-800',
-      'delivering': 'bg-purple-100 text-purple-800',
-      'completed': 'bg-green-100 text-green-800',
-      'cancelled': 'bg-red-100 text-red-800'
-    }
-    return colorMap[status] || 'bg-gray-100 text-gray-800'
   }
 
   // 회원 등급 판별 함수
@@ -285,14 +264,11 @@ export default function ProfilePage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
             {/* 회원 정보 카드 */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-amber-100">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="text-2xl">👤</span>
-                <h2 className="text-xl sm:text-2xl font-bold text-stone-900">
-                  {profile?.name || user?.name || '사용자'}님의 회원정보
-                </h2>
-              </div>
-              
+            <Card borderColorClass="border-amber-100">
+              <CardHeader
+                title={`${profile?.name || user?.name || '사용자'}님의 회원정보`}
+                icon={<span>👤</span>}
+              />
               {user && (
                 <div className="space-y-3 sm:space-y-4">
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
@@ -375,15 +351,15 @@ export default function ProfilePage() {
 
                 </div>
               )}
-            </div>
+            </Card>
 
             {/* 최근 주문 정보 카드 (직원 계정 제외) */}
             {!isStaffAccount && !isAdminAccount && (
-            <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-amber-100">
-              <h2 className="text-xl sm:text-2xl font-bold text-stone-900 mb-5 sm:mb-6 flex items-center gap-3">
-                <span>🍽️</span>
-                <span>최근 주문</span>
-              </h2>
+            <Card borderColorClass="border-amber-100">
+              <CardHeader
+                title="최근 주문"
+                icon={<span>🍽️</span>}
+              />
 
               {recentOrder ? (
                 <div className="space-y-4">
@@ -399,9 +375,7 @@ export default function ProfilePage() {
 
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
                     <span className="font-medium text-stone-700">상태</span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(recentOrder.status || '')}`}>
-                      {getStatusText(recentOrder.status || '')}
-                    </span>
+                    <OrderStatusBadge status={recentOrder.status || ''} size="sm" />
                   </div>
 
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
@@ -421,7 +395,7 @@ export default function ProfilePage() {
                   <p className="text-sm text-stone-500 mt-2">첫 주문을 해보세요!</p>
                 </div>
               )}
-            </div>
+            </Card>
             )}
           </div>
           

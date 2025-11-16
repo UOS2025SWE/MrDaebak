@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { PageContainer, Section } from '../../../components/layout/Responsive'
 
@@ -20,6 +20,24 @@ export default function OrderCompletePage() {
 
   const paymentStatusLabel = paymentInfo?.payment_status === 'FAILED' ? '결제 실패' : '결제 완료'
   const paymentStatusClass = paymentInfo?.payment_status === 'FAILED' ? 'text-red-600' : 'text-green-600'
+
+  const fetchOrderInfo = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/orders/${orderId}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setOrderInfo(data.order)
+      } else {
+        alert('주문 정보를 찾을 수 없습니다.')
+        router.push('/')
+      }
+    } catch (error) {
+      console.error('주문 정보 조회 실패:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [orderId, router])
 
   useEffect(() => {
     if (orderId) {
@@ -37,25 +55,7 @@ export default function OrderCompletePage() {
         sessionStorage.removeItem('lastOrderPricing')
       }
     }
-  }, [orderId])
-
-  const fetchOrderInfo = async () => {
-    try {
-      const response = await fetch(`/api/orders/${orderId}`)
-      const data = await response.json()
-
-      if (data.success) {
-        setOrderInfo(data.order)
-      } else {
-        alert('주문 정보를 찾을 수 없습니다.')
-        router.push('/')
-      }
-    } catch (error) {
-      console.error('주문 정보 조회 실패:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  }, [orderId, fetchOrderInfo])
 
 
   if (isLoading) {

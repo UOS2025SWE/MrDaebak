@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import Header from '@/components/Header'
@@ -1345,7 +1344,7 @@ function AdminDashboardContent() {
   }, [activeTab])
 
   // WebSocket 연결
-  const { status: wsStatus, isConnected } = useWebSocket({
+  const { status: wsStatus } = useWebSocket({
     token,
     onMessage: handleWebSocketMessage,
     showToasts: false,
@@ -1523,10 +1522,6 @@ function AdminDashboardContent() {
       alert('직원 상태 변경 중 오류가 발생했습니다.')
     }
   }
-
-  const handleRestockQuantityChange = () => {}
-
-  const handleRestockSelectedItems = async () => {}
 
   const handleQuickCategoryRestock = async (categoryKey: CategoryKey) => {
     const form = quickRestockForms[categoryKey]

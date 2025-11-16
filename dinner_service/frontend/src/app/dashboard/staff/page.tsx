@@ -7,71 +7,9 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { INGREDIENT_DISPLAY_NAMES, MENU_INGREDIENTS } from '@/utils/ingredients';
+import OrderStatusBadge from '@/components/orders/OrderStatusBadge';
 
-// 재료 한글 이름 매핑
-const ingredientNames: { [key: string]: string } = {
-  heart_plate: '하트 모양 접시',
-  cupid_decoration: '큐피드 장식',
-  napkin: '냅킨',
-  paper_napkin: '종이 냅킨',
-  cotton_napkin: '면 냅킨',
-  linen_napkin: '린넨 냅킨',
-  plastic_tray: '플라스틱 쟁반',
-  wooden_tray: '나무 쟁반',
-  plastic_plate: '플라스틱 접시',
-  plastic_cup: '플라스틱 컵',
-  ceramic_plate: '도자기 접시',
-  ceramic_cup: '도자기 컵',
-  plastic_wine_glass: '플라스틱 와인잔',
-  glass_wine_glass: '유리 와인잔',
-  vase_with_flowers: '꽃병 장식',
-  wine: '와인',
-  premium_steak: '프리미엄 스테이크',
-  coffee: '커피',
-  fresh_salad: '신선한 샐러드',
-  scrambled_eggs: '에그 스크램블',
-  bacon: '베이컨',
-  bread: '빵',
-  champagne_bottle: '샴페인',
-  baguette: '바게트빵',
-  coffee_pot: '커피 포트',
-  cake_base: '케이크 시트',
-  buttercream_frosting: '버터크림',
-  fresh_berries: '신선한 베리',
-  fondant: '폰단트',
-  edible_gold_leaf: '식용 금박',
-  chocolate_ganache: '초콜릿 가나슈',
-  cake_board: '케이크 보드',
-  edible_flowers: '식용 꽃'
-}
-
-// 메뉴별 기본 재료 구성
-const menuIngredients: Record<string, Record<string, Record<string, number>>> = {
-  valentine: {
-    simple: { heart_plate: 1, cupid_decoration: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
-    grand: { heart_plate: 1, cupid_decoration: 2, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, wine: 1, premium_steak: 1 },
-    deluxe: { heart_plate: 1, cupid_decoration: 3, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, wine: 1, premium_steak: 1 }
-  },
-  french: {
-    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, plastic_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 },
-    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 1, coffee: 1, wine: 1, fresh_salad: 1, premium_steak: 1 }
-  },
-  english: {
-    simple: { plastic_plate: 1, plastic_cup: 1, paper_napkin: 1, plastic_tray: 1, scrambled_eggs: 1, bacon: 2, bread: 1, premium_steak: 1 },
-    grand: { ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1, scrambled_eggs: 2, bacon: 3, bread: 1, premium_steak: 1 },
-    deluxe: { ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1, scrambled_eggs: 2, bacon: 4, bread: 2, premium_steak: 1 }
-  },
-  champagne: {
-    grand: { ceramic_plate: 2, ceramic_cup: 2, cotton_napkin: 2, wooden_tray: 1, plastic_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 },
-    deluxe: { ceramic_plate: 2, ceramic_cup: 2, linen_napkin: 2, wooden_tray: 1, vase_with_flowers: 1, glass_wine_glass: 2, champagne_bottle: 1, baguette: 4, coffee_pot: 1, wine: 1, premium_steak: 2 }
-  },
-  cake: {
-    simple: { cake_base: 1, buttercream_frosting: 1, fresh_berries: 1, cake_board: 1, plastic_plate: 1, plastic_tray: 1, paper_napkin: 1 },
-    grand: { cake_base: 1, buttercream_frosting: 1, fondant: 1, fresh_berries: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, cotton_napkin: 1, wooden_tray: 1 },
-    deluxe: { cake_base: 1, buttercream_frosting: 1, fondant: 1, edible_gold_leaf: 1, chocolate_ganache: 1, edible_flowers: 1, cake_board: 1, ceramic_plate: 1, ceramic_cup: 1, linen_napkin: 1, wooden_tray: 1, vase_with_flowers: 1 }
-  }
-}
 
 type IntakeItemTemplate = {
   code: string
@@ -166,21 +104,6 @@ function OrderCard({
   userPosition?: 'COOK' | 'RIDER' | 'STAFF';
   canPerformAction: boolean;
 }) {
-  const getStatusDisplay = (status: string) => {
-    switch (status) {
-      case 'RECEIVED':
-        return { text: '접수 완료', color: 'blue' };
-      case 'PREPARING':
-        return { text: '조리 중', color: 'amber' };
-      case 'DELIVERING':
-        return { text: '배달 중', color: 'green' };
-      case 'COMPLETED':
-        return { text: '완료', color: 'gray' };
-      default:
-        return { text: status, color: 'gray' };
-    }
-  };
-
   const getNextAction = (status: string, position?: 'COOK' | 'RIDER' | 'STAFF') => {
     switch (status) {
       case 'RECEIVED':
@@ -208,7 +131,6 @@ function OrderCard({
     }
   };
 
-  const statusDisplay = getStatusDisplay(order.status);
   const nextAction = getNextAction(order.status, userPosition);
 
   const styleNames: Record<string, string> = {
@@ -225,9 +147,7 @@ function OrderCard({
           <p className="text-xs text-gray-500">주문번호</p>
           <p className="text-sm font-bold text-gray-800">{order.order_number}</p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-xs font-semibold bg-${statusDisplay.color}-100 text-${statusDisplay.color}-700`}>
-          {statusDisplay.text}
-        </div>
+        <OrderStatusBadge status={order.status} size="sm" showIcon />
       </div>
 
       {/* 메뉴 정보 */}
@@ -242,7 +162,7 @@ function OrderCard({
 
       {/* 커스터마이징 정보 */}
       {order.customizations && Object.keys(order.customizations).length > 0 && (() => {
-        const baseIngredients = menuIngredients[order.menu_code]?.[order.style] || {}
+        const baseIngredients = MENU_INGREDIENTS[order.menu_code]?.[order.style] || {}
         const changedItems = Object.entries(order.customizations).filter(([ingredient, qty]) => {
           const baseQty = baseIngredients[ingredient] || 0
           return baseQty !== Number(qty)
@@ -266,7 +186,7 @@ function OrderCard({
 
                 return (
                   <div key={ingredient} className="flex justify-between text-xs">
-                    <span className="text-gray-700">{ingredientNames[ingredient] || ingredient}</span>
+                    <span className="text-gray-700">{INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}</span>
                     <span className="font-medium text-amber-700">
                       {baseQty}개 → {qtyNum}개
                       <span className="text-xs ml-1 text-gray-600">
@@ -767,7 +687,7 @@ function StaffDashboardContent() {
   };
 
   // WebSocket 연결 및 실시간 업데이트
-  const { status: wsStatus, lastMessage } = useWebSocket({
+  const { status: wsStatus } = useWebSocket({
     token,
     showToasts: true, // Toast 알림 자동 표시
     reconnect: true,
@@ -956,7 +876,7 @@ function StaffDashboardContent() {
                             {batch.intake_items.map((item) => {
                               const key = `${batch.batch_id}::${item.intake_item_id}`;
                               const editedQuantity = pendingIntakeEdits[key] ?? item.actual_quantity;
-                              const displayName = ingredientNames[item.ingredient_code] || item.ingredient_code;
+                              const displayName = INGREDIENT_DISPLAY_NAMES[item.ingredient_code] || item.ingredient_code;
                               return (
                                 <div
                                   key={item.intake_item_id}
