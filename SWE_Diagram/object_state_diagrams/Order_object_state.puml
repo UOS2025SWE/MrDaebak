@@ -1,0 +1,42 @@
+@startuml
+title "주문 (Order.order_status) 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "주문 접수\n(RECEIVED)" as Received
+state "조리 중\n(PREPARING)" as Preparing
+state "배달 중\n(DELIVERING)" as Delivering
+state "배달 완료\n(COMPLETED)" as Completed
+state "주문 취소\n(CANCELLED)" as Cancelled
+state "결제 실패\n(PAYMENT_FAILED)" as PaymentFailed
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' OrderService.create_order()가 orders 테이블에 삽입하면
+' 항상 RECEIVED 상태로 시작한다.
+[*] --> Received : OrderService.create_order()\n(order_status='RECEIVED')
+
+' "RECEIVED" 상태에서 가능한 전이
+Received --> Preparing : Cook가 '주문 접수'\n(PATCH /orders/{id}/status PREPARING)
+Received --> Cancelled : Customer가 '주문 취소'\n(POST /orders/{id}/cancel)
+Received --> PaymentFailed : PaymentService.process_mock_payment()\n실패 시 order_status='PAYMENT_FAILED'
+
+' "PREPARING" 상태에서 가능한 전이
+Preparing --> Delivering : Cook/Delivery가 '배달 시작'\n(PATCH /orders/{id}/status DELIVERING)
+
+' "DELIVERING" 상태에서 가능한 전이
+Delivering --> Completed : Delivery가 '배달 완료'\n(PATCH /orders/{id}/status COMPLETED)
+
+' 최종 상태 (End States)
+Completed --> [*]
+Cancelled --> [*]
+PaymentFailed --> [*]
+
+@enduml

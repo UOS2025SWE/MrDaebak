@@ -1,0 +1,50 @@
+@startuml
+title "AuthContext User Session State Machine"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+  RoundCorner 10
+}
+
+state "Unauthenticated\n(no token stored)" as Unauthenticated
+state "Restoring Session\n(localStorage check + verifyToken)" as Restoring
+state "Session Expired\n(token revoked / server reject)" as Expired
+
+state "Authenticated" as Authenticated {
+  state "Customer" as CustomerState
+  state "Staff or Manager" as StaffManagerState
+}
+
+[*] --> Unauthenticated
+
+Unauthenticated --> Restoring : page load\nlocalStorage has token
+Restoring --> CustomerState : token valid\nuser_type=CUSTOMER
+Restoring --> StaffManagerState : token valid\nuser_type∈{STAFF, MANAGER}
+Restoring --> Unauthenticated : token missing/invalid
+
+Unauthenticated --> CustomerState : login success (customer)
+Unauthenticated --> StaffManagerState : login success (staff/manager)
+
+CustomerState --> Expired : verifyToken fails\n(periodic 5-minute check)
+StaffManagerState --> Expired : verifyToken fails
+Expired --> Unauthenticated : clear token & user info
+
+CustomerState --> Unauthenticated : logout / server rejects token
+StaffManagerState --> Unauthenticated : logout / session expired
+
+CustomerState --> CustomerState : refreshUserInfo / token renewal
+StaffManagerState --> StaffManagerState : refreshUserInfo / token renewal
+
+note right of Restoring
+  useEffect loads auth_token + user_info\n
+  verifyToken protects routes
+end note
+
+note right of Authenticated
+  setInterval every 5 minutes runs\nverifyToken() and auto-logout on failure
+end note
+
+@enduml

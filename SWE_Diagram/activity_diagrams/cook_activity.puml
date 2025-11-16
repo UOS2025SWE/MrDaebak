@@ -1,0 +1,68 @@
+@startuml
+title "Cook Activity Diagram\n(Kitchen Order Processing Aligned with OrderService)"
+
+|Cook|
+start
+:Log in via /api/auth/login\n(role=STAFF_COOK);
+|System|
+:LoginService.verify_credentials()\n+ issue JWT (STAFF_COOK);
+
+|Cook|
+:Open Cook Dashboard\n(StaffRouter + WebSocket);
+|System|
+:Subscribe to /api/ws\nORDER_STATUS_CHANGED stream;
+
+repeat
+  if (New order with status=RECEIVED?) then (yes)
+    |Cook|
+    :Open order detail\n(/api/staff/orders?status=RECEIVED);
+    |System|
+    :OrderService.get_orders_for_staff();
+    |Cook|
+    :Check requested menu & customizations;
+    |System|
+    :OrderService.check_and_reserve_ingredients();
+    if (Ingredients sufficient?) then (yes)
+      |Cook|
+      :Click "Start Preparing";
+      |System|
+      :OrderService.update_status(PREPARING);
+      :Broadcast ORDER_STATUS_CHANGED(PREPARING);
+      |Cook|
+      :Cook main dishes & sides;
+      :Plate and pack order;
+      :Mark "Ready for Delivery";
+      |System|
+      :Optionally notify Delivery queue\n(order now ready);
+    else (no)
+      |Cook|
+      :Mark as cannot prepare\n(select reason: shortage / machine error);
+      |System|
+      :OrderService.update_status(CANCELLED);
+      :PaymentService.process_refund_if_paid();
+      :Broadcast ORDER_STATUS_CHANGED(CANCELLED);
+    endif
+  else (no)
+    |Cook|
+    :Monitor PREPARING queue\nand timers;
+  endif
+repeat while (On shift?)
+
+|Cook|
+if (Ingredient intake handled by kitchen?) then (sometimes)
+  :Record intake via\n/api/ingredients/intake;
+  |System|
+  :IngredientService.create_intake_batch(PENDING);
+  |Manager|
+  :Later confirm batch in manager UI;
+  |System|
+  :IngredientService.mark_completed\nand update stock;
+endif
+
+|Cook|
+:Clean stations & close shift;
+stop
+
+@enduml
+
+

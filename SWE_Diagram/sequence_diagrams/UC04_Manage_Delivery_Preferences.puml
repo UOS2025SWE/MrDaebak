@@ -1,0 +1,41 @@
+@startuml
+title "UC-04: Manage Delivery Preferences"
+
+actor customer as "Customer"
+participant "fe:CustomerWebApp" as fe
+participant "checkoutR:CheckoutRouter" as checkoutR
+
+== Load Default Delivery Info ==
+activate customer
+customer -> fe: Open Checkout page
+deactivate customer
+activate fe
+fe -> checkoutR: GET /api/checkout/delivery-info/{user_id}
+deactivate fe
+activate checkoutR
+checkoutR -> checkoutR: load name, phone, address\nfor given user_id
+checkoutR --> fe: { has_default, delivery_info? }
+deactivate checkoutR
+activate fe
+fe --> customer: Pre-fill form if exists
+deactivate fe
+
+== Update Default Delivery Info ==
+activate customer
+customer -> fe: Edit address / recipient info
+customer -> fe: Click \"Save as default\"
+deactivate customer
+activate fe
+fe -> checkoutR: PUT /api/checkout/delivery-info/{user_id}\n(body: DeliveryInfo)
+deactivate fe
+activate checkoutR
+checkoutR -> checkoutR: update address for user_id
+checkoutR --> fe: { success, message, delivery_info }
+deactivate checkoutR
+activate fe
+fe --> customer: Show confirmation\n(\"Default address saved\")
+deactivate fe
+
+@enduml
+
+

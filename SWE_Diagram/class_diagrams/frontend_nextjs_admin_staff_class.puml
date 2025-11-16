@@ -1,0 +1,292 @@
+@startuml
+title "Next.js 15 Frontend (Admin & Staff: Manager / Cook / Delivery) - 클래스 다이어그램"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam linetype ortho
+
+' ===============================
+' 1. 외부 API / 브라우저 인터페이스
+' ===============================
+
+interface "FastAPI Backend" as IBackend {
+  + POST /api/auth/login
+  + GET  /api/auth/me
+  ---
+  + GET  /api/staff/orders        (직원용 주문 목록)
+  + GET  /api/staff/orders/cook   (조리 담당자용 주문)
+  + GET  /api/staff/orders/delivery (배달 담당자용 주문)
+  + PATCH /api/orders/{order_id}/status
+  ---
+  + GET  /api/events/manage
+  + POST /api/events
+  + PATCH /api/events/{event_id}
+  + DELETE /api/events/{event_id}
+  ---
+  + GET  /api/ingredients/store
+  ---
+  + GET  /api/inquiries
+  + PATCH /api/inquiries/{inquiry_id}
+  ---
+  + WS   /api/ws?token=...        (직원/관리자 실시간 알림)
+}
+
+interface "Browser APIs" as IBrowser {
+  + localStorage (JWT, user 캐시)
+}
+
+' ===============================
+' 2. 도메인 타입 / 컨텍스트
+' ===============================
+
+class "StaffUser (type)\n(types/auth.ts)" as StaffUser {
+  - id: string
+  - name: string
+  - email: string
+  - user_type: 'STAFF'
+  - position: 'COOK' | 'DELIVERY'
+}
+
+class "ManagerUser (type)\n(types/auth.ts)" as ManagerUser {
+  - id: string
+  - name: string
+  - email: string
+  - user_type: 'MANAGER'
+}
+
+class "AuthContext\n(contexts/AuthContext.tsx)" as AuthContext {
+  - user: StaffUser | ManagerUser | null
+  - token: string | null
+  - loading: boolean
+  ---
+  + login(email, password): Promise<void>
+  + logout(): void
+  + isManager(): boolean
+  + isStaffCook(): boolean
+  + isStaffDelivery(): boolean
+  + requireRole(role): void
+}
+
+class "ToastContext\n(contexts/ToastContext.tsx)" as ToastContext {
+  - toasts: Toast[]
+  ---
+  + showToast(message, type): void
+  + removeToast(id): void
+}
+
+' ===============================
+' 3. 레이아웃 & 페이지 (Admin / Staff)
+' ===============================
+
+class "AdminLayout\n(app/(admin)/layout.tsx)" as AdminLayout {
+  - user: ManagerUser
+  ---
+  + renderSidebar(): void
+  + renderHeader(): void
+}
+
+class "StaffLayout\n(app/(staff)/layout.tsx)" as StaffLayout {
+  - user: StaffUser
+  ---
+  + renderRoleBadge(): void
+  + renderNavByPosition(): void
+}
+
+class "AdminDashboardPage\n(app/(admin)/dashboard/page.tsx)" as AdminDashboardPage {
+  <<MANAGER>>
+  - summaryCards: DashboardCard[]
+  - recentOrders: Order[]
+  - staffStatus: StaffStatus[]
+  ---
+  + loadDashboard(): Promise<void>
+}
+
+class "CookDashboardPage\n(app/(staff)/cook/page.tsx)" as CookDashboardPage {
+  <<STAFF: COOK>>
+  - orders: Order[]
+  ---
+  + loadCookOrders(): Promise<void>
+  + startCooking(orderId): Promise<void>      ' RECEIVED → PREPARING
+  + markReady(orderId): Promise<void>         ' PREPARING → DELIVERING
+}
+
+class "DeliveryDashboardPage\n(app/(staff)/delivery/page.tsx)" as DeliveryDashboardPage {
+  <<STAFF: DELIVERY>>
+  - orders: Order[]
+  ---
+  + loadDeliveryOrders(): Promise<void>
+  + startDelivery(orderId): Promise<void>     ' PREPARING → DELIVERING
+  + completeDelivery(orderId): Promise<void>  ' DELIVERING → COMPLETED
+}
+
+class "ManageOrdersPage\n(app/(admin)/orders/page.tsx)" as ManageOrdersPage {
+  <<MANAGER>>
+  - orders: Order[]
+  - filter: OrderFilter
+  ---
+  + loadAllOrders(): Promise<void>
+  + updateOrderStatus(orderId, status): Promise<void>
+  + filterOrders(filter): void
+}
+
+class "ManageEventsPage\n(app/(admin)/events/page.tsx)" as ManageEventsPage {
+  <<MANAGER>>
+  - events: Event[]
+  - selectedEvent: Event | null
+  ---
+  + loadEvents(): Promise<void>
+  + createEvent(eventData): Promise<void>
+  + updateEvent(eventId, eventData): Promise<void>
+  + deleteEvent(eventId): Promise<void>
+}
+
+class "ManageInventoryPage\n(app/(admin)/inventory/page.tsx)" as ManageInventoryPage {
+  <<MANAGER>>
+  - inventory: InventoryItem[]
+  - lowStockItems: InventoryItem[]
+  ---
+  + loadStoreInventory(): Promise<void>
+  + updateStock(ingredientId, diff): Promise<void>
+}
+
+class "ManageInquiriesPage\n(app/(admin)/inquiries/page.tsx)" as ManageInquiriesPage {
+  <<MANAGER>>
+  - inquiries: Inquiry[]
+  - filter: InquiryFilter
+  ---
+  + loadInquiries(): Promise<void>
+  + updateInquiryStatus(id, status, note): Promise<void>
+}
+
+' ===============================
+' 4. 재사용 컴포넌트 / Hooks
+' ===============================
+
+class "ProtectedRoute\n(components/ProtectedRoute.tsx)" as ProtectedRoute {
+  - requiredRole: 'MANAGER' | 'STAFF_COOK' | 'STAFF_DELIVERY'
+  ---
+  + render(children): JSX.Element
+}
+
+class "OrderCard\n(components/orders/OrderCard.tsx)" as OrderCard {
+  - order: Order
+  - canCookUpdate: boolean
+  - canDeliveryUpdate: boolean
+  - canManagerOverride: boolean
+  ---
+  + renderStatusBadge(): JSX.Element
+  + renderCookActions(): JSX.Element
+  + renderDeliveryActions(): JSX.Element
+  + renderManagerActions(): JSX.Element
+}
+
+class "StaffBadge\n(components/staff/StaffBadge.tsx)" as StaffBadge {
+  - position: 'COOK' | 'DELIVERY'
+  - online: boolean
+  ---
+  + render(): JSX.Element
+}
+
+class "useStaffWebSocket\n(hooks/useStaffWebSocket.ts)" as UseStaffWebSocket {
+  - socket: WebSocket | null
+  - isConnected: boolean
+  ---
+  + connect(token): void
+  + disconnect(): void
+  + onOrderEvent(handler): void
+}
+
+' ===============================
+' 5. 관계
+' ===============================
+
+' Context -> External
+AuthContext ..> IBackend : "login / me"
+AuthContext ..> IBrowser : "JWT 토큰 저장"
+
+' Layouts / Pages -> Context
+AdminLayout ..> AuthContext : "MANAGER 인증"
+StaffLayout ..> AuthContext : "STAFF 인증"
+
+AdminDashboardPage ..> AuthContext
+CookDashboardPage ..> AuthContext
+DeliveryDashboardPage ..> AuthContext
+ManageOrdersPage ..> AuthContext
+ManageEventsPage ..> AuthContext
+ManageInventoryPage ..> AuthContext
+ManageInquiriesPage ..> AuthContext
+
+AdminDashboardPage ..> ToastContext
+CookDashboardPage ..> ToastContext
+DeliveryDashboardPage ..> ToastContext
+ManageOrdersPage ..> ToastContext
+ManageEventsPage ..> ToastContext
+ManageInventoryPage ..> ToastContext
+ManageInquiriesPage ..> ToastContext
+
+' Pages -> Backend
+AdminDashboardPage ..> IBackend : "요약/통계"
+CookDashboardPage ..> IBackend : "조리 담당 주문"
+DeliveryDashboardPage ..> IBackend : "배달 담당 주문"
+ManageOrdersPage ..> IBackend : "전체 주문 관리"
+ManageEventsPage ..> IBackend : "이벤트 관리"
+ManageInventoryPage ..> IBackend : "재고 조회/수정"
+ManageInquiriesPage ..> IBackend : "문의 조회/업데이트"
+
+' Pages / Layouts -> Components / Hooks
+StaffLayout ..> StaffBadge
+CookDashboardPage ..> OrderCard
+DeliveryDashboardPage ..> OrderCard
+ManageOrdersPage ..> OrderCard
+
+CookDashboardPage ..> UseStaffWebSocket : "실시간 ORDER_CREATED / STATUS_CHANGED"
+DeliveryDashboardPage ..> UseStaffWebSocket
+AdminDashboardPage ..> UseStaffWebSocket
+
+ProtectedRoute ..> AuthContext : "역할 기반 접근 제어"
+
+note right of AuthContext
+  **역할/포지션 기반 권한 (RBAC)**
+  - user_type: CUSTOMER | STAFF | MANAGER
+  - STAFF.position: COOK | DELIVERY
+  - isManager(): user_type == MANAGER
+  - isStaffCook(): user_type == STAFF && position == COOK
+  - isStaffDelivery(): user_type == STAFF && position == DELIVERY
+end note
+
+note right of CookDashboardPage
+  **조리 담당(COOK) 화면**
+  - 필터: RECEIVED, PREPARING 주문만 표시
+  - 상태 변경:
+    * RECEIVED → PREPARING (조리 시작)
+    * PREPARING → DELIVERING (조리 완료, 배달 준비)
+  - WebSocket으로 새 주문/변경 실시간 반영
+end note
+
+note right of DeliveryDashboardPage
+  **배달 담당(DELIVERY) 화면**
+  - 필터: PREPARING, DELIVERING 주문만 표시
+  - 상태 변경:
+    * PREPARING → DELIVERING (픽업/출발)
+    * DELIVERING → COMPLETED (배달 완료)
+  - WebSocket으로 배달 대상 주문 실시간 갱신
+end note
+
+note right of ManageOrdersPage
+  **관리자 주문 관리(MANAGER)**
+  - 모든 주문 조회/필터링
+  - COOK/DELIVERY 권한을 넘어서는 수동 오버라이드 가능
+  - 고객 문의/이벤트와 연계된 주문 확인
+end note
+
+note right of UseStaffWebSocket
+  **실시간 직원 알림 채널**
+  - /api/ws?token=JWT 로 연결
+  - ORDER_CREATED, ORDER_STATUS_CHANGED 이벤트 수신
+  - 역할에 따라 다른 알림만 UI에 노출
+end note
+
+@enduml
+
+

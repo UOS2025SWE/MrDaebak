@@ -1,0 +1,59 @@
+@startuml
+title "Dinner Service Use Case Diagram (2025, Consolidated)"
+left to right direction
+
+actor Customer as "Customer"
+actor Staff as "Staff"
+actor Cook as "Cook (Staff)"
+actor Delivery as "Delivery Staff"
+actor Manager as "Manager"
+actor PaymentSystem as "<<External API>>\nMock Payment"
+actor GeminiAI as "<<External API>>\nGemini NLU"
+actor OpenAIAudio as "<<External API>>\nOpenAI STT / TTS"
+
+Staff <|-- Cook
+Staff <|-- Delivery
+Staff <|-- Manager
+
+rectangle "Dinner Service Platform" {
+  (Register & Log In)
+  (Place Dinner Order - GUI or Voice)
+  (Track Order Status)
+  (Manage Delivery Preferences)
+  (View Order History & Reorder)
+  (Submit Support Inquiry)
+  (Prepare Orders Kitchen)
+  (Deliver Orders)
+  (Manage Inventory & Promotions)
+  (Monitor Operations & Handle Inquiries)
+}
+
+' === Customer use cases ===
+Customer -- (Register & Log In)
+Customer -- (Place Dinner Order - GUI or Voice)
+Customer -- (Track Order Status)
+Customer -- (Manage Delivery Preferences)
+Customer -- (View Order History & Reorder)
+Customer -- (Submit Support Inquiry)
+
+' === Staff (Cook / Delivery / Manager) use cases ===
+Cook -- (Register & Log In)
+Cook -- (Prepare Orders Kitchen)
+Cook -- (Track Order Status)
+
+Delivery -- (Register & Log In)
+Delivery -- (Deliver Orders)
+Delivery -- (Track Order Status)
+
+Manager -- (Register & Log In)
+Manager -- (Manage Inventory & Promotions)
+Manager -- (Monitor Operations & Handle Inquiries)
+
+' === External API interactions (no extra use cases to keep total <= 10) ===
+PaymentSystem .. (Place Dinner Order - GUI or Voice)
+GeminiAI .. (Place Dinner Order - GUI or Voice)
+OpenAIAudio .. (Place Dinner Order - GUI or Voice)
+
+@enduml
+
+

@@ -1,0 +1,121 @@
+@startuml
+title "Manager Activity Diagram\n(Inventory / Promotions / Monitoring / Inquiries)"
+
+|Manager|
+start
+:Log in with Manager account;
+|System|
+:Authenticate via /api/auth/login\n(check role = MANAGER);
+
+|Manager|
+if (Authentication successful?) then (yes)
+  :Open Manager Dashboard;
+  |System|
+  :Subscribe to WebSocket\n(admin operations stream);
+
+  |Manager|
+  repeat
+    :Select menu on dashboard;
+    if (Menu?) then ([Monitor Operations])
+      :Open "Real-time Operations" view;
+      |System|
+      :Listen to ORDER_STATUS_CHANGED,\nINQUIRY_CREATED events via WebSocket;
+      |Manager|
+      :Watch cooking / delivery timeline;
+      if (Critical delay or issue?) then (yes)
+        :Check order detail\n(/api/orders/{id});
+        :Contact Cook / Delivery staff;
+        :Optionally update note or\nescalate to support;
+      endif
+
+    elseif ([Inventory Management])
+      :Open Inventory Management page;
+      |System|
+      :IngredientService.list_ingredients();
+      |Manager|
+      :Review low-stock items;
+      if (Register stock intake?) then (yes)
+        :Create intake record\n(/api/ingredients/intake);
+        |System|
+        :Store intake batch with status=PENDING;
+        |Manager|
+        :Confirm intake batch\n(/api/ingredients/intake/{id}/confirm);
+        |System|
+        :Update batch status=COMPLETED\nand adjust quantities;
+      endif
+      if (Dispose or adjust stock?) then (yes)
+        :Record disposal/adjustment;
+        |System|
+        :Update Ingredient quantities\nand create audit log;
+      endif
+
+    elseif ([Promotion / Event Management])
+      :Open Event & Promotion page;
+      |System|
+      :EventService.list_events();
+      |Manager|
+      if (Create new event?) then (yes)
+        :Enter event name, period,\nmenu/side discounts;
+        :Upload banner image if needed;
+        |System|
+        :Create event_promotions row\nand related discounts;
+      else ([Edit / End existing])
+        :Select existing event;
+        if (Update period or discount?) then (update)
+          :Edit fields and save;
+          |System|
+          :Update event_promotions\n+ discount tables;
+        else ([End early])
+          :Set is_published=false\nor end_date=today;
+          |System|
+          :Mark event as Ended;
+        endif
+      endif
+
+    elseif ([Support / Inquiry Management])
+      :Open "Customer Inquiries" page;
+      |System|
+      :InquiryService.list_inquiries\n(filter by status NEW/IN_PROGRESS);
+      |Manager|
+      :Pick an inquiry to handle;
+      if (Start handling?) then (yes)
+        |System|
+        :Update status → IN_PROGRESS;
+        |Manager|
+        :Write answer or call customer;
+        if (Resolved?) then (yes)
+          |System|
+          :Update status → RESOLVED;
+        else (no)
+          |System|
+          :Leave as IN_PROGRESS\nor move to ARCHIVED;
+        endif
+      endif
+
+    elseif ([Staff Overview])
+      :Open "Staff Overview" page;
+      |System|
+      :List staff accounts & roles;
+      |Manager|
+      :Check workloads for Cook/Delivery;
+      if (Need change?) then (schedule)
+        :Coordinate shifts offline or\nvia another HR system;
+      endif
+
+    else ([Log Out])
+      :Click "Logout";
+      |System|
+      :Clear session token;
+      break
+    endif
+  repeat while (Stay on dashboard?)
+
+  |Manager|
+  stop
+else (no)
+  |Manager|
+  :Show login failed message;
+  stop
+endif
+
+@enduml

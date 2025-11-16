@@ -1,0 +1,57 @@
+@startuml
+title "UC-05: View Order History & Reorder"
+
+actor customer as "Customer"
+participant "fe:CustomerWebApp" as fe
+participant "ordersR:OrdersRouter" as ordersR
+participant "orderSvc:OrderService" as orderSvc
+participant "loginSvc:LoginService" as loginSvc
+
+== View Order History ==
+activate customer
+customer -> fe: Open \"My Orders\"
+deactivate customer
+activate fe
+fe -> ordersR: GET /api/orders/user/{user_id}\nAuthorization: Bearer JWT
+deactivate fe
+activate ordersR
+ordersR -> loginSvc: verify_token(JWT)
+activate loginSvc
+loginSvc --> ordersR: payload (user_id)
+deactivate loginSvc
+ordersR -> orderSvc: get_user_orders(db, user_id)\n(load orders + items + customizations)
+activate orderSvc
+orderSvc --> ordersR: { success, orders[] }
+deactivate orderSvc
+ordersR --> fe: 200 OK orders[]
+deactivate ordersR
+activate fe
+fe --> customer: Render history list
+deactivate fe
+
+== Reorder Past Dinner ==
+activate customer
+customer -> fe: Click \"Reorder\" on past order
+deactivate customer
+activate fe
+fe -> ordersR: POST /api/orders/reorder/{order_id}\nAuthorization: Bearer JWT
+deactivate fe
+activate ordersR
+ordersR -> loginSvc: verify_token(JWT)
+activate loginSvc
+loginSvc --> ordersR: payload (user_id)
+deactivate loginSvc
+ordersR -> ordersR: SELECT original order +\nmenu_items + serving_styles
+ordersR -> orderSvc: create_order(db, reorder_data\n{ dinner_code, style, quantity,\n  delivery_address, user_id })\n(persist new order)
+activate orderSvc
+orderSvc --> ordersR: { success, order }
+deactivate orderSvc
+ordersR --> fe: 200 OK { order }
+deactivate ordersR
+activate fe
+fe --> customer: Show \"Reorder successful\"\nand new order number
+deactivate fe
+
+@enduml
+
+

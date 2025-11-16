@@ -1,0 +1,133 @@
+@startuml
+title "Customer Activity Diagram\n(Browse / Order / Delivery / History & Inquiry)"
+
+|Customer|
+start
+:Open Customer Web App;
+|System|
+:AuthContext.restoreSession()\n(localStorage token, verifyToken);
+
+|Customer|
+if (Already logged in?) then (yes)
+else (no)
+  :Login or Sign Up\n(/api/auth/login, /api/auth/register);
+  |System|
+  :Issue JWT & store in AuthContext;
+endif
+
+|Customer|
+if (Main goal?) then ([Place New Order])
+  :Open Home / Menu page;
+  if (Use Voice Order?) then ([Voice])
+    :Click "음성 주문" 버튼;
+    |System|
+    :Open voice widget\n(GeminiService + OpenAIAudioService);
+    :Start STT stream & call GeminiService\nwith current user + events;
+    |Customer|
+    :Speak dinner requirements;
+    |System|
+    :Recommend menu & options\n(based on history / promotions);
+    |Customer|
+    :Confirm recommended dinner & options;
+  else ([GUI])
+    :Browse dinner packages & events\n(/api/menu, /api/events);
+    :Select dinner package & serving style;
+    :Adjust quantity / options\n(baguette count, drinks, sides);
+  endif
+
+  if (Need decoration or note?) then (yes)
+    :Upload photo or request AI image;
+    |System|
+    :Call GeminiService for image prompt\n(or use existing asset);
+  endif
+
+  |Customer|
+  :Enter / confirm delivery info\n(address, phone, memo);
+  :Select delivery date & time;
+  |System|
+  :OrderService.validate_request()\n(check inventory & schedule);
+  if (Slot or inventory unavailable?) then (yes)
+    :Propose alternative slot or options;
+    |Customer|
+    :Select alternative slot or cancel;
+    if (Cancel here?) then (cancel)
+      stop
+    endif
+  endif
+
+  |System|
+  :OrderService.create_order()\n(order_status=RECEIVED,\n payment_status=PENDING);
+  :DiscountService.apply_loyalty()\n(update customer_loyalty);
+  :Calculate final price;
+
+  |Customer|
+  :Enter card info & click "Pay";
+  |System|
+  :PaymentService.process_mock_payment();
+  if (Payment success?) then (yes)
+    :Update order.payment_status=PAID;
+    :Emit ORDER_STATUS_CHANGED(RECEIVED)\nvia WebSocketManager;
+    :Send confirmation (email/push);
+  else (no)
+    :Set payment_status=FAILED;
+    :Notify payment failure to customer;
+    |Customer|
+    :Retry payment or abandon order;
+    stop
+  endif
+
+  |Customer|
+  :Track order status screen open;
+  |System|
+  :Load initial status via /api/orders/{id};
+  :Subscribe WebSocket /ws/orders/{id};
+  repeat
+    |System| :Receive status update\n(PREPARING / DELIVERING / COMPLETED);
+    |Customer| :View real-time status;
+  repeat while (Order not COMPLETED/CANCELLED?)
+
+  |Customer|
+  if (Delivery completed?) then (yes)
+    :Confirm delivery & optionally rate;
+  endif
+
+elseif ([View Order History / Reorder])
+  :Open "My Orders" page;
+  |System|
+  :OrderService.get_user_orders();
+  |Customer|
+  :Select past order;
+  if (Reorder this?) then (yes)
+    :Click "Reorder" 버튼;
+    |System|
+    :OrderService.reorder(previous_order_id);
+    |Customer|
+    :Review auto-filled order &\nfollow same payment flow;
+  endif
+
+elseif ([Manage Delivery Preferences])
+  :Open "Delivery Info" page;
+  |System|
+  :Load saved addresses\n(from user profile);
+  |Customer|
+  :Add / Edit / Delete address;
+  |System|
+  :Persist updated delivery info;
+
+elseif ([Submit Support Inquiry])
+  :Open "Support / Inquiry" page;
+  :Write inquiry title + content;
+  :Submit;
+  |System|
+  :InquiryService.create_inquiry()\n(status=NEW);
+  :Show confirmation & redirect;
+
+else ([Logout])
+  :Click "Logout";
+  |System|
+  :Clear token & user info in AuthContext;
+  stop
+endif
+
+stop
+@enduml

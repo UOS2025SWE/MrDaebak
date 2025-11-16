@@ -1,0 +1,152 @@
+@startuml
+title "Dinner Service - High Level Component Diagram"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+
+' ==========================================
+' 외부 사용자 및 시스템 (Actors / External)
+' ==========================================
+actor "Customer" as Customer
+actor "Cook" as Cook
+actor "Delivery Staff" as DeliveryStaff
+actor "Manager" as Manager
+
+actor "Browser\n(Customer FE)" as BrowserCustomer
+actor "Browser\n(Admin/Staff FE)" as BrowserAdmin
+
+component "PostgreSQL DB" as PostgreSQL <<database>>
+component "Mock Payment\n(외부 PG)" as MockPayment <<external>>
+component "Gemini AI\n(LLM API)" as GeminiAI <<external>>
+component "OpenAI STT/TTS\n(Audio API)" as OpenAIAPI <<external>>
+
+
+' ==========================================
+' 프론트엔드 컴포넌트 (Next.js Apps)
+' ==========================================
+package "Frontend" {
+
+  [Customer Web App] as CustomerApp <<component>>
+  [Admin & Staff Web App] as AdminApp <<component>>
+
+}
+
+
+' ==========================================
+' 백엔드 컴포넌트 (FastAPI Monolith)
+' Visual Paradigm 컴포넌트 다이어그램 패턴 참고
+' https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-component-diagram/
+' ==========================================
+package "Backend (FastAPI Monolith)" {
+
+  ' API 계층
+  [API Gateway / Routers] as ApiLayer <<component>>
+
+  ' 도메인 서비스 계층
+  [Order & Checkout Service] as OrderComp <<component>>
+  [Payment Service] as PaymentComp <<component>>
+  [Discount & Loyalty Service] as DiscountComp <<component>>
+  [Event & Promotion Service] as EventComp <<component>>
+  [Inquiry Service] as InquiryComp <<component>>
+  [Menu & SideDish Service] as MenuComp <<component>>
+  [Inventory / Ingredient Service] as InventoryComp <<component>>
+  [Auth & User Session Service] as AuthComp <<component>>
+
+  ' 실시간/AI 계층
+  [WebSocket Manager] as WsComp <<component>>
+  [Gemini Voice Orchestrator] as GeminiComp <<component>>
+  [OpenAI Audio Adapter] as AudioComp <<component>>
+
+}
+
+
+' ==========================================
+' 내부 인터페이스 (Provided / Required Interfaces)
+' - 심벌을 단순화해서 의존 관계 위주로 표현
+' ==========================================
+
+' Frontend <-> Backend
+Customer -down- BrowserCustomer
+BrowserCustomer -down- CustomerApp
+BrowserAdmin -down- AdminApp
+Cook -down- BrowserAdmin
+DeliveryStaff -down- BrowserAdmin
+Manager -down- BrowserAdmin
+
+CustomerApp --> ApiLayer : HTTP/REST\n(orders, checkout,\nstatus, inquiry, events)
+CustomerApp --> ApiLayer : WebSocket\n(order tracking)
+CustomerApp --> ApiLayer : HTTP/REST\n(auth, profile)
+
+AdminApp --> ApiLayer : HTTP/REST\n(order manage,\ninventory, events,\ninquiries, staff)
+AdminApp --> ApiLayer : WebSocket\n(realtime operations)
+
+
+' API Layer -> Domain Services
+ApiLayer --> OrderComp : uses
+ApiLayer --> PaymentComp : uses
+ApiLayer --> DiscountComp : uses
+ApiLayer --> EventComp : uses
+ApiLayer --> InquiryComp : uses
+ApiLayer --> MenuComp : uses
+ApiLayer --> InventoryComp : uses
+ApiLayer --> AuthComp : uses
+ApiLayer --> GeminiComp : uses\n(voice ordering)
+ApiLayer --> WsComp : uses\n(realtime endpoints)
+
+
+' Domain Services -> DB / Other Services
+OrderComp --> DiscountComp
+OrderComp --> EventComp
+OrderComp --> MenuComp
+OrderComp --> InventoryComp
+OrderComp --> WsComp
+OrderComp --> PostgreSQL
+
+PaymentComp --> PostgreSQL
+PaymentComp --> MockPayment
+
+DiscountComp --> PostgreSQL
+EventComp --> PostgreSQL
+InquiryComp --> PostgreSQL
+MenuComp --> PostgreSQL
+InventoryComp --> PostgreSQL
+AuthComp --> PostgreSQL
+
+
+' Realtime & AI
+WsComp --> PostgreSQL : persist notifications\n(order status log)
+GeminiComp --> PostgreSQL : query history/events
+GeminiComp --> GeminiAI
+AudioComp --> OpenAIAPI
+GeminiComp --> AudioComp : STT/TTS 협력
+
+
+' ==========================================
+' 요약 Note
+' ==========================================
+note bottom of ApiLayer
+  FastAPI app 내부에서 라우터들이\n
+  Order/Payment/Discount/Event/Inquiry/Auth 서비스로\n
+  요청을 위임하며, WebSocket 및 Voice API도\n
+  같은 모놀리스 프로세스에 포함된다.
+end note
+
+note bottom of CustomerApp
+  Next.js Customer FE\n
+  - 주문/결제/배달조회/프로모션 조회\n
+  - 음성/텍스트 기반 주문
+end note
+
+note bottom of AdminApp
+  Next.js Admin/Staff FE\n
+  - 주방/배달/매니저 대시보드\n
+  - 재고/프로모션/문의 관리
+end note
+
+@enduml
+
+

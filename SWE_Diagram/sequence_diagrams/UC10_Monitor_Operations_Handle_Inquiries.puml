@@ -1,0 +1,87 @@
+@startuml
+title "UC-10: Monitor Operations & Handle Inquiries (Manager)"
+
+actor manager as "Manager"
+participant "adminDash:AdminDashboardUI" as adminDash
+participant "wsR:WebSocketRouter" as wsR
+participant "wsMan:WebSocketManager" as wsMan
+participant "loginSvc:LoginService" as loginSvc
+participant "staffR:StaffRouter" as staffR
+participant "inquiryR:InquiryRouter" as inquiryR
+participant "inquirySvc:InquiryService" as inquirySvc
+
+== Monitor Realtime Operations ==
+activate manager
+manager -> adminDash: Open Admin Dashboard
+deactivate manager
+activate adminDash
+adminDash -> wsR: WS /api/ws?token=JWT
+deactivate adminDash
+activate wsR
+wsR -> loginSvc: verify_token(token)
+activate loginSvc
+loginSvc --> wsR: { user_id, user_type=MANAGER }
+deactivate loginSvc
+wsR -> wsMan: connect(user_id, user_type, websocket)
+activate wsMan
+wsMan --> adminDash: SEND { type: CONNECTED }
+deactivate wsR
+
+... time passes ...
+wsMan --> adminDash: SEND { type: ORDER_CREATED, data: {...} }
+activate adminDash
+adminDash -> adminDash: Update metrics / show notification
+deactivate adminDash
+
+wsMan --> adminDash: SEND { type: ORDER_STATUS_CHANGED, data: {...} }
+activate adminDash
+adminDash -> adminDash: Update order list/status
+deactivate adminDash
+
+== Review & Update Inquiries ==
+activate manager
+manager -> adminDash: Open \"Inquiries\" page
+deactivate manager
+activate adminDash
+adminDash -> inquiryR: GET /api/inquiries?status=NEW\nAuthorization: Bearer JWT
+deactivate adminDash
+activate inquiryR
+inquiryR -> loginSvc: get_current_user()
+activate loginSvc
+loginSvc --> inquiryR: { user_type: MANAGER }
+deactivate loginSvc
+inquiryR -> inquirySvc: list_inquiries(db, status='NEW',\n limit, offset)\n(load inquiries)
+activate inquirySvc
+inquirySvc --> inquiryR: { items, total }
+deactivate inquirySvc
+inquiryR --> adminDash: 200 OK
+deactivate inquiryR
+activate adminDash
+adminDash --> manager: Show list of incoming inquiries
+deactivate adminDash
+
+activate manager
+manager -> adminDash: Update inquiry (status, note)
+deactivate manager
+activate adminDash
+adminDash -> inquiryR: PATCH /api/inquiries/{inquiry_id}\nbody: { status, manager_note }
+deactivate adminDash
+activate inquiryR
+inquiryR -> loginSvc: get_current_user()
+activate loginSvc
+loginSvc --> inquiryR: { user_type: MANAGER }
+deactivate loginSvc
+inquiryR -> inquirySvc: update_inquiry(db, inquiry_id,\n status, manager_note)\n(persist changes)
+activate inquirySvc
+inquirySvc --> inquiryR: { success: true }
+deactivate inquirySvc
+inquiryR --> adminDash: 200 OK
+deactivate inquiryR
+activate adminDash
+adminDash --> manager: Reflect updated status in UI
+deactivate adminDash
+deactivate wsMan
+
+@enduml
+
+

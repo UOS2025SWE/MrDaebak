@@ -1,0 +1,127 @@
+@startuml
+title "UC-02: Place Dinner Order - GUI or Voice"
+
+actor customer as "Customer"
+participant "fe:CustomerWebApp" as fe
+participant "menuR:MenuRouter" as menuR
+participant "checkoutR:CheckoutRouter" as checkoutR
+participant "orderR:OrderRouter" as orderR
+participant "voiceR:VoiceRouter" as voiceR
+participant "orderSvc:OrderService" as orderSvc
+participant "paySvc:PaymentService" as paySvc
+participant "discSvc:DiscountService" as discSvc
+participant "geminiSvc:GeminiService" as geminiSvc
+participant "audioSvc:OpenAIAudioService" as audioSvc
+actor paymentSystem as "Mock Payment"
+actor geminiAI as "Gemini NLU"
+actor openAIAudio as "OpenAI STT/TTS"
+
+== GUI Order Path ==
+activate customer
+customer -> fe: Select menu/style, customize,\nclick "Checkout"
+deactivate customer
+activate fe
+fe -> checkoutR: POST /api/checkout/checkout\n(menu_code, style, quantity,\ncustomizations, side_dishes, cake, delivery, payment)
+deactivate fe
+activate checkoutR
+checkoutR -> orderSvc: create_order(db, order_data)
+activate orderSvc
+orderSvc -> discSvc: calculate_order_pricing(user_id,\noriginal_price, db)\n(and persist order)
+activate discSvc
+discSvc --> orderSvc: pricing info
+deactivate discSvc
+orderSvc --> checkoutR: { success, order.id, pricing }
+deactivate orderSvc
+
+checkoutR -> paySvc: process_mock_payment(order_id,\namount, card_info, db)
+activate paySvc
+paySvc -> paymentSystem: authorize/charge
+activate paymentSystem
+paymentSystem --> paySvc: success / fail
+deactivate paymentSystem
+paySvc -> paySvc: persist payment & update\norder.payment_status
+paySvc --> checkoutR: { success, payment_id, transaction_id }
+deactivate paySvc
+
+checkoutR --> fe: HTTP 200 { order_id, order_number,\npricing, payment_status }
+deactivate checkoutR
+activate fe
+fe --> customer: Show order confirmation
+deactivate fe
+
+== Voice Order Path ==
+group Capture & Transcribe
+  activate C
+  C -> FE: Press "Voice Order" & speak
+  deactivate C
+  activate FE
+  FE -> OpenAIAudio: send audio blob
+  deactivate FE
+  activate OpenAIAudio
+  OpenAIAudio -> AudioSvc: transcribe_audio()
+  activate AudioSvc
+  AudioSvc -> OpenAIAudio: call STT API
+  OpenAIAudio --> AudioSvc: transcript
+  deactivate OpenAIAudio
+  AudioSvc --> FE: transcript text
+  deactivate AudioSvc
+  activate customer
+  customer -> fe: Press "Voice Order" & speak
+  deactivate customer
+  activate fe
+  fe -> openAIAudio: send audio blob
+  deactivate fe
+  activate openAIAudio
+  openAIAudio -> audioSvc: transcribe_audio()
+  activate audioSvc
+  audioSvc -> openAIAudio: call STT API
+  openAIAudio --> audioSvc: transcript
+  deactivate openAIAudio
+  audioSvc --> fe: transcript text
+  deactivate audioSvc
+end
+
+group Analyze & Recommend (Gemini)
+  activate fe
+  fe -> voiceR: POST /api/voice/analyze\n(transcript, session_id, user_id)
+  deactivate fe
+  activate voiceR
+  voiceR -> geminiSvc: analyze_voice_input(...)
+  activate geminiSvc
+  geminiSvc -> geminiSvc: get_user_order_history(user_id, db)
+  geminiSvc -> geminiSvc: get_active_events(db)
+  geminiSvc -> geminiAI: generate_content(model, prompt)
+  activate geminiAI
+  geminiAI --> geminiSvc: structured JSON\n(intent, menu, style, qty, customizations)
+  deactivate geminiAI
+  geminiSvc --> voiceR: analysis + proposed order
+  deactivate geminiSvc
+  voiceR --> fe: AI response + order preview
+  deactivate voiceR
+  activate fe
+  fe --> customer: Show recommended dinner\n(menu/style/qty/customization)
+  deactivate fe
+end
+
+group Confirm & Create Order
+  activate customer
+  customer -> fe: Confirm AI-suggested order
+  deactivate customer
+  activate fe
+  fe -> orderR: POST /api/orders\n(dinner_code, style, quantity,\ncustomizations, side_dishes, cake_customization)
+  deactivate fe
+  activate orderR
+  orderR -> orderSvc: create_order(...)\n(persist order, reservations, pricing)
+  activate orderSvc
+  orderSvc --> orderR: { success, order.id, pricing }
+  deactivate orderSvc
+  orderR --> fe: 200 OK
+  deactivate orderR
+  activate fe
+  fe --> customer: Show \"Order created\" and\nnavigate to confirmation
+  deactivate fe
+end
+
+@enduml
+
+

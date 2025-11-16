@@ -1,0 +1,87 @@
+@startuml
+title "UC-07: Prepare Orders Kitchen (Cook)"
+
+actor cook as "Cook"
+participant "cookUI:CookDashboardUI" as cookUI
+participant "staffR:StaffRouter" as staffR
+participant "ordersR:OrdersRouter" as ordersR
+participant "orderSvc:OrderService" as orderSvc
+participant "discSvc:DiscountService" as discSvc
+participant "wsR:WebSocketRouter" as wsR
+participant "wsMan:WebSocketManager" as wsMan
+participant "loginSvc:LoginService" as loginSvc
+
+== Load Cook Orders ==
+activate cook
+cook -> cookUI: Open \"Cook Dashboard\"
+deactivate cook
+activate cookUI
+cookUI -> staffR: GET /api/staff/orders?role=COOK\nAuthorization: Bearer JWT
+deactivate cookUI
+activate staffR
+staffR -> loginSvc: verify_token(JWT)
+activate loginSvc
+loginSvc --> staffR: payload (user_type=STAFF, position=COOK)
+deactivate loginSvc
+staffR -> staffR: load orders with status\nRECEIVED / PREPARING
+staffR --> cookUI: 200 OK orders[]
+deactivate staffR
+activate cookUI
+cookUI --> cook: Show RECEIVED/PREPARING orders
+deactivate cookUI
+
+== Start Cooking (RECEIVED → PREPARING) ==
+activate cook
+cook -> cookUI: Click \"Start Cooking\" on order
+deactivate cook
+activate cookUI
+cookUI -> ordersR: PATCH /api/orders/{order_id}/status\nbody: { new_status: \"PREPARING\" }
+deactivate cookUI
+activate ordersR
+ordersR -> loginSvc: verify_token(JWT)
+activate loginSvc
+loginSvc --> ordersR: payload (user_type=STAFF or MANAGER)
+deactivate loginSvc
+ordersR -> ordersR: load order_status, customer_id
+ordersR -> discSvc: increment_user_orders(customer_id,\n db, total_price)
+activate discSvc
+discSvc --> ordersR: ok
+deactivate discSvc
+ordersR -> ordersR: UPDATE order_status='PREPARING'
+ordersR -> wsMan: broadcast_to_staff(ORDER_STATUS_CHANGED)
+activate wsMan
+ordersR -> wsMan: send_to_user(customer_id,\n ORDER_STATUS_CHANGED)
+ordersR --> cookUI: { success, status='PREPARING' }
+deactivate ordersR
+activate cookUI
+cookUI --> cook: Update UI to PREPARING
+deactivate cookUI
+deactivate wsMan
+
+== Cooking Complete (PREPARING → DELIVERING) ==
+activate cook
+cook -> cookUI: Click \"Cooking Complete\" on order
+deactivate cook
+activate cookUI
+cookUI -> ordersR: PATCH /api/orders/{order_id}/status\nbody: { new_status: \"DELIVERING\" }
+deactivate cookUI
+activate ordersR
+ordersR -> loginSvc: verify_token(JWT)
+activate loginSvc
+loginSvc --> ordersR: payload
+deactivate loginSvc
+ordersR -> ordersR: load order_status, customer_id
+ordersR -> ordersR: UPDATE order_status='DELIVERING'
+ordersR -> wsMan: broadcast_to_staff(ORDER_STATUS_CHANGED)
+activate wsMan
+ordersR -> wsMan: send_to_user(customer_id,\n ORDER_STATUS_CHANGED)
+ordersR --> cookUI: { success, status='DELIVERING' }
+deactivate ordersR
+activate cookUI
+cookUI --> cook: Reflect new status
+deactivate cookUI
+deactivate wsMan
+
+@enduml
+
+

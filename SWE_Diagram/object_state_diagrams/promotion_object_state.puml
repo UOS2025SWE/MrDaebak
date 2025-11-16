@@ -1,0 +1,37 @@
+@startuml
+title "이벤트 프로모션 (event_promotions) 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "초안\n(Draft\nis_published=false)" as Draft
+state "예약됨\n(Scheduled\nis_published=true,\nstart_date>오늘)" as Scheduled
+state "진행 중\n(Active\nis_published=true,\n기간 내)" as Active
+state "종료됨\n(Ended\nis_published=false\n또는 기간 경과)" as Ended
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+[*] --> Draft : Manager가 이벤트 생성\n(is_published=false)
+
+' "Draft" 상태에서 가능한 전이
+Draft --> Scheduled : Manager가 is_published=true,\nstart_date>오늘로 설정
+Draft --> Active : Manager가 is_published=true,\nstart_date<=오늘로 설정
+Draft --> Ended : Manager가 이벤트를 삭제/비활성화
+
+' "Scheduled" 상태에서 가능한 전이
+Scheduled --> Active : start_date 도래\n(오늘>=start_date)
+Scheduled --> Ended : Manager가 이벤트 취소\n(is_published=false)
+
+' "Active" 상태에서 가능한 전이
+Active --> Ended : end_date 도래\n또는 is_published=false
+
+' 최종 상태 (End State)
+Ended --> [*]
+
+@enduml

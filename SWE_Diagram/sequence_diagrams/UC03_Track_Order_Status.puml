@@ -1,0 +1,61 @@
+@startuml
+title "UC-03: Track Order Status"
+
+actor customer as "Customer"
+participant "fe:CustomerWebApp" as fe
+participant "ordersR:OrdersRouter" as ordersR
+participant "orderSvc:OrderService" as orderSvc
+participant "wsR:WebSocketRouter" as wsR
+participant "wsMan:WebSocketManager" as wsMan
+participant "loginSvc:LoginService" as loginSvc
+
+== Initial Load (HTTP) ==
+activate customer
+customer -> fe: Open \"My Orders\"
+deactivate customer
+activate fe
+fe -> ordersR: GET /api/orders/user/{user_id}\nAuthorization: Bearer JWT
+deactivate fe
+activate ordersR
+ordersR -> loginSvc: verify_token(JWT)
+activate loginSvc
+loginSvc --> ordersR: payload (user_id)
+deactivate loginSvc
+ordersR -> orderSvc: get_user_orders(db, user_id)\n(load orders + items + customizations)
+activate orderSvc
+orderSvc --> ordersR: { success, orders[] }
+deactivate orderSvc
+ordersR --> fe: 200 OK orders[]
+deactivate ordersR
+activate fe
+fe --> customer: Render order list with statuses
+deactivate fe
+
+== Realtime Updates (WebSocket) ==
+activate customer
+customer -> fe: Stay on orders page
+deactivate customer
+activate fe
+fe -> wsR: WS /api/ws?token=JWT
+deactivate fe
+activate wsR
+wsR -> loginSvc: verify_token(token)
+activate loginSvc
+loginSvc --> wsR: user_id, user_type=CUSTOMER
+deactivate loginSvc
+wsR -> wsMan: connect(user_id, user_type, websocket)
+activate wsMan
+wsMan --> fe: SEND { type: CONNECTED }
+deactivate wsR
+
+... time passes ...
+wsMan -> fe: SEND { type: ORDER_STATUS_CHANGED,\n  data: { order_id, old_status, new_status } }
+activate fe
+fe -> fe: Update matching order entry in UI
+fe --> customer: Show toast / badge for new status
+deactivate fe
+deactivate wsMan
+
+@enduml
+
+

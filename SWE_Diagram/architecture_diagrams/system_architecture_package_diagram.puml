@@ -1,0 +1,66 @@
+@startuml
+title "Dinner Service System Architecture - Package Diagram"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam package {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+
+ ' 최상위 시스템 패키지(클래스 없이 패키지 수준만 표현)
+package "DinnerService" <<system>> {
+
+  ' --- Backend Monolith ---
+  package "Backend" <<subsystem>> {
+
+    package "API Routers" as ApiRouters {
+    }
+
+    package "Domain Services" as DomainServices {
+    }
+
+    package "Realtime & AI" as RealtimeAI {
+    }
+
+    package "Persistence" as Persistence {
+    }
+  }
+
+  ' --- Frontend Apps ---
+  package "Frontend" {
+
+    package "Customer Web App" as CustomerFE {
+    }
+
+    package "Admin & Staff Web App" as AdminFE {
+    }
+  }
+
+  ' --- External Systems ---
+  package "External Systems" as ExternalSys <<external>> {
+  }
+}
+
+' =======================
+' 패키지 간 주요 의존 관계 (패키지 단위)
+' =======================
+
+' Frontend → Backend
+CustomerFE ..> ApiRouters  : <<use>>\nHTTP / WebSocket / Voice
+AdminFE    ..> ApiRouters  : <<use>>\n관리자/스태프 기능
+
+' Backend 내부 의존 관계
+ApiRouters   ..> DomainServices : <<use>>
+DomainServices ..> Persistence  : <<use>>
+DomainServices ..> RealtimeAI   : <<use>>
+RealtimeAI    ..> Persistence   : <<use>>
+RealtimeAI    ..> ExternalSys   : <<use>>
+
+' Frontend → Realtime & AI (간접적으로 Routers를 통해 사용하지만, 아키텍처 레벨에서 표현)
+CustomerFE ..> RealtimeAI  : <<use>>\n음성 주문 / 추천 / 실시간 알림
+AdminFE    ..> RealtimeAI  : <<use>>\n실시간 모니터링
+
+@enduml
+
+

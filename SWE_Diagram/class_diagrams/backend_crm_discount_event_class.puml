@@ -1,0 +1,197 @@
+@startuml
+title "Backend CRM / Discount / Event & Inquiry - 클래스 다이어그램"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Next.js Frontend" as IFrontend {
+  + GET  /api/discount/{user_id}
+  + GET  /api/events
+  + GET  /api/events/manage
+  + POST /api/events
+  + PATCH /api/events/{event_id}
+  + DELETE /api/events/{event_id}
+  + POST /api/events/{event_id}/image
+  + GET  /api/events/menu-discounts/{target_id}
+  + POST /api/inquiries
+  + GET  /api/inquiries
+  + PATCH /api/inquiries/{inquiry_id}
+}
+
+interface "PostgreSQL Database" as IDatabase {
+  + customer_loyalty
+  + event_promotions
+  + event_menu_discounts
+  + event_side_dish_discounts
+  + customer_inquiries
+  + users
+  + orders
+}
+
+class "DiscountRouter\n(routers/discount.py)" as DiscountRouter {
+  + GET /api/discount/{user_id}
+}
+
+class "EventsRouter\n(routers/events.py)" as EventsRouter {
+  + GET   /api/events
+  + GET   /api/events/manage
+  + POST  /api/events
+  + PATCH /api/events/{event_id}
+  + DELETE /api/events/{event_id}
+  + POST  /api/events/{event_id}/image
+  + GET   /api/events/menu-discounts/{target_id}
+}
+
+class "InquiryRouter\n(routers/inquiries.py)" as InquiryRouter {
+  + POST /api/inquiries
+  + GET  /api/inquiries
+  + PATCH /api/inquiries/{inquiry_id}
+}
+
+class "LoginService\n(services/login_service.py)" as LoginService {
+  + get_current_user()
+}
+
+class "DiscountService\n(services/discount_service.py)" as DiscountService {
+  + get_customer_discount_info(user_id, db): dict
+  + calculate_order_pricing(user_id, original_price, db): dict
+  + apply_discount(original_price, discount_rate): (float, int)
+  + increment_user_orders(user_id, db, total_price): bool
+}
+
+class "EventPayload\n(dataclass)" as EventPayload {
+  - title: str
+  - description: str
+  - discount_label: str?
+  - start_date: date?
+  - end_date: date?
+  - tags: list[str]?
+  - is_published: bool
+  - menu_discounts: list[dict]?
+}
+
+class "EventService\n(services/event_service.py)" as EventService {
+  + list_events(db, include_unpublished=False): list
+  + create_event(db, payload, created_by): dict
+  + update_event(db, event_id, updates, menu_discounts): dict
+  + delete_event(db, event_id): bool
+  + attach_image(db, event_id, filename): str
+  + get_active_menu_discounts(db, target_id, target_type, on_date): list
+  - _ensure_tables(db)
+  - _fetch_event_discounts(db, event_ids)
+  - _normalize_menu_discounts(discounts)
+  - _replace_menu_discounts(db, event_id, discounts)
+}
+
+class "InquiryPayload\n(dataclass)" as InquiryPayload {
+  - name: str
+  - email: str
+  - topic: str
+  - message: str
+}
+
+class "InquiryService\n(services/inquiry_service.py)" as InquiryService {
+  + create_inquiry(db, payload): dict
+  + list_inquiries(db, status, limit, offset): dict
+  + update_inquiry(db, inquiry_id, status, manager_note): dict
+  - _ensure_table(db)
+}
+
+class "CustomerLoyalty (Entity)\ncustomer_loyalty" as CustomerLoyalty {
+  - customer_id: UUID <<PK, FK users.user_id>>
+  - order_count: INT
+  - total_spent: NUMERIC
+  - vip_level: TEXT
+  - last_order_at: TIMESTAMP
+}
+
+class "EventPromotion (Entity)\nevent_promotions" as EventPromotion {
+  - event_id: UUID <<PK>>
+  - title: TEXT
+  - description: TEXT
+  - image_path: TEXT
+  - discount_label: TEXT
+  - start_date: DATE
+  - end_date: DATE
+  - tags: JSONB
+  - is_published: BOOLEAN
+  - created_by: UUID <<FK users.user_id>>
+  - created_at: TIMESTAMP
+  - updated_at: TIMESTAMP
+}
+
+class "EventMenuDiscount (Entity)\nevent_menu_discounts" as EventMenuDiscount {
+  - event_id: UUID <<PK, FK event_promotions.event_id>>
+  - menu_item_id: UUID <<PK>>
+  - discount_type: VARCHAR
+  - discount_value: NUMERIC
+  - created_at: TIMESTAMP
+}
+
+class "EventSideDishDiscount (Entity)\nevent_side_dish_discounts" as EventSideDishDiscount {
+  - event_id: UUID <<PK, FK event_promotions.event_id>>
+  - side_dish_id: UUID <<PK>>
+  - discount_type: VARCHAR
+  - discount_value: NUMERIC
+  - created_at: TIMESTAMP
+}
+
+class "CustomerInquiry (Entity)\ncustomer_inquiries" as CustomerInquiry {
+  - inquiry_id: UUID <<PK>>
+  - name: TEXT
+  - email: TEXT
+  - topic: TEXT
+  - message: TEXT
+  - status: VARCHAR
+  - manager_note: TEXT
+  - created_at: TIMESTAMP
+  - updated_at: TIMESTAMP
+}
+
+IFrontend -> DiscountRouter
+IFrontend -> EventsRouter
+IFrontend -> InquiryRouter
+
+DiscountRouter ..> DiscountService
+EventsRouter ..> EventService
+EventsRouter ..> LoginService : "MANAGER 권한"
+InquiryRouter ..> InquiryService
+InquiryRouter ..> LoginService : "MANAGER 권한"
+
+DiscountService ..> IDatabase
+EventService ..> IDatabase
+InquiryService ..> IDatabase
+
+CustomerLoyalty "1" -- "1" users : "고객 로열티"
+EventPromotion "1" -- "0..*" EventMenuDiscount
+EventPromotion "1" -- "0..*" EventSideDishDiscount
+EventMenuDiscount "0..*" -- "1" menu_items
+EventSideDishDiscount "0..*" -- "1" side_dishes
+
+note right of DiscountService
+  **단골 할인 정책**
+  - REGULAR: 5회 이상 주문 → 10% 할인
+  - VIP: 10회 이상 주문 → 20% 할인
+  - PREPARING 이상 주문만 카운트, CANCELLED/PAYMENT_FAILED 제외
+  - customer_loyalty UPSERT로 누적 관리
+end note
+
+note right of EventService
+  **이벤트 / 메뉴/사이드 할인**
+  - event_promotions 로 이벤트 정의
+  - event_menu_discounts, event_side_dish_discounts 로 타겟 할인 설정
+  - OrderService 에서 get_active_menu_discounts 를 호출해 가격 계산에 사용
+end note
+
+note right of InquiryService
+  **고객 문의 관리**
+  - create_inquiry: 고객 앱에서 접수
+  - list_inquiries / update_inquiry: 관리자 UI에서 처리
+  - 상태: NEW / IN_PROGRESS / RESOLVED / ARCHIVED
+end note
+
+@enduml
+
+

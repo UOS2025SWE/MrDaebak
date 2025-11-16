@@ -1,0 +1,36 @@
+@startuml
+title "주문 결제 상태 (Order.payment_status) 상태도"
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #LightGoldenRodYellow
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "결제 대기\n(PENDING)" as Pending
+state "결제 완료\n(PAID)" as Paid
+state "결제 실패\n(FAILED)" as Failed
+state "환불됨\n(REFUNDED)" as Refunded
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+' OrderService.create_order() 후 PaymentService 호출 전
+' orders.payment_status 는 항상 PENDING 으로 시작한다.
+[*] --> Pending : OrderService.create_order()\n(order.payment_status='PENDING')
+
+' "PENDING" 상태에서 가능한 전이
+Pending --> Paid : PaymentService.process_mock_payment()\n성공 → orders.payment_status='PAID'
+Pending --> Failed : PaymentService.process_mock_payment()\n실패 → orders.payment_status='FAILED'
+
+' "PAID" 상태에서 가능한 전이
+Paid --> Refunded : cancel_order()\n(order_status=CANCELLED,\n payment_status='REFUNDED')
+
+' 최종 상태 (End States)
+Paid --> [*]
+Failed --> [*]
+Refunded --> [*]
+
+@enduml

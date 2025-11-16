@@ -1,0 +1,410 @@
+@startuml
+' Dinner Service 실제 DB 스키마 기반 ER 다이어그램 (2025)
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam linetype ortho
+skinparam roundcorner 10
+skinparam entity {
+    backgroundColor #LightGoldenRodYellow
+    borderColor #555
+}
+skinparam note {
+    backgroundColor #EFEFEF
+    borderColor #555
+}
+
+' ===============================
+' 1. 매장 / 직원 도메인
+' ===============================
+
+entity "stores" as stores {
+  *store_id : UUID <<PK>>
+  --
+  name : TEXT <<UNIQUE>>
+  address : TEXT
+  phone : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "users" as users {
+  *user_id : UUID <<PK>>
+  --
+  email : TEXT <<UNIQUE>>
+  password_hash : TEXT
+  name : TEXT
+  phone_number : TEXT
+  address : TEXT
+  user_type : VARCHAR('CUSTOMER','STAFF','MANAGER')
+  privacy_consent : BOOLEAN
+  created_at : TIMESTAMP
+}
+
+entity "staff_details" as staff_details {
+  *staff_id : UUID <<PK, FK>>
+  --
+  store_id : UUID <<FK>>
+  position : TEXT
+  salary : NUMERIC
+  permissions : JSONB
+  hired_at : TIMESTAMP
+  is_on_duty : BOOLEAN
+  last_check_in : TIMESTAMP
+  last_check_out : TIMESTAMP
+  last_payday : TIMESTAMP
+  next_payday : TIMESTAMP
+}
+
+entity "staff_termination_logs" as staff_termination_logs {
+  *log_id : UUID <<PK>>
+  --
+  staff_id : UUID
+  staff_name : TEXT
+  staff_email : TEXT
+  position : TEXT
+  termination_reason : TEXT
+  terminated_at : TIMESTAMP
+  terminated_by : UUID <<FK>>
+}
+
+note left of users
+  **User & Staff Schema**
+  - 로그인/권한(`user_type`)
+  - 직원 상세/해고 이력
+end note
+
+' ===============================
+' 2. 재료 입고 / 재고 도메인
+' ===============================
+
+entity "ingredients" as ingredients {
+  *ingredient_id : UUID <<PK>>
+  --
+  name : TEXT <<UNIQUE>>
+  unit : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "ingredient_pricing" as ingredient_pricing {
+  *ingredient_code : TEXT <<PK, FK>>
+  --
+  unit_price : NUMERIC(12,2)
+}
+
+entity "ingredient_intake_batches" as ingredient_intake_batches {
+  *batch_id : UUID <<PK>>
+  --
+  store_id : UUID <<FK>>
+  manager_id : UUID <<FK>>
+  cook_id : UUID <<FK>>
+  status : VARCHAR(32)
+  note : TEXT
+  created_at : TIMESTAMP
+  reviewed_at : TIMESTAMP
+  total_expected_cost : NUMERIC(12,2)
+  total_actual_cost : NUMERIC(12,2)
+}
+
+entity "ingredient_intake_items" as ingredient_intake_items {
+  *intake_item_id : UUID <<PK>>
+  --
+  batch_id : UUID <<FK>>
+  ingredient_id : UUID <<FK>>
+  expected_quantity : NUMERIC(12,2)
+  actual_quantity : NUMERIC(12,2)
+  unit_price : NUMERIC(12,2)
+  expected_total_cost : NUMERIC(12,2)
+  actual_total_cost : NUMERIC(12,2)
+  remarks : TEXT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "store_inventory" as store_inventory {
+  *store_id : UUID <<PK, FK>>
+  *ingredient_id : UUID <<PK, FK>>
+  --
+  quantity_on_hand : NUMERIC(12,2)
+}
+
+note right of ingredients
+  **재고/입고 관리**
+  - 재료 기본 마스터
+  - 입고 배치 및 단가
+  - 매장별 재고 수량
+end note
+
+' ===============================
+' 3. 메뉴 / 스타일 / 사이드 메뉴 도메인
+' ===============================
+
+entity "serving_styles" as serving_styles {
+  *serving_style_id : UUID <<PK>>
+  --
+  name : TEXT <<UNIQUE>>
+  description : TEXT
+  price_modifier : NUMERIC(10,2)
+}
+
+entity "menu_items" as menu_items {
+  *menu_item_id : UUID <<PK>>
+  --
+  code : TEXT <<UNIQUE>>
+  name : TEXT
+  description : TEXT
+  base_price : NUMERIC(10,2)
+  is_available : BOOLEAN
+  created_at : TIMESTAMP
+}
+
+entity "menu_serving_style_availability" as menu_serving_style_availability {
+  *menu_item_id : UUID <<PK, FK>>
+  *serving_style_id : UUID <<PK, FK>>
+}
+
+entity "menu_base_ingredients" as menu_base_ingredients {
+  *menu_code : TEXT <<PK>>
+  *style : TEXT <<PK>>
+  *ingredient_code : TEXT <<PK, FK>>
+  --
+  base_quantity : INT
+}
+
+entity "side_dishes" as side_dishes {
+  *side_dish_id : UUID <<PK>>
+  --
+  code : TEXT <<UNIQUE>>
+  name : TEXT
+  description : TEXT
+  base_price : NUMERIC(10,2)
+  is_available : BOOLEAN
+  created_by : UUID <<FK>>
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "custom_cake_recipes" as custom_cake_recipes {
+  *recipe_id : UUID <<PK>>
+  --
+  flavor : TEXT
+  size : TEXT
+  ingredient_code : TEXT <<FK>>
+  quantity : NUMERIC(12,2)
+}
+
+note left of menu_items
+  **메뉴/사이드/레시피**
+  - 디너 코스(`menu_items`)
+  - 스타일별 제공 여부
+  - 메뉴/사이드별 기본 재료
+  - 커스텀 케이크 레시피
+end note
+
+' ===============================
+' 4. 주문 / 결제 도메인
+' ===============================
+
+entity "orders" as orders {
+  *order_id : UUID <<PK>>
+  --
+  order_number : TEXT <<UNIQUE>>
+  customer_id : UUID <<FK>>
+  store_id : UUID <<FK>>
+  order_status : TEXT
+  payment_status : TEXT
+  total_price : NUMERIC(12,2)
+  delivery_address : TEXT
+  delivery_time_estimated : TIMESTAMP
+  inventory_consumed : BOOLEAN
+  created_at : TIMESTAMP
+}
+
+entity "order_items" as order_items {
+  *order_item_id : UUID <<PK>>
+  --
+  order_id : UUID <<FK>>
+  menu_item_id : UUID <<FK>>
+  serving_style_id : UUID <<FK>>
+  quantity : INT
+  price_per_item : NUMERIC(10,2)
+}
+
+entity "order_item_customizations" as order_item_customizations {
+  *customization_id : UUID <<PK>>
+  --
+  order_item_id : UUID <<FK>>
+  item_name : TEXT
+  change_type : TEXT
+  quantity_change : INT
+}
+
+entity "order_side_dishes" as order_side_dishes {
+  *order_side_dish_id : UUID <<PK>>
+  --
+  order_id : UUID <<FK>>
+  side_dish_id : UUID <<FK>>
+  quantity : INT
+  price_per_unit : NUMERIC(10,2)
+  total_price : NUMERIC(12,2)
+  notes : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "cake_customizations" as cake_customizations {
+  *cake_customization_id : UUID <<PK>>
+  --
+  order_item_id : UUID <<FK>>
+  customer_id : UUID <<FK>>
+  image_path : TEXT
+  message : TEXT
+  flavor : TEXT
+  size : TEXT
+  status : VARCHAR(32)
+  reviewed_by : UUID <<FK>>
+  reviewed_at : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "order_inventory_reservations" as order_inventory_reservations {
+  *reservation_id : UUID <<PK>>
+  --
+  order_id : UUID <<FK>>
+  ingredient_code : TEXT
+  quantity : NUMERIC(12,2)
+  consumed : BOOLEAN
+  created_at : TIMESTAMP
+  consumed_at : TIMESTAMP
+}
+
+entity "mock_payments" as mock_payments {
+  *payment_id : UUID <<PK>>
+  --
+  order_id : UUID <<FK>>
+  transaction_id : TEXT
+  amount : NUMERIC(12,2)
+  status : TEXT
+  masked_card_number : TEXT
+  cardholder_name : TEXT
+  error_message : TEXT
+  created_at : TIMESTAMP
+}
+
+note right of orders
+  **Order & Payment**
+  - 주문 헤더/라인/커스터마이징
+  - 사이드 디시/케이크 커스터마이징
+  - 재고 예약 및 실제 차감
+  - Mock 결제 이력
+end note
+
+' ===============================
+' 5. 고객 로열티 / 이벤트 / 문의 도메인
+' ===============================
+
+entity "customer_loyalty" as customer_loyalty {
+  *customer_id : UUID <<PK, FK>>
+  --
+  order_count : INT
+  total_spent : NUMERIC(12,2)
+  vip_level : TEXT
+  last_order_at : TIMESTAMP
+}
+
+entity "event_promotions" as event_promotions {
+  *event_id : UUID <<PK>>
+  --
+  title : TEXT
+  description : TEXT
+  image_path : TEXT
+  discount_label : TEXT
+  start_date : DATE
+  end_date : DATE
+  tags : JSONB
+  is_published : BOOLEAN
+  created_by : UUID <<FK>>
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+entity "event_menu_discounts" as event_menu_discounts {
+  *event_id : UUID <<PK, FK>>
+  *menu_item_id : UUID <<PK, FK>>
+  --
+  discount_type : VARCHAR(16)
+  discount_value : NUMERIC(10,2)
+  created_at : TIMESTAMP
+}
+
+entity "customer_inquiries" as customer_inquiries {
+  *inquiry_id : UUID <<PK>>
+  --
+  name : TEXT
+  email : TEXT
+  topic : TEXT
+  message : TEXT
+  status : VARCHAR(20)
+  manager_note : TEXT
+  created_at : TIMESTAMP
+  updated_at : TIMESTAMP
+}
+
+note right of customer_loyalty
+  **CRM & 이벤트**
+  - 고객별 주문/지출/등급
+  - 프로모션 이벤트 및 메뉴 할인
+  - 고객 문의 관리
+end note
+
+' ===============================
+' 6. 관계 정의
+' ===============================
+
+' User / Staff
+users "1" --|| "0..1" staff_details : "직원 상세 (STAFF)"
+users "1" --o{ "0..*" staff_termination_logs : "해고 이력(terminated_by)"
+users "1" --o{ "0..*" orders : "고객 주문"
+users "1" --|| "0..1" customer_loyalty : "로열티 정보"
+
+staff_details "0..*" --|| "1" stores : "소속 매장"
+ingredient_intake_batches "0..*" --|| "1" stores : "입고 매장"
+ingredient_intake_batches "0..*" --|| "1" users : "관리자(manager_id)"
+ingredient_intake_batches "0..*" --o{ "0..1" users : "요리사(cook_id)"
+
+' 재료/재고
+ingredient_pricing "1" --|| "1" ingredients : "코드=이름"
+ingredient_intake_items "0..*" --|| "1" ingredient_intake_batches : "배치"
+ingredient_intake_items "0..*" --|| "1" ingredients : "재료"
+store_inventory "0..*" --|| "1" stores : "매장"
+store_inventory "0..*" --|| "1" ingredients : "재료"
+
+' 메뉴/스타일/사이드
+menu_serving_style_availability "0..*" --|| "1" menu_items : "메뉴"
+menu_serving_style_availability "0..*" --|| "1" serving_styles : "스타일"
+menu_base_ingredients "0..*" --|| "1" ingredients : "기본 재료(ingredient_code)"
+side_dishes "0..*" --o{ "0..*" users : "생성자(created_by)"
+custom_cake_recipes "0..*" --|| "1" ingredients : "케이크 재료"
+
+' 주문/결제
+orders "0..*" --|| "1" stores : "주문 매장"
+orders "0..*" --o{ "0..1" users : "고객(customer_id)"
+orders "1" --o{ "0..*" order_items : "주문 항목"
+orders "1" --o{ "0..*" order_side_dishes : "사이드 디시"
+orders "1" --o{ "0..*" order_inventory_reservations : "재고 예약"
+orders "1" --o{ "0..1" mock_payments : "결제"
+
+order_items "0..*" --|| "1" menu_items : "메뉴"
+order_items "0..*" --|| "1" serving_styles : "스타일"
+order_item_customizations "0..*" --|| "1" order_items : "재료 커스터마이징"
+order_side_dishes "0..*" --|| "1" side_dishes : "사이드 디시"
+cake_customizations "0..*" --|| "1" order_items : "케이크"
+cake_customizations "0..*" --o{ "0..1" users : "고객"
+order_inventory_reservations "0..*" --|| "1" orders : "주문별 예약"
+mock_payments "0..*" --|| "1" orders : "주문 결제"
+
+' 로열티/이벤트/문의
+customer_loyalty "1" --|| "1" users : "고객"
+event_promotions "0..*" --o{ "0..1" users : "생성자(created_by)"
+event_menu_discounts "0..*" --|| "1" event_promotions : "이벤트"
+event_menu_discounts "0..*" --|| "1" menu_items : "메뉴"
+
+@enduml

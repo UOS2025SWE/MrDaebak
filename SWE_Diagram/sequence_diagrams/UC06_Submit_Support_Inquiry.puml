@@ -1,0 +1,31 @@
+@startuml
+title "UC-06: Submit Support Inquiry"
+
+actor customer as "Customer"
+participant "fe:CustomerWebApp" as fe
+participant "inquiryR:InquiryRouter" as inquiryR
+participant "inquirySvc:InquiryService" as inquirySvc
+
+== Submit Inquiry ==
+activate customer
+customer -> fe: Open \"Support\" page
+customer -> fe: Fill form (name, email,\n topic, message)
+customer -> fe: Click \"Submit\"
+deactivate customer
+activate fe
+fe -> inquiryR: POST /api/inquiries\n(body: InquiryPayload)
+deactivate fe
+activate inquiryR
+inquiryR -> inquirySvc: create_inquiry(db, payload)\n(persist inquiry)
+activate inquirySvc
+inquirySvc --> inquiryR: { inquiry_id, created_at,\n status=\"NEW\" }
+deactivate inquirySvc
+inquiryR --> fe: 201 Created
+deactivate inquiryR
+activate fe
+fe --> customer: Show \"Inquiry received\" message
+deactivate fe
+
+@enduml
+
+

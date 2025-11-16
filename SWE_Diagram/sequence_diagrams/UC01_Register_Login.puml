@@ -1,0 +1,49 @@
+@startuml
+title "UC-01: Register & Log In"
+
+actor customer as "Customer"
+participant "fe:CustomerWebApp" as fe
+participant "authR:AuthRouter" as authR
+participant "loginSvc:LoginService" as loginSvc
+
+== Sign Up ==
+activate customer
+customer -> fe: Open Sign Up form
+deactivate customer
+activate fe
+fe -> authR: POST /api/auth/register\n(email, password, name, phone)
+deactivate fe
+activate authR
+authR -> loginSvc: register_user(data)\n(persist user in DB)
+activate loginSvc
+loginSvc --> authR: success
+deactivate loginSvc
+authR --> fe: 201 Created
+deactivate authR
+activate fe
+fe --> customer: Show "Sign up complete"\nand redirect/login
+deactivate fe
+
+== Log In ==
+activate customer
+customer -> fe: Submit login form\n(email, password)
+deactivate customer
+activate fe
+fe -> authR: POST /api/auth/login
+deactivate fe
+activate authR
+authR -> loginSvc: authenticate(email, password)\n(load user and verify)
+activate loginSvc
+loginSvc -> loginSvc: create_access_token(JWT)
+loginSvc --> authR: 200 OK + JWT + user profile
+deactivate loginSvc
+authR --> fe: 200 OK + JWT + user profile
+deactivate authR
+activate fe
+fe -> fe: store JWT in localStorage / context
+fe --> customer: Redirect to home/dashboard
+deactivate fe
+
+@enduml
+
+

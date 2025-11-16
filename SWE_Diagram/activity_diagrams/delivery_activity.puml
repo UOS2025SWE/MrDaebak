@@ -1,0 +1,60 @@
+@startuml
+title "Delivery Staff Activity Diagram\n(Aligned with StaffRouter & OrderService)"
+
+|Delivery Staff|
+start
+:Log in via /api/auth/login\n(role=STAFF_DELIVERY);
+|System|
+:LoginService.verify_credentials()\n+ issue JWT (STAFF_DELIVERY);
+
+|Delivery Staff|
+:Open Delivery Dashboard\n(StaffRouter + WebSocket);
+|System|
+:Load assigned orders\n(/api/staff/orders?role=DELIVERY);
+:Subscribe to ORDER_STATUS_CHANGED\nWebSocket stream;
+
+repeat
+  if (Order with status=PREPARING\nand ready_for_delivery?) then (pickup)
+    |Delivery Staff|
+    :View list of ready orders\nwith map/route;
+    :Select order to pickup;
+    :Scan ticket / confirm pickup;
+    |System|
+    :OrderService.update_status(DELIVERING);
+    :Broadcast ORDER_STATUS_CHANGED(DELIVERING)
+      to customer & manager dashboard;
+
+    |Delivery Staff|
+    :Drive to customer location;
+    if (Arrive at address?) then (yes)
+      :Call customer if needed;
+      :Hand over package\nand confirm name/order no.;
+      :Mark "Delivered" in app;
+      |System|
+      :OrderService.update_status(COMPLETED);
+      :Broadcast ORDER_STATUS_CHANGED(COMPLETED);
+    else (cannot reach / wrong address)
+      :Try contact customer / support;
+      if (Reschedule?) then (reschedule)
+        |System|
+        :Record issue note &\nupdate expected time;
+      else (return/cancel)
+        |System|
+        :OrderService.update_status(CANCELLED);
+        :PaymentService.process_refund_if_policy_allows();
+        :Broadcast ORDER_STATUS_CHANGED(CANCELLED);
+      endif
+    endif
+  else (no ready order)
+    |Delivery Staff|
+    :Monitor dashboard & navigation;
+  endif
+repeat while (On shift?)
+
+|Delivery Staff|
+:Return vehicle / device\nand close shift;
+stop
+
+@enduml
+
+

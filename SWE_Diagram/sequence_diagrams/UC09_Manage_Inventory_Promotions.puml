@@ -1,0 +1,99 @@
+@startuml
+title "UC-09: Manage Inventory & Promotions (Manager)"
+
+actor manager as "Manager"
+participant "adminUI:AdminAppUI" as adminUI
+participant "ingR:IngredientsRouter" as ingR
+participant "evR:EventsRouter" as evR
+participant "ingSvc:IngredientService" as ingSvc
+participant "evSvc:EventService" as evSvc
+participant "loginSvc:LoginService" as loginSvc
+
+== View Inventory ==
+activate manager
+manager -> adminUI: Open \"Inventory\" page
+deactivate manager
+activate adminUI
+adminUI -> ingR: GET /api/ingredients/store\nAuthorization: Bearer JWT
+deactivate adminUI
+activate ingR
+ingR -> loginSvc: get_current_user()
+activate loginSvc
+loginSvc --> ingR: { user_type: MANAGER }
+deactivate loginSvc
+ingR -> ingSvc: get_store_inventory(db, store_id)\n(load inventory + ingredient info)
+activate ingSvc
+ingSvc --> ingR: inventory[]
+deactivate ingSvc
+ingR --> adminUI: 200 OK
+deactivate ingR
+activate adminUI
+adminUI --> manager: Show inventory / low-stock items
+deactivate adminUI
+
+== Adjust Stock ==
+activate manager
+manager -> adminUI: Edit quantity for ingredient
+deactivate manager
+activate adminUI
+adminUI -> ingR: POST /api/ingredients/stock/update\n(diff for ingredient_id)
+deactivate adminUI
+activate ingR
+ingR -> ingSvc: update_stock(db, ingredient_id, diff)\n(UPSERT store_inventory)
+activate ingSvc
+ingSvc --> ingR: { success }
+deactivate ingSvc
+ingR --> adminUI: 200 OK
+deactivate ingR
+activate adminUI
+adminUI --> manager: Reflect new quantity
+deactivate adminUI
+
+== Manage Promotions / Events ==
+activate manager
+manager -> adminUI: Open \"Events\" page
+deactivate manager
+activate adminUI
+adminUI -> evR: GET /api/events/manage\nAuthorization: Bearer JWT
+deactivate adminUI
+activate evR
+evR -> loginSvc: get_current_user()
+activate loginSvc
+loginSvc --> evR: { user_type: MANAGER }
+deactivate loginSvc
+evR -> evSvc: list_events(db, include_unpublished=true)\n(load events + discounts)
+activate evSvc
+evSvc --> evR: events[]
+deactivate evSvc
+evR --> adminUI: 200 OK
+deactivate evR
+activate adminUI
+adminUI --> manager: Show event list
+deactivate adminUI
+
+group Create or Update Event
+  activate manager
+  manager -> adminUI: Fill event form\n(title, period, discounts)
+  deactivate manager
+  activate adminUI
+  adminUI -> evR: POST /api/events\nor PATCH /api/events/{id}
+  deactivate adminUI
+  activate evR
+  evR -> loginSvc: get_current_user()
+  activate loginSvc
+  loginSvc --> evR: { user_type: MANAGER, id }
+  deactivate loginSvc
+  evR -> evSvc: create_event(...) or update_event(...)\n(persist promotions + discounts)
+  activate evSvc
+  evSvc --> evR: { success, event }
+  deactivate evSvc
+  evR --> adminUI: 200 OK/201
+  deactivate evR
+  activate adminUI
+  adminUI --> manager: Show updated event list
+  deactivate adminUI
+end
+
+@enduml
+
+

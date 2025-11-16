@@ -1,0 +1,39 @@
+@startuml
+title "고객 문의 (customer_inquiries.status) 상태도"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- 상태 정의 (States) ---
+state "신규 문의\n(NEW)" as New
+state "처리 중\n(IN_PROGRESS)" as InProgress
+state "처리 완료\n(RESOLVED)" as Resolved
+state "보관됨\n(ARCHIVED)" as Archived
+
+' --- 상태 전이 (Transitions) ---
+
+' 시작점 (Entry Point)
+[*] --> New : InquiryService.create_inquiry()\n(status='NEW')
+
+' "NEW" 상태에서 가능한 전이
+New --> InProgress : Manager가 문의 확인 시작\n(update_inquiry status='IN_PROGRESS')
+New --> Archived : 스팸/중복으로 바로 보관\n(status='ARCHIVED')
+
+' "IN_PROGRESS" 상태에서 가능한 전이
+InProgress --> Resolved : 답변 완료\n(status='RESOLVED')
+InProgress --> Archived : 처리 불필요 / 정리\n(status='ARCHIVED')
+
+' "RESOLVED" 상태에서 가능한 전이
+Resolved --> Archived : 일정 기간 후 보관\n또는 수동 보관
+
+' 최종 상태 (End State)
+Archived --> [*]
+
+@enduml
+
+

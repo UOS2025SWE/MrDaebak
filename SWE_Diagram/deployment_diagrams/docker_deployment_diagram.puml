@@ -1,0 +1,132 @@
+@startuml
+title "Dinner Service - Docker 기반 배포 다이어그램"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam node {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+
+' ==========================================
+' 클라이언트 / 외부 시스템
+' 참고: UML 배치 다이어그램 개념 - 노드, 실행환경, 아티팩트
+' https://ocwokocw.tistory.com/24
+' ==========================================
+actor "Customer" as Customer
+actor "Cook" as Cook
+actor "Delivery Staff" as DeliveryStaff
+actor "Manager" as Manager
+
+node "Client Browser\n(Desktop / Mobile)" as ClientBrowser
+
+Customer --> ClientBrowser
+Cook --> ClientBrowser
+DeliveryStaff --> ClientBrowser
+Manager --> ClientBrowser
+
+
+' ==========================================
+' 인프라 계층 (물리/가상 서버 + Docker)
+' PlantUML 배치 다이어그램 문법 참고
+' https://plantuml.com/ko/deployment-diagram
+' ==========================================
+node "Cloud / Data Center" as CloudDC {
+
+  node "Linux Host\n(EC2 / VM / Bare Metal)" as Host {
+
+    node "Docker Engine" as Docker {
+
+      ' -----------------------------
+      ' Frontend 컨테이너 (Next.js Monorepo)
+      ' -----------------------------
+      node "dinner_service-frontend\nDocker container" as Frontend {
+        artifact "dinner_service-frontend:latest\n(Next.js app - customer + admin)" as FrontendImg <<artifact>>
+      }
+
+
+      ' -----------------------------
+      ' Backend 컨테이너 (FastAPI Monolith)
+      ' -----------------------------
+      node "dinner_service-backend\nDocker container" as Backend {
+        artifact "dinner_service-backend:latest\n(FastAPI + Uvicorn)" as BackendImg <<artifact>>
+      }
+
+
+      ' -----------------------------
+      ' Database 컨테이너 (PostgreSQL)
+      ' -----------------------------
+      node "dinner_service_db\nDocker container" as Postgres {
+        artifact "postgres:17-alpine\n(DB Engine)" as PostgresImg <<artifact>>
+        artifact "dinner_service_db_volume\n(data volume)" as DbVolume <<artifact>>
+      }
+
+
+      ' -----------------------------
+      ' Reverse Proxy / SSL Termination (Caddy)
+      ' -----------------------------
+      node "dinner_service_caddy\nDocker container" as Caddy {
+        artifact "caddy:2.8\n(HTTPS reverse proxy)" as CaddyImg <<artifact>>
+        artifact "Caddyfile\n(routing / TLS config)" as CaddyConf <<artifact>>
+      }
+
+    }
+
+  }
+
+}
+
+
+' ==========================================
+' 통신 경로 / 프로토콜
+' ==========================================
+
+' Browser -> Caddy (단일 진입점)
+ClientBrowser --> Caddy : HTTP/HTTPS\n(80, 443)\n/customer, /admin, /api, /ws
+
+' Caddy -> Frontend 컨테이너 (Next.js)
+Caddy --> Frontend : HTTP\n:3000\n(SSR/Static for customer + admin)
+
+
+' Caddy -> Backend API (FastAPI)
+Caddy --> Backend : HTTP\n:8000\n(/api/*, /docs, /ws/*)
+
+
+' Backend -> Database
+Backend --> Postgres : TCP 5432\n(SQL / SQLAlchemy)
+
+
+' Backend -> 외부 API (네트워크 밖으로 나가는 호출)
+node "External APIs / SaaS" as ExternalAPIs {
+  node "Mock Payment Gateway" as MockPaymentGW
+  node "Gemini AI\n(LLM API)" as GeminiNode
+  node "OpenAI STT/TTS\n(Audio API)" as OpenAINode
+}
+
+Backend --> MockPaymentGW : HTTPS\n(Mock payment)
+Backend --> GeminiNode    : HTTPS\n(GeminiService)
+Backend --> OpenAINode    : HTTPS\n(OpenAIAudioService)
+
+
+' ==========================================
+' 요약 Note
+' ==========================================
+note bottom of Docker
+  하나의 Linux Host 위에 Docker Engine이 올라가고,\n
+  - dinner_service-frontend 컨테이너에서\n    고객 / 관리자용 Next.js 앱을 서비스하며\n    3000 포트를 사용한다.\n
+  - dinner_service-backend 컨테이너에서\n    FastAPI 모놀리스를 8000 포트에서 실행한다.\n
+  - dinner_service_db(PostgreSQL 17) 컨테이너가\n    트랜잭션 데이터를 저장하고 5432 포트를 사용하며,\n    호스트에는 15432로 매핑될 수 있다.\n
+  - dinner_service_caddy(Caddy 2.8) 컨테이너가\n    80/443 포트에서 SSL 종료 및 라우팅을 담당한다.
+end note
+
+note bottom of Backend
+  backend-api 컨테이너 내부에서\n
+  OrderService, PaymentService, DiscountService,\n
+  EventService, InquiryService, WebSocketManager,\n
+  GeminiService, OpenAIAudioService 등이\n
+  하나의 프로세스로 동작한다.
+end note
+
+@enduml
+
+
