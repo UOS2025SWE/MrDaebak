@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import Header from '../../components/Header'
-import Footer from '../../components/Footer'
+import { PageContainer, Section, GridList } from '../../components/layout/Responsive'
 import type { MenuItem, MenuStyle } from '@/types/menu'
 import type { DiscountInfo, RecentOrder } from '@/types/common'
 
@@ -346,47 +345,51 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-2xl">메뉴를 불러오는 중...</div>
-      </div>
+      <PageContainer currentPage="menu">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-lg sm:text-2xl text-stone-700">메뉴를 불러오는 중...</div>
+        </div>
+      </PageContainer>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-500 text-xl">{error}</div>
-      </div>
+      <PageContainer currentPage="menu">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-red-500 text-base sm:text-xl">{error}</div>
+        </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
-      {/* Header Navigation */}
-      <Header currentPage="menu" />
-
-      {/* Main Content - Constrained width */}
-      <main className="w-full py-20">
-        <div className="max-w-[1400px] mx-auto px-6">
-          {/* Title Section - 컴팩트하게 */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl lg:text-4xl font-bold text-stone-900 mb-3">
+    <PageContainer currentPage="menu">
+      {/* Title Section */}
+      <Section>
+        <div className="max-w-[1400px] mx-auto px-2 sm:px-4">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-3xl sm:text-4xl lg:text-4xl font-bold text-stone-900 mb-2 sm:mb-3">
               프리미엄 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800">디너 메뉴</span>
             </h1>
-            <p className="text-lg text-stone-600">
+            <p className="text-sm sm:text-lg text-stone-600 max-w-2xl mx-auto">
               최고급 재료로 만든 특별한 디너를 집에서 편안하게 즐기세요
             </p>
           </div>
+        </div>
+      </Section>
 
-          {/* Main Layout - 사이드바 구조 (컴팩트 사이드바) */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+      {/* Main Layout - 사이드바 구조 (컴팩트 사이드바) */}
+      <Section>
+        <div className="max-w-[1400px] mx-auto px-2 sm:px-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 sm:gap-8">
             {/* Left: Menu Grid (주요 콘텐츠) */}
             <div className="order-2 lg:order-1">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {menuItems.filter(menu => menu.code !== 'cake').map((menu) => (
                   <div key={menu.id} className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all transform hover:-translate-y-1 border border-amber-100">
                     {/* Menu Image */}
-                    <div className="w-full h-48 bg-gradient-to-br from-amber-50 to-stone-100 overflow-hidden">
+                    <div className="w-full h-48 sm:h-52 bg-gradient-to-br from-amber-50 to-stone-100 overflow-hidden">
                       <img
                         src={`/images/${menu.code === 'champagne' ? 'champagne-feast-dinner' : menu.code + '-dinner'}.jpg`}
                         alt={`${menu.name} 이미지`}
@@ -395,13 +398,13 @@ export default function MenuPage() {
                     </div>
 
                     {/* Menu Info */}
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-stone-900 mb-2">{menu.name}</h3>
-                      <p className="text-stone-600 mb-4 text-sm leading-relaxed">{menu.description} (배달시간 20분)</p>
+                    <div className="p-4 sm:p-6">
+                      <h3 className="text-lg sm:text-xl font-bold text-stone-900 mb-1 sm:mb-2">{menu.name}</h3>
+                      <p className="text-stone-600 mb-3 sm:mb-4 text-xs sm:text-sm leading-relaxed">{menu.description} (배달시간 20분)</p>
 
                       {/* Styles */}
                       <div className="space-y-2">
-                        <h4 className="font-bold text-stone-800 text-sm mb-2">스타일 선택:</h4>
+                        <h4 className="font-bold text-stone-800 text-xs sm:text-sm mb-1.5 sm:mb-2">스타일 선택:</h4>
                         {menu.styles.map((style) => {
                           const isAvailable = style.available !== false
                           const originalStylePrice = style.price
@@ -423,7 +426,7 @@ export default function MenuPage() {
                               }`}
                             >
                               <div className="flex-1">
-                                <div className="font-semibold text-stone-900 relative">
+                                <div className="font-semibold text-stone-900 relative text-sm sm:text-base">
                                   {style.name}
                                   {!isAvailable && (
                                     <span className="ml-2 text-xs font-medium text-red-500">재고 부족</span>
@@ -440,7 +443,7 @@ export default function MenuPage() {
                                     <div className="absolute -left-2 top-3 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-stone-800"></div>
                                   </div>
                                 </div>
-                                <div className="text-xs text-stone-600 mt-0.5">
+                                <div className="text-[11px] sm:text-xs text-stone-600 mt-0.5">
                                   조리 {style.cooking_time}분 · 총 {style.cooking_time + 20}분
                                 </div>
                               </div>
@@ -448,7 +451,7 @@ export default function MenuPage() {
                                 <div className="flex flex-col items-end gap-0.5">
                                   {hasEventDiscount || hasLoyaltyDiscount ? (
                                     <>
-                                      <div className="text-xs text-stone-500 line-through">{style.price.toLocaleString()}원</div>
+                                      <div className="text-[11px] sm:text-xs text-stone-500 line-through">{style.price.toLocaleString()}원</div>
                                       {hasEventDiscount && (
                                         <div className="text-xs text-blue-600 font-medium">
                                           이벤트 -{menuEventDiscountAmount.toLocaleString()}원
@@ -464,12 +467,12 @@ export default function MenuPage() {
                                           이벤트 할인 적용중
                                         </div>
                                       )}
-                                      <div className="text-lg font-bold text-amber-700">
+                                      <div className="text-base sm:text-lg font-bold text-amber-700">
                                         {finalPrice.toLocaleString()}원
                                       </div>
                                     </>
                                   ) : (
-                                    <div className="text-lg font-bold bg-gradient-to-r from-amber-600 to-amber-800 text-transparent bg-clip-text">
+                                    <div className="text-base sm:text-lg font-bold bg-gradient-to-r from-amber-600 to-amber-800 text-transparent bg-clip-text">
                                       {style.price.toLocaleString()}원
                                     </div>
                                   )}
@@ -477,7 +480,7 @@ export default function MenuPage() {
                                 <button
                                   onClick={() => handleOrder(menu, style)}
                                   disabled={!isAvailable}
-                                  className={`mt-2 px-4 py-1.5 font-semibold text-sm rounded-lg transition-all ${
+                                  className={`mt-2 px-3 sm:px-4 py-1.5 font-semibold text-xs sm:text-sm rounded-lg transition-all ${
                                     isAvailable
                                       ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white hover:shadow-lg hover:scale-105 hover:from-amber-700 hover:to-amber-800'
                                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -603,10 +606,7 @@ export default function MenuPage() {
             </div>
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <Footer />
-    </div>
+      </Section>
+      </PageContainer>
   )
 }

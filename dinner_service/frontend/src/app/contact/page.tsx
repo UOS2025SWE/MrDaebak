@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
+import { PageContainer, Section } from '@/components/layout/Responsive'
 
 export default function ContactPage() {
   const [formState, setFormState] = useState({
@@ -58,21 +57,21 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-amber-50 to-amber-100">
-      <Header currentPage="contact" />
-
-      <main className="max-w-[1100px] mx-auto px-6 py-16">
-        <section className="text-center mb-12">
-          <h1 className="text-4xl lg:text-5xl font-bold text-stone-900 mb-4">문의하기</h1>
-          <p className="text-lg text-stone-600 max-w-2xl mx-auto leading-relaxed">
+    <PageContainer currentPage="contact">
+      <main className="w-full">
+        <Section>
+          <div className="max-w-[1100px] mx-auto px-3 sm:px-6">
+        <section className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 mb-3 sm:mb-4">문의하기</h1>
+          <p className="text-sm sm:text-lg text-stone-600 max-w-2xl mx-auto leading-relaxed">
             미스터 대박 서비스에 대해 궁금한 점이나 제안하고 싶은 내용이 있으시면 언제든지 연락주세요. 고객님의 목소리를 소중하게 듣겠습니다.
           </p>
         </section>
 
-        <section className="grid gap-8 md:grid-cols-2 mb-16">
-          <div className="bg-white rounded-3xl shadow-lg p-8 border border-amber-100">
-            <h2 className="text-2xl font-semibold text-amber-800 mb-4">고객 상담 센터</h2>
-            <div className="space-y-4 text-stone-700">
+        <section className="grid gap-6 sm:gap-8 md:grid-cols-2 mb-12 sm:mb-16">
+          <div className="bg-white rounded-3xl shadow-lg p-6 sm:p-8 border border-amber-100">
+            <h2 className="text-xl sm:text-2xl font-semibold text-amber-800 mb-3 sm:mb-4">고객 상담 센터</h2>
+            <div className="space-y-4 text-sm sm:text-base text-stone-700">
               <div>
                 <p className="text-sm text-stone-500 mb-1">전화 상담</p>
                 <p className="text-lg font-semibold">070-1234-5678</p>
@@ -89,7 +88,7 @@ export default function ContactPage() {
                 <p className="text-lg font-semibold">서울특별시 강남구 테이스트로 77, 3층 미스터 대박</p>
               </div>
             </div>
-            <div className="mt-8 p-5 rounded-2xl bg-amber-50 border border-amber-100 text-sm text-stone-600">
+            <div className="mt-6 sm:mt-8 p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-100 text-xs sm:text-sm text-stone-600">
               <p className="font-semibold text-amber-800 mb-2">빠른 답변을 원하시나요?</p>
               <p>관리자 전용 대시보드 &gt; 고객 지원 메뉴에서도 실시간 문의 상태를 확인할 수 있습니다.</p>
             </div>
@@ -97,9 +96,9 @@ export default function ContactPage() {
 
           <form
             onSubmit={handleSubmit}
-            className="bg-white rounded-3xl shadow-lg p-8 border border-amber-100"
+            className="bg-white rounded-3xl shadow-lg p-6 sm:p-8 border border-amber-100"
           >
-            <h2 className="text-2xl font-semibold text-amber-800 mb-4">문의 남기기</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-amber-800 mb-4">문의 남기기</h2>
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-2" htmlFor="contact-name">
@@ -111,7 +110,7 @@ export default function ContactPage() {
                   required
                   value={formState.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
                   placeholder="이름을 입력해주세요"
                 />
               </div>
@@ -126,7 +125,7 @@ export default function ContactPage() {
                   required
                   value={formState.email}
                   onChange={(e) => handleChange('email', e.target.value)}
-                  className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
                   placeholder="example@email.com"
                 />
               </div>
@@ -139,7 +138,7 @@ export default function ContactPage() {
                   id="contact-topic"
                   value={formState.topic}
                   onChange={(e) => handleChange('topic', e.target.value)}
-                  className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-sm"
                 >
                   <option value="general">일반 문의</option>
                   <option value="order">주문/배송</option>
@@ -158,7 +157,7 @@ export default function ContactPage() {
                   required
                   value={formState.message}
                   onChange={(e) => handleChange('message', e.target.value)}
-                  className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-amber-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
                   placeholder="문의 내용을 작성해주세요"
                 />
               </div>
@@ -166,18 +165,18 @@ export default function ContactPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold rounded-xl hover:from-amber-700 hover:to-amber-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold rounded-xl hover:from-amber-700 hover:to-amber-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 {submitting ? '전송 중...' : '문의 보내기'}
               </button>
 
               {submitted && (
-                <div className="mt-4 p-4 text-sm rounded-xl bg-green-50 text-green-700 border border-green-200">
+                <div className="mt-4 p-3 sm:p-4 text-xs sm:text-sm rounded-xl bg-green-50 text-green-700 border border-green-200">
                   문의가 접수되었습니다. 빠른 시일 내에 연락드리겠습니다.
                 </div>
               )}
               {submitError && (
-                <div className="mt-4 p-4 text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">
+                <div className="mt-4 p-3 sm:p-4 text-xs sm:text-sm rounded-xl bg-red-50 text-red-600 border border-red-200">
                   {submitError}
                 </div>
               )}
@@ -185,9 +184,9 @@ export default function ContactPage() {
           </form>
         </section>
 
-        <section className="bg-white rounded-3xl shadow-lg border border-amber-100 p-8">
-          <h2 className="text-2xl font-semibold text-amber-800 mb-6">자주 묻는 질문</h2>
-          <div className="space-y-4 text-sm text-stone-600">
+        <section className="bg-white rounded-3xl shadow-lg border border-amber-100 p-6 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-semibold text-amber-800 mb-5 sm:mb-6">자주 묻는 질문</h2>
+          <div className="space-y-4 text-xs sm:text-sm text-stone-600">
             <details className="group border border-amber-100 rounded-2xl overflow-hidden">
               <summary className="cursor-pointer bg-amber-50 px-5 py-4 font-semibold text-stone-800 flex justify-between items-center">
                 <span>배송은 어느 지역까지 가능한가요?</span>
@@ -217,9 +216,9 @@ export default function ContactPage() {
             </details>
           </div>
         </section>
+        </div>
+      </Section>
       </main>
-
-      <Footer />
-    </div>
+    </PageContainer>
   )
 }

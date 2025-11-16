@@ -3,8 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import Header from '../../components/Header'
-import Footer from '../../components/Footer'
+import { PageContainer, Section } from '../../components/layout/Responsive'
 import ChangePasswordModal from '../../components/ChangePasswordModal'
 import type { UserProfile } from '@/types/profile'
 import type { RecentOrder } from '@/types/common'
@@ -246,35 +245,36 @@ export default function ProfilePage() {
   // AuthContext 로딩 중이거나 최근 주문 로딩 중일 때
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-2xl">
-          {authLoading ? "인증 정보 확인 중..." : "회원 정보를 불러오는 중..."}
+      <PageContainer currentPage="profile">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-lg sm:text-2xl">
+            {authLoading ? "인증 정보 확인 중..." : "회원 정보를 불러오는 중..."}
+          </div>
         </div>
-      </div>
+      </PageContainer>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl text-red-600">{error}</div>
-      </div>
+      <PageContainer currentPage="profile">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-base sm:text-xl text-red-600">{error}</div>
+        </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
-      {/* Header Navigation */}
-      <Header currentPage="profile" />
-
+    <PageContainer currentPage="profile">
       {/* Main Content */}
-      <main className="w-full py-20">
-        <div className="max-w-[1000px] mx-auto px-6">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl lg:text-5xl font-bold text-stone-900 mb-6">
+      <Section>
+        <div className="max-w-[1000px] mx-auto px-3 sm:px-6">
+          <div className="text-center mb-8 sm:mb-12">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 mb-4 sm:mb-6">
               회원 <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-800">정보</span>
             </h1>
-            <p className="text-xl text-stone-600">
+            <p className="text-base sm:text-xl text-stone-600">
               {isStaffAccount
                 ? '내 계정 정보를 확인하세요'
                 : isAdminAccount
@@ -283,47 +283,47 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
             {/* 회원 정보 카드 */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-amber-100">
+            <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-amber-100">
               <div className="flex items-center gap-3 mb-6">
                 <span className="text-2xl">👤</span>
-                <h2 className="text-2xl font-bold text-stone-900">
+                <h2 className="text-xl sm:text-2xl font-bold text-stone-900">
                   {profile?.name || user?.name || '사용자'}님의 회원정보
                 </h2>
               </div>
               
               {user && (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">이메일</span>
-                    <span className="text-stone-900">{profile?.email || user.email}</span>
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">이메일</span>
+                    <span className="text-stone-900 text-sm sm:text-base">{profile?.email || user.email}</span>
                   </div>
                   
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">이름</span>
-                    <span className="text-stone-900">{profile?.name || user.name || '정보 없음'}</span>
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">이름</span>
+                    <span className="text-stone-900 text-sm sm:text-base">{profile?.name || user.name || '정보 없음'}</span>
                   </div>
                   
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">전화번호</span>
-                    <span className="text-stone-900">{profile?.phone || '정보 없음'}</span>
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">전화번호</span>
+                    <span className="text-stone-900 text-sm sm:text-base">{profile?.phone || '정보 없음'}</span>
                   </div>
                   
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">주소</span>
-                    <span className="text-stone-900 text-right max-w-xs">{profile?.address || '정보 없음'}</span>
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">주소</span>
+                    <span className="text-stone-900 text-right max-w-xs text-sm sm:text-base">{profile?.address || '정보 없음'}</span>
                   </div>
                   
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">총 주문 수</span>
-                    <span className="text-amber-600 font-semibold">
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">총 주문 수</span>
+                    <span className="text-amber-600 font-semibold text-sm sm:text-base">
                       {profile?.total_orders !== undefined ? `${profile.total_orders}회` : '로딩 중...'}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">회원 등급</span>
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">회원 등급</span>
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getUserGradeColor(getUserGrade(profile, user))}`}>
                       {getUserGrade(profile, user)}
                     </span>
@@ -333,14 +333,14 @@ export default function ProfilePage() {
                   {discountInfo && (
                     <div className="py-3 border-b border-gray-100">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium text-stone-700">할인 혜택</span>
+                        <span className="font-medium text-stone-700 text-sm sm:text-base">할인 혜택</span>
                         {discountInfo.eligible && (
                           <span className="px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white">
                             {Math.floor(discountInfo.discount_rate * 100)}% 할인
                           </span>
                         )}
                       </div>
-                      <div className="text-sm text-stone-600 mt-2">
+                      <div className="text-xs sm:text-sm text-stone-600 mt-2">
                         {discountInfo.discount_message}
                       </div>
                       {discountInfo.eligible && (
@@ -362,13 +362,13 @@ export default function ProfilePage() {
                   )}
                   
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">계정 유형</span>
-                    <span className="text-stone-900">{getAccountTypeInKorean(user.role)}</span>
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">계정 유형</span>
+                    <span className="text-stone-900 text-sm sm:text-base">{getAccountTypeInKorean(user.role)}</span>
                   </div>
                   
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                    <span className="font-medium text-stone-700">가입일</span>
-                    <span className="text-stone-600 text-sm">
+                    <span className="font-medium text-stone-700 text-sm sm:text-base">가입일</span>
+                    <span className="text-stone-600 text-xs sm:text-sm">
                       {profile?.created_at ? formatDate(profile.created_at) : '로딩 중...'}
                     </span>
                   </div>
@@ -379,8 +379,8 @@ export default function ProfilePage() {
 
             {/* 최근 주문 정보 카드 (직원 계정 제외) */}
             {!isStaffAccount && !isAdminAccount && (
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-amber-100">
-              <h2 className="text-2xl font-bold text-stone-900 mb-6 flex items-center gap-3">
+            <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-amber-100">
+              <h2 className="text-xl sm:text-2xl font-bold text-stone-900 mb-5 sm:mb-6 flex items-center gap-3">
                 <span>🍽️</span>
                 <span>최근 주문</span>
               </h2>
@@ -426,10 +426,10 @@ export default function ProfilePage() {
           </div>
           
           {/* 액션 버튼들 */}
-          <div className="mt-12 flex justify-center gap-4">
+          <div className="mt-8 sm:mt-12 flex justify-center gap-3 sm:gap-4 flex-wrap">
             <button
               onClick={() => router.push('/')}
-              className="bg-gradient-to-r from-amber-600 to-amber-700 text-white font-medium px-6 py-3 rounded-lg hover:from-amber-700 hover:to-amber-800 transition-all duration-300 shadow-md hover:shadow-lg"
+              className="bg-gradient-to-r from-amber-600 to-amber-700 text-white font-medium px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:from-amber-700 hover:to-amber-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm sm:text-base"
             >
               메인으로 돌아가기
             </button>
@@ -437,17 +437,14 @@ export default function ProfilePage() {
             {recentOrder && (
               <button
                 onClick={() => router.push('/orders')}
-                className="bg-gradient-to-r from-stone-600 to-stone-700 text-white font-medium px-6 py-3 rounded-lg hover:from-stone-700 hover:to-stone-800 transition-all duration-300 shadow-md hover:shadow-lg"
+                className="bg-gradient-to-r from-stone-600 to-stone-700 text-white font-medium px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:from-stone-700 hover:to-stone-800 transition-all duration-300 shadow-md hover:shadow-lg text-sm sm:text-base"
               >
                 전체 주문 내역 보기
               </button>
             )}
           </div>
         </div>
-      </main>
-
-      {/* Footer */}
-      <Footer />
+      </Section>
 
       {/* 비밀번호 변경 모달 */}
       <ChangePasswordModal
@@ -458,6 +455,6 @@ export default function ProfilePage() {
           loadProfileData()
         }}
       />
-    </div>
+    </PageContainer>
   )
 }

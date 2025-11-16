@@ -163,7 +163,7 @@ function OrderCard({
 }: {
   order: Order;
   onStatusChange: (orderId: string, newStatus: string) => Promise<void>;
-  userPosition?: 'COOK' | 'DELIVERY' | 'STAFF';
+  userPosition?: 'COOK' | 'RIDER' | 'STAFF';
   canPerformAction: boolean;
 }) {
   const getStatusDisplay = (status: string) => {
@@ -181,7 +181,7 @@ function OrderCard({
     }
   };
 
-  const getNextAction = (status: string, position?: 'COOK' | 'DELIVERY' | 'STAFF') => {
+  const getNextAction = (status: string, position?: 'COOK' | 'RIDER' | 'STAFF') => {
     switch (status) {
       case 'RECEIVED':
         // 조리 수락: COOK만 가능
@@ -193,13 +193,13 @@ function OrderCard({
         if (position === 'COOK' || position === 'STAFF') {
           return { label: '조리 완료', nextStatus: 'DELIVERING', color: 'amber' };
         }
-        if (position === 'DELIVERY') {
+        if (position === 'RIDER') {
           return { label: '배달 시작', nextStatus: 'DELIVERING', color: 'green' };
         }
         return null;
       case 'DELIVERING':
         // 배달 완료: DELIVERY만 가능
-        if (position === 'DELIVERY' || position === 'STAFF') {
+        if (position === 'RIDER' || position === 'STAFF') {
           return { label: '배달 완료', nextStatus: 'COMPLETED', color: 'green' };
         }
         return null;
@@ -826,7 +826,7 @@ function StaffDashboardContent() {
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-800 mb-1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-1 leading-tight">
                   직원 대시보드
                 </h1>
                 <p className="text-gray-600">실시간 주문 현황을 관리하세요</p>
@@ -834,9 +834,11 @@ function StaffDashboardContent() {
               <div className="flex items-center gap-4">
                 <div className="text-right">
                   <p className="text-xs text-gray-500">
-                    {user?.position === 'COOK' ? '요리사' :
-                     user?.position === 'DELIVERY' ? '배달원' :
-                     user?.position ? '직원' : '포지션 미정'}
+                    {user?.position === 'RIDER'
+                      ? '배달원'
+                      : user?.position === 'STAFF'
+                        ? '직원'
+                        : '포지션 미정'}
                   </p>
                   <p className="text-sm font-semibold text-gray-800">{user?.name || user?.email}</p>
                   <div className="flex items-center gap-2 mt-1">
@@ -1038,9 +1040,11 @@ function StaffDashboardContent() {
                 </span>
               </div>
               <p className="text-2xl font-bold text-gray-900 mb-2">
-                {user?.position === 'COOK' ? '요리사' :
-                 user?.position === 'DELIVERY' ? '배달원' :
-                 user?.position || '직원'}
+                {user?.position === 'RIDER'
+                  ? '배달원'
+                  : user?.position === 'STAFF'
+                    ? '직원'
+                    : '직원'}
               </p>
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <span>조리 대기: {cookingOrders.length}건</span>
@@ -1145,7 +1149,7 @@ function StaffDashboardContent() {
                 )}
               </div>
             </div>
-          ) : user?.position === 'DELIVERY' ? (
+          ) : user?.position === 'RIDER' ? (
             /* DELIVERY: 배달 컬럼만 표시 */
             <div>
               <div className="bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-xl p-4 shadow-md">

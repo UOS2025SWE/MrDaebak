@@ -136,7 +136,27 @@ export default function VoicePage() {
     return `${month}월 ${day}일`
   }
 
-  const scheduleCheckoutKeywords = ['체크아웃', 'checkout', '결제', '주문 진행', '주문해', '다음 단계', '넘어가', '완료', '진행해줘', '확정', '확인']
+  const scheduleCheckoutKeywords = [
+    '체크아웃',
+    'checkout',
+    '결제',
+    '주문 진행',
+    '주문해',
+    '주문 완료',
+    '주문 끝',
+    '주문 마무리',
+    '마무리하자',
+    '마무리해',
+    '마무리',
+    '끝내자',
+    '끝내',
+    '다음 단계',
+    '넘어가',
+    '완료',
+    '진행해줘',
+    '확정',
+    '확인'
+  ]
 
   const shouldProceedToCheckout = (input: string) => {
     const lowered = input.toLowerCase()
@@ -171,21 +191,55 @@ export default function VoicePage() {
 
     const extractTime = (text: string) => {
       const normalized = text.toLowerCase()
-      const hourMatch = normalized.match(/(오전|오후|am|pm)?\s*(\d{1,2})\s*(시|시간|:|시\s*정도|o'clock)?/)
-      if (!hourMatch) return null
-      const [, meridiem, hourStr] = hourMatch
-      let hour = Number(hourStr)
-      if (Number.isNaN(hour)) return null
-      if (meridiem && (meridiem.includes('오후') || meridiem.includes('pm'))) {
-        if (hour < 12) hour += 12
+
+      // 1) 명시적인 시간 표현 우선 처리: "오후 7시", "19시", "7시 정도", "18:00" 등
+      const explicitTimeRegex = /(오전|오후|am|pm)?\s*(\d{1,2})\s*(시|:|시\s*정도|o'clock)/g
+      let bestHour: number | null = null
+      let bestMeridiem: string | null = null
+
+      for (const match of normalized.matchAll(explicitTimeRegex)) {
+        const meridiem = match[1] || null
+        const hourStr = match[2]
+        const hour = Number(hourStr)
+        if (Number.isNaN(hour)) continue
+
+        // 같은 문장에 "17시간이나 오후 7시"처럼 여러 시간이 있으면
+        // "오전/오후"가 붙은 시간을 우선 선택하고, 없으면 마지막 것을 사용
+        if (meridiem) {
+          bestHour = hour
+          bestMeridiem = meridiem
+          continue
+        }
+
+        bestHour = hour
       }
-      if (meridiem && (meridiem.includes('오전') || meridiem.includes('am'))) {
-        if (hour === 12) hour = 0
+
+      if (bestHour !== null) {
+        let hour = bestHour
+        const meridiem = bestMeridiem
+
+        if (meridiem && (meridiem.includes('오후') || meridiem.includes('pm'))) {
+          if (hour < 12) hour += 12
+        }
+        if (meridiem && (meridiem.includes('오전') || meridiem.includes('am'))) {
+          if (hour === 12) hour = 0
+        }
+        return resolveTimeSlot(hour)
       }
-      if (!meridiem && hour <= 12 && (normalized.includes('저녁') || normalized.includes('밤') || normalized.includes('늦게'))) {
-        if (hour < 12) hour += 12
+
+      // 2) "저녁 7시", "밤 9시", "늦게 8시쯤" 등 맥락 기반 표현 처리
+      const contextualMatch = normalized.match(/(\d{1,2})\s*(시|:)/)
+      if (contextualMatch) {
+        let hour = Number(contextualMatch[1])
+        if (Number.isNaN(hour)) return null
+        if (hour <= 12 && (normalized.includes('저녁') || normalized.includes('밤') || normalized.includes('늦게'))) {
+          if (hour < 12) hour += 12
+        }
+        return resolveTimeSlot(hour)
       }
-      return resolveTimeSlot(hour)
+
+      // 3) 위 케이스에 해당하지 않으면 (예: "17시간", "두 시간 후")는 시간으로 해석하지 않음
+      return null
     }
 
     const isoMatch = trimmed.match(/(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/)
@@ -1453,7 +1507,7 @@ export default function VoicePage() {
                             </div>
                             <button
                               onClick={async () => {
-                                let message = `수량 ${selectedQuantity}개로 주문하겠습니다`
+                                const message = `수량 ${selectedQuantity}개로 주문하겠습니다`
                                 await handleSendMessage(message)
                                 // 상태는 handleSendMessage 내부에서 자동으로 전환됨
                               }}

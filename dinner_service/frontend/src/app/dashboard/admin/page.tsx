@@ -308,8 +308,8 @@ function AdminDashboardContent() {
   const [customCakeRecipes, setCustomCakeRecipes] = useState<CustomCakeRecipeMap>({})
   const [customCakeRecipeLoading, setCustomCakeRecipeLoading] = useState(false)
   const [customCakeRecipeError, setCustomCakeRecipeError] = useState<string | null>(null)
-  const [selectedCakeFlavor, setSelectedCakeFlavor] = useState(CUSTOM_CAKE_FLAVORS[0].code)
-  const [selectedCakeSize, setSelectedCakeSize] = useState(CUSTOM_CAKE_SIZES[0].code)
+  const [selectedCakeFlavor, setSelectedCakeFlavor] = useState<string>(CUSTOM_CAKE_FLAVORS[0].code)
+  const [selectedCakeSize, setSelectedCakeSize] = useState<string>(CUSTOM_CAKE_SIZES[0].code)
   const [customCakeRecipeEdits, setCustomCakeRecipeEdits] = useState<Record<string, number>>({})
   const [customCakeRecipeDraft, setCustomCakeRecipeDraft] = useState<{ ingredient_code: string; quantity: number }>({ ingredient_code: '', quantity: 0 })
   const [customCakeRecipeActionLoading, setCustomCakeRecipeActionLoading] = useState<Record<string, boolean>>({})
@@ -337,6 +337,7 @@ function AdminDashboardContent() {
   })
   const [eventDiscountForm, setEventDiscountForm] = useState<EventMenuDiscountDraft[]>([createDefaultEventDiscount()])
   const [eventImageFile, setEventImageFile] = useState<File | null>(null)
+  const [tabPage, setTabPage] = useState<1 | 2>(1)
   const [eventSubmitting, setEventSubmitting] = useState(false)
   const [eventActionLoading, setEventActionLoading] = useState<Record<string, boolean>>({})
   const [eventEditDrafts, setEventEditDrafts] = useState<Record<string, EventDraft>>({})
@@ -1868,17 +1869,19 @@ function AdminDashboardContent() {
       }
 
       const items: InquiryItem[] = Array.isArray(data.items)
-        ? data.items.map((item: any) => ({
-            id: item.inquiry_id ?? item.id ?? '',
-            name: item.name ?? '익명',
-            email: item.email ?? '',
-            topic: item.topic ?? '',
-            message: item.message ?? '',
-            status: (item.status ?? 'NEW') as InquiryStatus,
-            managerNote: item.manager_note ?? null,
-            createdAt: item.created_at ?? '',
-            updatedAt: item.updated_at ?? ''
-          })).filter((item) => item.id)
+        ? data.items
+            .map((item: any): InquiryItem => ({
+              id: item.inquiry_id ?? item.id ?? '',
+              name: item.name ?? '익명',
+              email: item.email ?? '',
+              topic: item.topic ?? '',
+              message: item.message ?? '',
+              status: (item.status ?? 'NEW') as InquiryStatus,
+              managerNote: item.manager_note ?? null,
+              createdAt: item.created_at ?? '',
+              updatedAt: item.updated_at ?? ''
+            }))
+            .filter((item: InquiryItem) => !!item.id)
         : []
 
       setInquiries(items)
@@ -1951,7 +1954,7 @@ function AdminDashboardContent() {
                   })
                   .filter((discount: EventMenuDiscount) => Boolean(discount.menuItemId))
               : []
-          })).filter((event) => event.id)
+          })).filter((event: AdminEventItem) => !!event.id)
         : []
 
       setManagerEvents(items)
@@ -2576,7 +2579,8 @@ function AdminDashboardContent() {
 
           {/* Tab Navigation */}
           <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 border border-gray-100">
-            <div className="flex gap-2">
+            {/* 데스크톱: 전체 탭 한 번에 표시 */}
+            <div className="hidden lg:flex gap-2">
               <button
                 onClick={() => setActiveTab('accounting')}
                 className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
@@ -2655,6 +2659,116 @@ function AdminDashboardContent() {
                   <span>문의</span>
                 </div>
               </button>
+            </div>
+
+            {/* 모바일: 1/2, 2/2 토글로 두 페이지로 나누어 표시 */}
+            <div className="lg:hidden">
+              <div className="flex justify-end gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setTabPage(1)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                    tabPage === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-stone-600 border-stone-200'
+                  }`}
+                >
+                  1 / 2
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTabPage(2)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                    tabPage === 2 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-stone-600 border-stone-200'
+                  }`}
+                >
+                  2 / 2
+                </button>
+              </div>
+
+              {tabPage === 1 ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('accounting')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                      activeTab === 'accounting'
+                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">💰</span>
+                      <span className="text-sm">회계</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('staff')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                      activeTab === 'staff'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">👥</span>
+                      <span className="text-sm">직원 관리</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('inventory')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                      activeTab === 'inventory'
+                        ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">📦</span>
+                      <span className="text-sm">재고 관리</span>
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('menu')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                      activeTab === 'menu'
+                        ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">🍽️</span>
+                      <span className="text-sm">메뉴 관리</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('events')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                      activeTab === 'events'
+                        ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">🎉</span>
+                      <span className="text-sm">이벤트</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('inquiries')}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+                      activeTab === 'inquiries'
+                        ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-lg">📨</span>
+                      <span className="text-sm">문의</span>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

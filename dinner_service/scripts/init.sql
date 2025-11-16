@@ -311,9 +311,9 @@ ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO ingredient_pricing (ingredient_code, unit_price) VALUES
     ('premium_steak', 18000),
-    ('wine', 15000),
-    ('champagne_bottle', 55000),
-    ('champagne', 45000),
+    ('wine', 10000),
+    ('champagne_bottle', 5000),
+    ('champagne', 25000),
     ('coffee_pot', 8000),
     ('coffee', 4000),
     ('fresh_salad', 6000),
