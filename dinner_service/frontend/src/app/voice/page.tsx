@@ -689,10 +689,10 @@ export default function VoicePage() {
         if ((newMenuCode || selectedMenuCode) && (newStyleCode || selectedStyleCode)) {
           if (data.quantity && data.quantity > 0) {
             newQuantity = data.quantity
-            setSelectedQuantity(newQuantity)
+            setSelectedQuantity(data.quantity)
           } else if (data.order_state?.quantity) {
             newQuantity = data.order_state.quantity
-            setSelectedQuantity(newQuantity)
+            setSelectedQuantity(data.order_state.quantity)
           }
         }
 
@@ -740,7 +740,8 @@ export default function VoicePage() {
           newState = 'INGREDIENT_CUSTOMIZATION'
         }
 
-        if (forceScheduling || awaitingSchedule || (!deliveryDate && newState === 'CHECKOUT_READY')) {
+        // 일정이 아직 없는데 체크아웃 단계(또는 강제 스케줄링)로 진입하려 할 때는 먼저 일정 선택으로 보냄
+        if (forceScheduling || awaitingSchedule || (!deliveryDate && orderState === 'CHECKOUT_READY')) {
           if (!awaitingSchedule) {
             promptScheduleSelection()
           }
@@ -779,17 +780,20 @@ export default function VoicePage() {
         if (currentQuantity > 1) {
           // 숫자와 쉼표로 구성된 가격 패턴 찾기 (예: "40,000원", "40,000원에", "40,000원에 20분")
           const pricePattern = /(\d{1,3}(?:,\d{3})*)\s*원/g
-          responseContent = responseContent.replace(pricePattern, (match, priceStr) => {
-            // 쉼표 제거하고 숫자로 변환
-            const priceNum = parseInt(priceStr.replace(/,/g, ''), 10)
-            if (!isNaN(priceNum)) {
-              // 수량 곱하기
-              const totalPrice = priceNum * currentQuantity
-              // 다시 쉼표 포함 형식으로 변환
-              return `${totalPrice.toLocaleString()}원`
+          responseContent = responseContent.replace(
+            pricePattern,
+            (match: string, priceStr: string) => {
+              // 쉼표 제거하고 숫자로 변환
+              const priceNum = parseInt(priceStr.replace(/,/g, ''), 10)
+              if (!isNaN(priceNum)) {
+                // 수량 곱하기
+                const totalPrice = priceNum * currentQuantity
+                // 다시 쉼표 포함 형식으로 변환
+                return `${totalPrice.toLocaleString()}원`
+              }
+              return match
             }
-            return match
-          })
+          )
         }
         
         const assistantMessage: ChatMessage = {
@@ -1431,7 +1435,9 @@ export default function VoicePage() {
                             {message.menuInfo && (
                               <button
                                 onClick={async () => {
-                                await handleSendMessage(`${message.menuInfo.name} 선택`)
+                                  const menuName = message.menuInfo?.name
+                                  if (!menuName) return
+                                  await handleSendMessage(`${menuName} 선택`)
                                 }}
                                 className="w-full p-3 bg-amber-100/50 backdrop-blur rounded-lg border-2 border-amber-300 hover:bg-amber-200/50 transition-colors text-left"
                               >

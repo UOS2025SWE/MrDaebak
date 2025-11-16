@@ -5,6 +5,7 @@
 
 'use client'
 
+import { Suspense } from 'react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -311,7 +312,7 @@ const createSideDishOptionFromResponse = (dish: any): SideDishOption => {
   }
 }
 
-export default function CheckoutPage() {
+function CheckoutPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading, token } = useAuth()
@@ -2373,5 +2374,14 @@ export default function CheckoutPage() {
       </div>
       <Footer />
     </>
+  )
+}
+
+export default function CheckoutPage() {
+  // useSearchParams 사용 부분을 Suspense로 감싸서 Next.js 경고/에러를 해결
+  return (
+    <Suspense fallback={null}>
+      <CheckoutPageContent />
+    </Suspense>
   )
 }

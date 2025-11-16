@@ -399,8 +399,8 @@ export default function ProfilePage() {
 
                   <div className="flex justify-between items-center py-3 border-b border-gray-100">
                     <span className="font-medium text-stone-700">상태</span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(recentOrder.status)}`}>
-                      {getStatusText(recentOrder.status)}
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(recentOrder.status || '')}`}>
+                      {getStatusText(recentOrder.status || '')}
                     </span>
                   </div>
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -7,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-export default function CustomerLoginPage() {
+function CustomerLoginPageContent() {
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -167,5 +168,14 @@ export default function CustomerLoginPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function CustomerLoginPage() {
+  // useSearchParams 사용 부분을 Suspense로 감싸서 Next.js 빌드 에러를 방지
+  return (
+    <Suspense fallback={null}>
+      <CustomerLoginPageContent />
+    </Suspense>
   );
 }

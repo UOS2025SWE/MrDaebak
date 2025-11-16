@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
@@ -143,7 +144,7 @@ function PaymentModal({ isOpen, onClose, orderData, finalPrice }: PaymentModalPr
   )
 }
 
-export default function OrderPage() {
+function OrderPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { user, isAuthenticated } = useAuth()
@@ -798,5 +799,14 @@ export default function OrderPage() {
         finalPrice={finalPrice}
       />
     </div>
+  )
+}
+
+export default function OrderPage() {
+  // useSearchParams 사용 부분을 Suspense로 감싸서 Next.js 빌드 에러를 방지
+  return (
+    <Suspense fallback={null}>
+      <OrderPageContent />
+    </Suspense>
   )
 }
