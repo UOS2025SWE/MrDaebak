@@ -1,0 +1,202 @@
+교류도: Place Dinner Order - GUI or Voice (MRD-CUS-UC02)
+
+================================================================================
+
+1. 교류: GUI 주문 (주 흐름 및 부 흐름 2a, 2b)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 메뉴를 선택하고 스타일, 수량, 커스터마이징 옵션을 설정한 후 '주문하기' 버튼을 클릭
+
+2) CustomerWebApp (fe) -> CheckoutRouter (checkoutR)
+- CustomerWebApp이 POST /api/checkout/checkout 엔드포인트로 주문 요청을 전송
+- 요청 바디에는 메뉴 코드, 스타일, 수량, 커스터마이징, 사이드 디시, 케이크, 배달 정보, 결제 정보가 JSON 형식으로 포함됨
+
+3) CheckoutRouter (checkoutR) -> OrderService (orderSvc)
+- CheckoutRouter가 create_order(db, order_data) 메서드를 호출하여 주문 생성 요청
+- 주문 데이터에는 고객 ID, 매장 ID, 메뉴 정보, 커스터마이징, 배달 정보가 포함됨
+
+4) OrderService (orderSvc) -> DiscountService (discSvc)
+- OrderService가 calculate_order_pricing(user_id, original_price, db) 메서드를 호출하여 할인 적용 가격 계산
+- DiscountService가 고객 등급, 진행 중인 이벤트, 프로모션을 확인하여 최종 가격 산출
+
+5) DiscountService (discSvc) -> OrderService (orderSvc)
+- DiscountService가 할인이 적용된 가격 정보를 반환
+- 반환 데이터: 원가, 할인율, 최종 가격, 적용된 프로모션 정보
+
+6) OrderService (orderSvc) -> PostgreSQL
+- OrderService가 orders, order_items, order_item_customizations, order_side_dishes 테이블에 데이터를 INSERT
+- order_inventory_reservations 테이블에 재고 예약 정보를 기록
+- 저장되는 데이터: 주문 번호, 고객 ID, 매장 ID, 주문 상태, 총 가격, 배달 정보, 생성 일시
+
+7) OrderService (orderSvc) -> CheckoutRouter (checkoutR)
+- 주문 생성 성공 응답 반환
+- 응답 데이터: 주문 ID, 주문 번호, 가격 정보
+
+8) CheckoutRouter (checkoutR) -> PaymentService (paySvc)
+- CheckoutRouter가 process_mock_payment(order_id, amount, card_info, db) 메서드를 호출하여 결제 처리 요청
+- 결제 정보: 주문 ID, 결제 금액, 카드 정보(카드 번호, 소지자 이름, 만료일, CVV)
+
+9) PaymentService (paySvc) -> Mock Payment System
+- PaymentService가 외부 결제 시스템 API를 호출하여 결제 승인 요청
+- Mock Payment System이 카드 정보를 검증하고 결제 승인/거부 결정
+
+10) Mock Payment System -> PaymentService (paySvc)
+- Mock Payment System이 결제 결과를 반환
+- 성공 시: 거래 ID, 승인 번호, 결제 완료 시간
+- 실패 시: 오류 코드, 오류 메시지
+
+11) 교류 분기 (Alternative Flow):
+- (부 흐름 2a) 결제 실패 시:
+- Mock Payment System이 결제 실패 응답을 반환 (예: 잔액 부족, 카드 정보 오류)
+- PaymentService가 mock_payments 테이블에 실패 기록을 저장 (status: 'failed', error_message 포함)
+- CheckoutRouter가 CustomerWebApp으로 400 Bad Request 또는 402 Payment Required 오류를 반환
+- CustomerWebApp이 고객에게 "결제에 실패했습니다. 다시 시도해 주세요." 메시지를 표시
+- 주문은 생성되었으나 결제 미완료 상태로 유지되며, 고객이 결제를 재시도할 수 있음
+- 흐름 (1)로 복귀
+
+- (부 흐름 2b) 재고 부족 시:
+- OrderService가 order_inventory_reservations 생성 시 재고 확인 로직에서 부족함을 감지
+- PostgreSQL의 store_inventory 테이블에서 quantity_on_hand가 필요 수량보다 적음
+- OrderService가 CheckoutRouter로 재고 부족 오류를 반환
+- CheckoutRouter가 CustomerWebApp으로 409 Conflict 오류를 반환
+- CustomerWebApp이 고객에게 "선택하신 메뉴의 재료가 부족합니다. 다른 메뉴를 선택해 주세요." 메시지를 표시
+- 주문이 생성되지 않고 트랜잭션이 롤백됨
+- 흐름 (1)로 복귀
+
+- (주 흐름) 결제 성공 시:
+- Mock Payment System이 결제 성공 응답을 반환
+- PaymentService가 다음 단계로 진행
+
+12) PaymentService (paySvc) -> PostgreSQL
+- PaymentService가 mock_payments 테이블에 결제 정보를 INSERT
+- 저장되는 데이터: 결제 ID, 주문 ID, 거래 ID, 결제 금액, 결제 상태(success), 카드 번호(마스킹 처리), 소지자 이름, 결제 일시
+
+13) PaymentService (paySvc) -> PostgreSQL
+- PaymentService가 orders 테이블의 payment_status 필드를 'paid'로 UPDATE
+- 주문 상태(order_status)도 'confirmed'로 변경
+
+14) PaymentService (paySvc) -> CheckoutRouter (checkoutR)
+- 결제 성공 응답 반환
+- 응답 데이터: 결제 ID, 거래 ID, 결제 상태
+
+15) CheckoutRouter (checkoutR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 주문 및 결제 완료 정보를 반환
+- 응답 바디: 주문 ID, 주문 번호, 가격 정보, 결제 상태
+
+16) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 주문 확인 페이지를 표시
+- 표시 정보: 주문 번호, 주문 내역, 총 결제 금액, 배달 예정 시간
+- "주문이 완료되었습니다. 주문 번호: {주문 번호}" 메시지를 표시
+
+================================================================================
+
+2. 교류: 음성 주문 (주 흐름 및 부 흐름 4a, 4b)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 '음성 주문' 버튼을 누르고 마이크에 대고 주문 내용을 말함
+- 예: "치킨 디너 2인분, 매운 맛으로, 감자튀김 추가해주세요"
+
+2) CustomerWebApp (fe) -> STT & TTS API (audioAPI)
+- CustomerWebApp이 녹음된 오디오 데이터(Blob)를 STT API로 전송
+- 오디오 형식: WAV 또는 WebM, 샘플링 레이트: 16kHz 권장
+
+3) STT & TTS API (audioAPI) -> AudioService (audioSvc)
+- STT API가 transcribe_audio() 메서드를 호출하여 음성을 텍스트로 변환
+
+4) AudioService (audioSvc) -> STT & TTS API (audioAPI)
+- AudioService가 STT API의 음성 인식 엔진을 호출
+- API가 오디오를 분석하여 텍스트로 변환
+
+5) 교류 분기 (Alternative Flow):
+- (부 흐름 4a) 음성 인식 실패 시:
+- STT API가 오디오 품질이 낮거나 음성이 불명확하여 변환 실패
+- AudioService가 오류 응답을 반환 (예: "음성을 인식할 수 없습니다")
+- CustomerWebApp이 고객에게 "음성을 인식할 수 없습니다. 다시 시도해 주세요." 메시지를 표시
+- 흐름 (1)로 복귀
+
+- (주 흐름) 음성 인식 성공 시:
+- STT API가 변환된 텍스트를 반환
+- 다음 단계로 진행
+
+6) STT & TTS API (audioAPI) -> AudioService (audioSvc)
+- STT API가 변환된 텍스트(transcript)를 반환
+- 예: "치킨 디너 2인분, 매운 맛으로, 감자튀김 추가해주세요"
+
+7) AudioService (audioSvc) -> CustomerWebApp (fe)
+- AudioService가 변환된 텍스트를 CustomerWebApp으로 반환
+
+8) CustomerWebApp (fe) -> VoiceRouter (voiceR)
+- CustomerWebApp이 POST /api/voice/analyze 엔드포인트로 음성 분석 요청을 전송
+- 요청 바디: 변환된 텍스트(transcript), 세션 ID, 사용자 ID
+
+9) VoiceRouter (voiceR) -> LLMService (llmSvc)
+- VoiceRouter가 analyze_voice_input(...) 메서드를 호출하여 AI 기반 주문 분석 요청
+
+10) LLMService (llmSvc) -> PostgreSQL
+- LLMService가 get_user_order_history(user_id, db) 메서드를 호출하여 고객의 과거 주문 이력을 조회
+- 조회된 데이터를 바탕으로 고객 선호도 파악 (예: 자주 주문하는 메뉴, 선호 스타일)
+
+11) LLMService (llmSvc) -> PostgreSQL
+- LLMService가 get_active_events(db) 메서드를 호출하여 현재 진행 중인 이벤트 및 프로모션 정보를 조회
+- 조회된 데이터: 이벤트 제목, 할인율, 적용 메뉴, 유효 기간
+
+12) LLMService (llmSvc) -> LLM API
+- LLMService가 generate_content(model, prompt) 메서드를 호출하여 LLM API에 분석 요청
+- 프롬프트 구성: 변환된 텍스트 + 고객 주문 이력 + 진행 중인 이벤트 정보 + 메뉴 데이터베이스
+- 요청 형식: JSON with structured output schema
+
+13) LLM API -> LLMService (llmSvc)
+- LLM API가 주문 의도를 분석하여 구조화된 JSON 형식으로 반환
+- 반환 데이터 구조: {intent: string, menu: string, style: string, quantity: number, customizations: array, side_dishes: array, confidence: number}
+- 예: {intent: "order", menu: "치킨 디너", style: "매운 맛", quantity: 2, customizations: [], side_dishes: ["감자튀김"], confidence: 0.95}
+
+14) 교류 분기 (Alternative Flow):
+- (부 흐름 4b) AI 분석 실패 시:
+- LLM API가 고객 의도를 명확히 파악하지 못함 (confidence < 0.7)
+- LLMService가 VoiceRouter로 분석 실패 오류를 반환
+- CustomerWebApp이 고객에게 "주문 내용을 이해할 수 없습니다. 다시 말씀해 주세요." 메시지를 표시
+- 고객에게 재입력을 요청하거나 GUI 주문으로 전환 옵션 제공
+- 흐름 (1)로 복귀
+
+- (주 흐름) AI 분석 성공 시:
+- LLM API가 주문 의도를 명확히 파악 (confidence >= 0.7)
+- 다음 단계로 진행
+
+15) LLMService (llmSvc) -> VoiceRouter (voiceR)
+- LLMService가 분석 결과 및 제안된 주문 내용을 반환
+- 응답 데이터: AI가 분석한 주문 정보 + 추천 메뉴 + 적용 가능한 할인 정보
+
+16) VoiceRouter (voiceR) -> CustomerWebApp (fe)
+- VoiceRouter가 AI 분석 결과 및 주문 미리보기를 반환
+- 응답 바디: 제안된 메뉴, 스타일, 수량, 커스터마이징, 사이드 디시, 예상 가격
+
+17) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 AI가 제안한 주문 내용을 화면에 표시
+- 표시 정보: 메뉴명, 스타일, 수량, 추가 옵션, 예상 가격
+- 고객에게 확인 버튼("주문하기") 또는 수정 옵션 제공
+
+18) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 AI가 제안한 주문 내용을 확인하고 '주문하기' 버튼을 클릭
+
+19) CustomerWebApp (fe) -> OrderRouter (orderR)
+- CustomerWebApp이 POST /api/orders 엔드포인트로 주문 생성 요청을 전송
+- 요청 바디: 메뉴 코드, 스타일, 수량, 커스터마이징, 사이드 디시, 케이크 커스터마이징
+
+20) OrderRouter (orderR) -> OrderService (orderSvc)
+- OrderRouter가 create_order(...) 메서드를 호출하여 주문 생성, 재고 예약, 가격 계산 수행
+- OrderService가 주문 데이터를 데이터베이스에 저장하고 재고 예약 처리
+
+21) OrderService (orderSvc) -> PostgreSQL
+- OrderService가 orders, order_items, order_inventory_reservations 테이블에 데이터를 INSERT
+- 음성 주문의 경우 결제는 나중에 처리되므로 payment_status는 'pending'으로 설정
+
+22) OrderService (orderSvc) -> OrderRouter (orderR)
+- 주문 생성 성공 응답 반환
+- 응답 데이터: 주문 ID, 가격 정보
+
+23) OrderRouter (orderR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 주문 생성 완료 정보를 반환
+
+24) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 "주문이 생성되었습니다" 메시지를 표시하고 주문 확인 페이지로 이동
+- 고객에게 결제 페이지로 이동하여 결제 진행 안내

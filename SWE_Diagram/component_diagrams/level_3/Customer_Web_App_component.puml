@@ -1,0 +1,46 @@
+@startuml
+title "Customer Web App Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "Customer Web App" as CustomerAppComp {
+}
+
+rectangle "HomePage" as HomePage
+rectangle "MenuPage" as MenuPage
+rectangle "OrderPage" as OrderPage
+rectangle "CheckoutPage" as CheckoutPage
+rectangle "OrdersPage" as OrdersPage
+rectangle "OrderCompletePage" as OrderCompletePage
+rectangle "VoicePage" as VoicePage
+rectangle "EventsPage" as EventsPage
+rectangle "ProfilePage" as ProfilePage
+rectangle "RegisterPage" as RegisterPage
+rectangle "LoginPage" as LoginPage
+rectangle "AboutPage" as AboutPage
+rectangle "ContactPage" as ContactPage
+
+HomePage ..> CustomerAppComp
+MenuPage ..> CustomerAppComp
+OrderPage ..> CustomerAppComp
+CheckoutPage ..> CustomerAppComp
+OrdersPage ..> CustomerAppComp
+OrderCompletePage ..> CustomerAppComp
+VoicePage ..> CustomerAppComp
+EventsPage ..> CustomerAppComp
+ProfilePage ..> CustomerAppComp
+RegisterPage ..> CustomerAppComp
+LoginPage ..> CustomerAppComp
+AboutPage ..> CustomerAppComp
+ContactPage ..> CustomerAppComp
+
+@enduml

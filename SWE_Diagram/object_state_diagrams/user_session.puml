@@ -1,7 +1,6 @@
 @startuml
 title "AuthContext User Session State Machine"
 
-skinparam defaultFontName "Malgun Gothic"
 skinparam shadowing false
 skinparam state {
   BackgroundColor #FDF6E3
@@ -10,8 +9,8 @@ skinparam state {
 }
 
 state "Unauthenticated\n(no token stored)" as Unauthenticated
-state "Restoring Session\n(localStorage check + verifyToken)" as Restoring
-state "Session Expired\n(token revoked / server reject)" as Expired
+state "Restoring Session\n(localStorage check)" as Restoring
+state "Session Expired\n(token invalid)" as Expired
 
 state "Authenticated" as Authenticated {
   state "Customer" as CustomerState
@@ -20,31 +19,22 @@ state "Authenticated" as Authenticated {
 
 [*] --> Unauthenticated
 
-Unauthenticated --> Restoring : page load\nlocalStorage has token
-Restoring --> CustomerState : token valid\nuser_type=CUSTOMER
-Restoring --> StaffManagerState : token valid\nuser_type∈{STAFF, MANAGER}
-Restoring --> Unauthenticated : token missing/invalid
+Unauthenticated --> Restoring : useEffect\n(AuthContext.tsx:78)\nlocalStorage.getItem('auth_token')
+Restoring --> CustomerState : useEffect\n(AuthContext.tsx:84-85)\nJSON.parse(savedUser)\nuser_type='CUSTOMER'
+Restoring --> StaffManagerState : useEffect\n(AuthContext.tsx:84-85)\nJSON.parse(savedUser)\nuser_type∈{'STAFF', 'MANAGER'}
+Restoring --> Unauthenticated : useEffect\n(AuthContext.tsx:88-89)\ntoken missing/invalid\nlocalStorage.removeItem()
 
-Unauthenticated --> CustomerState : login success (customer)
-Unauthenticated --> StaffManagerState : login success (staff/manager)
+Unauthenticated --> CustomerState : login()\n(AuthContext.tsx:118)\nPOST /api/auth/login\nuser_type='CUSTOMER'
+Unauthenticated --> StaffManagerState : login()\n(AuthContext.tsx:118)\nPOST /api/auth/login\nuser_type∈{'STAFF', 'MANAGER'}
 
-CustomerState --> Expired : verifyToken fails\n(periodic 5-minute check)
-StaffManagerState --> Expired : verifyToken fails
-Expired --> Unauthenticated : clear token & user info
+CustomerState --> Expired : useEffect + verifyToken()\n(AuthContext.tsx:232-235)\nsetInterval 5 min\nverifyToken returns false
+StaffManagerState --> Expired : useEffect + verifyToken()\n(AuthContext.tsx:232-235)\nsetInterval 5 min\nverifyToken returns false
+Expired --> Unauthenticated : logout()\n(AuthContext.tsx:234, 195)\nsetUser(null), setToken(null)\nlocalStorage.removeItem()
 
-CustomerState --> Unauthenticated : logout / server rejects token
-StaffManagerState --> Unauthenticated : logout / session expired
+CustomerState --> Unauthenticated : logout()\n(AuthContext.tsx:195)\nmanual logout
+StaffManagerState --> Unauthenticated : logout()\n(AuthContext.tsx:195)\nmanual logout or session expired
 
-CustomerState --> CustomerState : refreshUserInfo / token renewal
-StaffManagerState --> StaffManagerState : refreshUserInfo / token renewal
-
-note right of Restoring
-  useEffect loads auth_token + user_info\n
-  verifyToken protects routes
-end note
-
-note right of Authenticated
-  setInterval every 5 minutes runs\nverifyToken() and auto-logout on failure
-end note
+CustomerState --> CustomerState : refreshUserInfo()\n(AuthContext.tsx:203)\nGET /api/auth/me
+StaffManagerState --> StaffManagerState : refreshUserInfo()\n(AuthContext.tsx:203)\nGET /api/auth/me
 
 @enduml

@@ -1,6 +1,5 @@
 @startuml
-title "이벤트 프로모션 (event_promotions) 상태도"
-skinparam defaultFontName "Malgun Gothic"
+title "Event Promotion State Diagram (event_promotions)"
 skinparam shadowing false
 skinparam state {
   BackgroundColor #LightGoldenRodYellow
@@ -8,30 +7,30 @@ skinparam state {
   RoundCorner 10
 }
 
-' --- 상태 정의 (States) ---
-state "초안\n(Draft\nis_published=false)" as Draft
-state "예약됨\n(Scheduled\nis_published=true,\nstart_date>오늘)" as Scheduled
-state "진행 중\n(Active\nis_published=true,\n기간 내)" as Active
-state "종료됨\n(Ended\nis_published=false\n또는 기간 경과)" as Ended
+' --- States ---
+state "Draft\n(is_published=false)" as Draft
+state "Scheduled\n(is_published=true,\nstart_date>today)" as Scheduled
+state "Active\n(is_published=true,\nwithin date range)" as Active
+state "Ended\n(is_published=false\nor date passed)" as Ended
 
-' --- 상태 전이 (Transitions) ---
+' --- Transitions ---
 
-' 시작점 (Entry Point)
-[*] --> Draft : Manager가 이벤트 생성\n(is_published=false)
+' Entry Point
+[*] --> Draft : EventService.create_event()\n(event_service.py:352)\nis_published=false
 
-' "Draft" 상태에서 가능한 전이
-Draft --> Scheduled : Manager가 is_published=true,\nstart_date>오늘로 설정
-Draft --> Active : Manager가 is_published=true,\nstart_date<=오늘로 설정
-Draft --> Ended : Manager가 이벤트를 삭제/비활성화
+' From Draft state
+Draft --> Scheduled : EventService.update_event()\n(event_service.py:436)\nis_published=true,\nstart_date>today
+Draft --> Active : EventService.update_event()\n(event_service.py:436)\nis_published=true,\nstart_date<=today
+Draft --> Ended : EventService.delete_event()\n(event_service.py:467)\nor update is_published=false
 
-' "Scheduled" 상태에서 가능한 전이
-Scheduled --> Active : start_date 도래\n(오늘>=start_date)
-Scheduled --> Ended : Manager가 이벤트 취소\n(is_published=false)
+' From Scheduled state
+Scheduled --> Active : Automatic transition\n(event_service.py:574)\nstart_date reached\n(today>=start_date)
+Scheduled --> Ended : EventService.update_event()\n(event_service.py:436)\nis_published=false
 
-' "Active" 상태에서 가능한 전이
-Active --> Ended : end_date 도래\n또는 is_published=false
+' From Active state
+Active --> Ended : Automatic transition\n(event_service.py:574)\nend_date passed\nor is_published=false
 
-' 최종 상태 (End State)
+' End State
 Ended --> [*]
 
 @enduml

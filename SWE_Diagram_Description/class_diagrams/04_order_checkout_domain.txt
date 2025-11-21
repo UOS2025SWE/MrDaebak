@@ -1,0 +1,149 @@
+4 "Order & Checkout Domain" 서브시스템 세부 설계
+
+"Order & Checkout Domain" 시스템은 주문 생성, 조회, 상태 변경 등 핵심 주문 로직을 처리하는 백엔드 시스템이다.
+
+주문 생성, 조회, 재주문, 취소 기능을 제공하며, 주문 커스터마이징 정보를 저장하고 조회한다.
+결제 처리 및 배송 정보 관리를 담당하며, External Payment API와 연동하여 실제 결제를 수행한다.
+커스텀 케이크 주문을 위한 이미지 업로드 및 AI 생성 기능을 제공한다.
+직원(요리사, 배달원)에게 배정된 주문 목록을 조회하고, 주문 상태를 업데이트한다.
+주문 발생 시 재고를 차감하고, 재고 부족 시 주문을 거부한다.
+Pydantic 모델을 활용하여 요청/응답 데이터 유효성을 검증한다.
+
+"Order & Checkout Domain" 시스템은 아래와 같은 중요한 라우터와 서비스들로 구성되어 있다.
+
+OrderRouter
+주문 관련 모든 엔드포인트를 제공하는 라우터이다.
+POST /api/orders/ 엔드포인트는 신규 주문을 생성하며, OrderRequest 모델을 통해 주문 정보를 검증한다.
+GET /api/orders/{order_id} 엔드포인트는 특정 주문의 상세 정보를 조회한다.
+GET /api/orders/user/{user_id} 엔드포인트는 특정 사용자의 전체 주문 목록을 조회한다.
+GET /api/orders/{order_id}/customizations 엔드포인트는 특정 주문의 커스터마이징 정보를 조회한다.
+POST /api/orders/reorder/{order_id} 엔드포인트는 과거 주문을 기반으로 재주문을 생성한다.
+GET /api/orders/staff/all 엔드포인트는 직원에게 배정된 주문 목록을 조회하며, 요리사는 조리 대기/진행 주문을, 배달원은 배송 대기/진행 주문을 확인한다.
+PATCH /api/orders/{order_id}/status 엔드포인트는 주문 상태를 업데이트하며, UpdateOrderStatusRequest 모델을 통해 새로운 상태를 검증한다.
+POST /api/orders/{order_id}/cancel 엔드포인트는 주문을 취소하고, 차감된 재고를 복구한다.
+
+CheckoutRouter
+체크아웃 및 결제 관련 엔드포인트를 제공하는 라우터이다.
+POST /api/checkout/checkout 엔드포인트는 주문 확정 및 결제를 처리하며, CheckoutRequest 모델을 통해 배송 정보 및 결제 정보를 검증한다.
+결제 성공 시 CheckoutResponse 모델을 반환하며, 주문 ID, 결제 ID, 거래 ID, 총 금액, 배송 주소, 마스킹된 카드 번호 등을 포함한다.
+GET /api/checkout/delivery-info/{user_id} 엔드포인트는 사용자의 기본 배송지 정보를 조회한다.
+PUT /api/checkout/delivery-info/{user_id} 엔드포인트는 사용자의 기본 배송지 정보를 저장하거나 수정한다.
+GET /api/checkout/payment-info/{order_id} 엔드포인트는 특정 주문의 결제 정보를 조회한다.
+GET /api/checkout/payments/user/{user_id} 엔드포인트는 특정 사용자의 전체 결제 내역을 조회한다.
+
+CakeRouter
+커스텀 케이크 주문을 위한 이미지 관리 엔드포인트를 제공하는 라우터이다.
+POST /api/cake/customizations/upload-image 엔드포인트는 고객이 업로드한 케이크 이미지를 서버에 저장하고, UploadImageResponse 모델을 반환한다.
+POST /api/cake/customizations/generate-ai-image 엔드포인트는 GenerateCakeImageRequest 모델을 통해 프롬프트와 비율을 입력받고, AI를 사용하여 케이크 이미지를 생성한다.
+POST /api/cake/customizations/edit-ai-image 엔드포인트는 생성된 AI 이미지를 수정하는 기능을 제공한다.
+GET /api/cake/customizations/image/{filename} 엔드포인트는 저장된 케이크 이미지를 조회한다.
+
+
+4.1 메인 클래스도
+
+OrderRequest (Pydantic 모델)
+
+OrderRequest는 주문 생성 시 사용되는 요청 데이터 모델이다.
+dinner_code 변수에 주문할 메뉴의 코드를 저장한다.
+style 변수에 메뉴 스타일(simple, grand, deluxe)을 저장한다.
+quantity 변수에 주문 수량을 저장한다.
+delivery_address 변수에 배송 주소를 저장한다.
+user_id 변수에 주문한 사용자의 ID를 저장하며, 비회원 주문의 경우 null 값을 가진다.
+customizations 변수에 재료 커스터마이징 정보를 딕셔너리 형태로 저장하며, 키는 재료 코드, 값은 수량이다.
+notes 변수에 주문 특이사항을 저장한다.
+order_type 변수에 주문 유형(DELIVERY 또는 PICKUP)을 저장한다.
+
+UpdateOrderStatusRequest (Pydantic 모델)
+
+UpdateOrderStatusRequest는 주문 상태 업데이트 시 사용되는 요청 데이터 모델이다.
+new_status 변수에 변경할 주문 상태를 저장하며, 가능한 값은 PENDING, PREPARING, READY_FOR_DELIVERY, IN_DELIVERY, DELIVERED, CANCELLED 등이다.
+
+CheckoutRequest (Pydantic 모델)
+
+CheckoutRequest는 체크아웃 요청 시 사용되는 요청 데이터 모델이다.
+menu_code 변수에 주문할 메뉴 코드를 저장한다.
+style 변수에 메뉴 스타일을 저장한다.
+quantity 변수에 주문 수량을 저장한다.
+delivery 변수에 DeliveryInfo 객체를 저장하며, 배송 주소, 수령인, 연락처, 배송 메모, 예약 날짜 및 시간대 정보를 포함한다.
+payment 변수에 PaymentInfo 객체를 저장하며, 카드 번호, 카드 소유자명, 만료일, CVC 정보를 포함한다.
+user_id 변수에 주문한 사용자의 ID를 저장하며, 비회원 주문의 경우 null 값을 가진다.
+save_as_default_address 변수에 배송지를 기본 배송지로 저장할지 여부를 저장한다.
+customizations 변수에 재료 커스터마이징 정보를 딕셔너리 형태로 저장한다.
+side_dishes 변수에 사이드 디시 목록을 리스트 형태로 저장하며, 각 항목은 사이드 디시 코드와 수량을 포함한다.
+cake_customization 변수에 커스텀 케이크 정보를 저장하며, 케이크 이미지 경로, 문구, 크기 등을 포함한다.
+
+DeliveryInfo (Pydantic 모델)
+
+DeliveryInfo는 배송 정보를 나타내는 모델이다.
+address 변수에 배송 주소를 저장한다.
+recipient_name 변수에 수령인 이름을 저장한다.
+recipient_phone 변수에 수령인 연락처를 저장한다.
+delivery_notes 변수에 배송 메모(예: 문 앞에 놓아주세요)를 저장한다.
+scheduled_date 변수에 예약 배송 날짜를 저장한다.
+scheduled_time_slot 변수에 예약 배송 시간대(예: 12:00-14:00)를 저장한다.
+
+PaymentInfo (Pydantic 모델)
+
+PaymentInfo는 결제 정보를 나타내는 모델이다.
+card_number 변수에 카드 번호를 저장한다.
+cardholder_name 변수에 카드 소유자명을 저장한다.
+expiry_date 변수에 카드 만료일(MM/YY 형식)을 저장한다.
+cvc 변수에 카드 CVC 코드를 저장한다.
+
+CheckoutResponse (Pydantic 모델)
+
+CheckoutResponse는 체크아웃 완료 시 반환되는 응답 데이터 모델이다.
+success 변수에 체크아웃 성공 여부를 저장한다.
+order_id 변수에 생성된 주문의 ID를 저장한다.
+order_number 변수에 고객에게 표시되는 주문 번호를 저장한다.
+payment_id 변수에 결제 ID를 저장한다.
+transaction_id 변수에 External Payment Gateway로부터 받은 거래 ID를 저장한다.
+total_price 변수에 최종 결제 금액을 저장한다.
+delivery_address 변수에 배송 주소를 저장한다.
+masked_card_number 변수에 마스킹된 카드 번호(예: **** **** **** 1234)를 저장한다.
+payment_status 변수에 결제 상태(SUCCESS, FAILED, PENDING)를 저장한다.
+message 변수에 체크아웃 결과 메시지를 저장한다.
+
+UploadImageResponse (Pydantic 모델)
+
+UploadImageResponse는 이미지 업로드 완료 시 반환되는 응답 데이터 모델이다.
+success 변수에 업로드 성공 여부를 저장한다.
+image_path 변수에 저장된 이미지의 경로를 저장한다.
+filename 변수에 저장된 이미지의 파일명을 저장한다.
+
+GenerateCakeImageRequest (Pydantic 모델)
+
+GenerateCakeImageRequest는 AI 케이크 이미지 생성 시 사용되는 요청 데이터 모델이다.
+prompt 변수에 이미지 생성 프롬프트를 저장한다.
+aspect_ratio 변수에 이미지 비율(1:1, 16:9, 9:16 등)을 저장한다.
+
+OrderService (services/order_service.py)
+
+OrderService는 주문 관련 비즈니스 로직을 처리하는 서비스 클래스이다.
+create_order(db, order_data) 함수는 신규 주문을 생성하고, 재고를 차감하며, 주문 ID를 반환한다.
+get_user_orders(db, user_id) 함수는 특정 사용자의 전체 주문 목록을 조회하고 반환한다.
+consume_order_inventory(db, order_id) 함수는 주문 발생 시 필요한 재료 재고를 차감하며, 재고 부족 시 에러를 발생시킨다.
+get_base_ingredients(db, menu_code, style) 함수는 특정 메뉴와 스타일에 필요한 기본 재료 목록을 조회한다.
+calculate_customization_price() 함수는 재료 커스터마이징에 따른 추가 금액을 계산하며, 재료 추가/제거 시 가격 변동을 반영한다.
+calculate_side_dish_price() 함수는 선택한 사이드 디시의 총 금액을 계산한다.
+Database 인터페이스에 의존하여 PostgreSQL 데이터베이스와 통신한다.
+
+PaymentService (services/payment_service.py)
+
+PaymentService는 결제 관련 비즈니스 로직을 처리하는 서비스 클래스이다.
+process_mock_payment(order_id, amount, ...) 함수는 Mock Payment Gateway를 통해 결제를 처리하고, 결제 ID 및 거래 ID를 반환한다.
+validate_card_number(card_number) 함수는 카드 번호의 유효성을 검증하며, Luhn 알고리즘을 사용하여 카드 번호를 확인한다.
+mask_card_number(card_number) 함수는 카드 번호를 마스킹하여 보안을 강화하며, 마지막 4자리만 표시한다.
+get_payment_info(order_id, db) 함수는 특정 주문의 결제 정보를 조회하고 반환한다.
+get_user_payments(user_id, db) 함수는 특정 사용자의 전체 결제 내역을 조회하고 반환한다.
+Database 인터페이스와 External Payment API 인터페이스에 의존하여 데이터베이스 및 외부 결제 시스템과 통신한다.
+
+Database (인터페이스)
+
+"Order & Checkout Domain" 시스템의 모든 서비스는 Database 인터페이스를 통해 PostgreSQL 데이터베이스와 통신한다.
+이 인터페이스는 실제로는 "Database Layer" 시스템에 구현되어 있으며, SQLAlchemy ORM을 통해 데이터베이스 작업을 수행한다.
+
+External Payment API (인터페이스)
+
+PaymentService는 External Payment API 인터페이스를 통해 외부 결제 시스템과 통신한다.
+이 인터페이스는 실제로는 "External Systems" 시스템의 Mock Payment Gateway에 구현되어 있다.

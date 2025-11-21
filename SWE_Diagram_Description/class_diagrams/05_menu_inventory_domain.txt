@@ -1,0 +1,137 @@
+5 "Menu & Inventory Domain" 서브시스템 세부 설계
+
+"Menu & Inventory Domain" 시스템은 메뉴 정보, 가격, 실시간 재고를 관리하는 백엔드 시스템이다.
+
+메뉴 조회 및 기본 재료 정보를 제공하며, 각 메뉴의 스타일별 기본 재료 구성을 관리한다.
+재료 생성, 조회, 가격 수정 기능을 제공하고, 실시간 재고 현황을 추적한다.
+매니저와 요리사가 협력하는 2단계 입고 프로세스를 통해 재고를 관리한다.
+매니저가 입고 예정 정보를 등록하면, 요리사가 실제 입고 수량을 확인하고 재고에 반영한다.
+사이드 디시 생성, 조회, 가용성 관리 기능을 제공하며, 각 사이드 디시의 재료 구성을 관리한다.
+주문 발생 시 재고를 차감하고, 재고 부족 시 주문을 거부한다.
+Pydantic 모델을 활용하여 요청/응답 데이터 유효성을 검증한다.
+
+"Menu & Inventory Domain" 시스템은 아래와 같은 중요한 라우터와 서비스들로 구성되어 있다.
+
+MenuRouter
+메뉴 관련 모든 엔드포인트를 제공하는 라우터이다.
+GET /api/menu/ 엔드포인트는 전체 메뉴 목록을 조회하며, 각 메뉴의 코드, 이름, 설명, 스타일별 가격 정보를 반환한다.
+GET /api/menu/{menu_code} 엔드포인트는 특정 메뉴의 상세 정보를 조회한다.
+GET /api/menu/base-ingredients 엔드포인트는 모든 메뉴의 스타일별 기본 재료 구성을 조회한다.
+PUT /api/menu/base-ingredients/{menu_code}/{style} 엔드포인트는 특정 메뉴 스타일의 기본 재료를 추가하거나 수정하며, BaseIngredientUpsertRequest 모델을 통해 재료 코드와 기본 수량을 검증한다.
+DELETE /api/menu/base-ingredients/{menu_code}/{style}/{ingredient_code} 엔드포인트는 특정 메뉴 스타일의 기본 재료를 제거한다.
+
+IngredientsRouter
+재료 및 재고 관련 모든 엔드포인트를 제공하는 라우터이다.
+GET /api/ingredients/ 엔드포인트는 전체 재료 목록 및 재고 현황을 조회한다.
+GET /api/ingredients/{ingredient_code} 엔드포인트는 특정 재료의 상세 정보 및 재고를 조회한다.
+POST /api/ingredients/ 엔드포인트는 신규 재료를 생성하며, IngredientCreateRequest 모델을 통해 이름, 단위, 단가, 초기 재고를 검증한다.
+PATCH /api/ingredients/{ingredient_code}/pricing 엔드포인트는 특정 재료의 가격 정보를 수정한다.
+POST /api/ingredients/intake 엔드포인트는 매니저가 입고 예정 정보를 등록하며, IngredientIntakeRequest 모델을 통해 입고 예정 재료 목록을 검증한다.
+GET /api/ingredients/intake/{intake_id} 엔드포인트는 특정 입고 예정 정보를 조회한다.
+POST /api/ingredients/intake/{intake_id}/confirm 엔드포인트는 요리사가 실제 입고 수량을 확인하고 재고에 반영한다.
+POST /api/ingredients/restock 엔드포인트는 단일 재료의 재고를 수동으로 보충하며, IngredientRestockRequest 모델을 통해 재고 보충 정보를 검증한다.
+POST /api/ingredients/restock/bulk 엔드포인트는 여러 재료의 재고를 일괄 보충한다.
+
+SideDishesRouter
+사이드 디시 관련 모든 엔드포인트를 제공하는 라우터이다.
+GET /api/side-dishes/ 엔드포인트는 전체 사이드 디시 목록을 조회하며, 가용성 정보를 포함한다.
+POST /api/side-dishes/ 엔드포인트는 신규 사이드 디시를 생성하며, SideDishCreateRequest 모델을 통해 코드, 이름, 설명, 가격, 재료 구성을 검증한다.
+GET /api/side-dishes/{code} 엔드포인트는 특정 사이드 디시의 상세 정보 및 재료 구성을 조회한다.
+PATCH /api/side-dishes/{code}/availability 엔드포인트는 특정 사이드 디시의 가용성을 변경하며, 재고 부족 시 비활성화할 수 있다.
+POST /api/side-dishes/{code}/ingredients 엔드포인트는 특정 사이드 디시에 재료를 추가하거나 수정한다.
+DELETE /api/side-dishes/{code}/ingredients/{ingredient_code} 엔드포인트는 특정 사이드 디시의 재료를 제거한다.
+
+
+5.1 메인 클래스도
+
+BaseIngredientUpsertRequest (Pydantic 모델)
+
+BaseIngredientUpsertRequest는 메뉴 기본 재료 추가/수정 시 사용되는 요청 데이터 모델이다.
+ingredient_code 변수에 재료 코드를 저장한다.
+base_quantity 변수에 기본 수량을 저장하며, 해당 메뉴 스타일 조리 시 사용되는 표준 수량을 나타낸다.
+
+IngredientCreateRequest (Pydantic 모델)
+
+IngredientCreateRequest는 신규 재료 생성 시 사용되는 요청 데이터 모델이다.
+name 변수에 재료 이름을 저장한다.
+unit 변수에 재료 단위(kg, g, L, ml, 개 등)를 저장한다.
+unit_price 변수에 재료 단가를 Decimal 타입으로 저장하여 정확한 가격 계산을 보장한다.
+initial_stock 변수에 초기 재고량을 저장하며, null 값인 경우 재고 0으로 시작한다.
+
+IngredientIntakeRequest (Pydantic 모델)
+
+IngredientIntakeRequest는 매니저가 입고 예정 정보를 등록할 때 사용되는 요청 데이터 모델이다.
+intake_items 변수에 IngredientIntakeItem 객체 리스트를 저장하며, 입고 예정인 재료 목록을 나타낸다.
+intake_note 변수에 입고 관련 메모(예: 공급업체명, 입고 예정일)를 저장한다.
+
+IngredientIntakeItem (Pydantic 모델)
+
+IngredientIntakeItem은 입고 예정 재료 항목을 나타내는 모델이다.
+ingredient_code 변수에 재료 코드를 저장한다.
+expected_quantity 변수에 입고 예정 수량을 Decimal 타입으로 저장한다.
+unit_price 변수에 입고 시 재료 단가를 저장하며, 가격 변동을 추적할 수 있다.
+remarks 변수에 해당 재료 입고 관련 특이사항을 저장한다.
+
+IngredientRestockRequest (Pydantic 모델)
+
+IngredientRestockRequest는 재고 보충 시 사용되는 요청 데이터 모델이다.
+items 변수에 IngredientRestockItem 객체 리스트를 저장하며, 보충할 재료 목록을 나타낸다.
+
+IngredientRestockItem (Pydantic 모델)
+
+IngredientRestockItem은 재고 보충 재료 항목을 나타내는 모델이다.
+ingredient_code 변수에 재료 코드를 저장한다.
+quantity 변수에 보충할 수량을 정수 타입으로 저장한다.
+
+SideDishCreateRequest (Pydantic 모델)
+
+SideDishCreateRequest는 신규 사이드 디시 생성 시 사용되는 요청 데이터 모델이다.
+code 변수에 사이드 디시 코드를 저장한다.
+name 변수에 사이드 디시 이름을 저장한다.
+description 변수에 사이드 디시 설명을 저장한다.
+base_price 변수에 사이드 디시 기본 가격을 Decimal 타입으로 저장한다.
+ingredients 변수에 SideDishIngredientInput 객체 리스트를 저장하며, 사이드 디시에 필요한 재료 구성을 나타낸다.
+
+SideDishIngredientInput (Pydantic 모델)
+
+SideDishIngredientInput은 사이드 디시 재료 항목을 나타내는 모델이다.
+ingredient_code 변수에 재료 코드를 저장한다.
+quantity 변수에 필요한 재료 수량을 Decimal 타입으로 저장한다.
+
+MenuService (services/menu_service.py)
+
+MenuService는 메뉴 관련 비즈니스 로직을 처리하는 서비스 클래스이다.
+get_menu_data(db) 함수는 전체 메뉴 목록 및 스타일별 가격 정보를 조회하고 반환한다.
+get_base_ingredient_data(db, menu_code) 함수는 특정 메뉴의 모든 스타일에 대한 기본 재료 구성을 조회한다.
+upsert_base_ingredient(...) 함수는 특정 메뉴 스타일의 기본 재료를 추가하거나 수정하며, 기존 재료가 있으면 수량을 업데이트하고, 없으면 새로 추가한다.
+remove_base_ingredient(...) 함수는 특정 메뉴 스타일의 기본 재료를 제거한다.
+Database 인터페이스에 의존하여 PostgreSQL 데이터베이스와 통신한다.
+
+IngredientService (services/ingredient_service.py)
+
+IngredientService는 재료 및 재고 관련 비즈니스 로직을 처리하는 서비스 클래스이다.
+get_all_ingredients() 함수는 전체 재료 목록 및 재고 현황을 조회하고 반환한다.
+get_ingredient(ingredient_code) 함수는 특정 재료의 상세 정보 및 재고를 조회한다.
+create_ingredient(...) 함수는 신규 재료를 생성하고, 초기 재고를 설정한다.
+update_pricing(...) 함수는 특정 재료의 단가를 수정하며, 가격 변경 이력을 기록한다.
+create_intake(...) 함수는 매니저가 입고 예정 정보를 등록하며, 입고 ID를 반환한다.
+confirm_intake(...) 함수는 요리사가 실제 입고 수량을 확인하고, 재고에 반영하며, 예정 수량과 실제 수량의 차이를 기록한다.
+restock_ingredients(...) 함수는 재고를 수동으로 보충하며, 단일 또는 여러 재료의 재고를 증가시킨다.
+bulk_restock() 함수는 여러 재료의 재고를 일괄 보충하며, 대량 입고 시 사용된다.
+Database 인터페이스에 의존하여 PostgreSQL 데이터베이스와 통신한다.
+
+SideDishService (services/side_dish_service.py)
+
+SideDishService는 사이드 디시 관련 비즈니스 로직을 처리하는 서비스 클래스이다.
+list_side_dishes(db, include_inactive) 함수는 전체 사이드 디시 목록을 조회하며, include_inactive 파라미터에 따라 비활성 사이드 디시 포함 여부를 결정한다.
+get_side_dish(db, code) 함수는 특정 사이드 디시의 상세 정보 및 재료 구성을 조회한다.
+create_side_dish(db, ...) 함수는 신규 사이드 디시를 생성하고, 재료 구성을 저장한다.
+update_availability(db, code, is_available) 함수는 특정 사이드 디시의 가용성을 변경하며, 재고 부족 시 비활성화할 수 있다.
+add_or_update_ingredient(db, ...) 함수는 특정 사이드 디시에 재료를 추가하거나, 기존 재료의 수량을 수정한다.
+remove_ingredient(db, code, ingredient_code) 함수는 특정 사이드 디시의 재료를 제거한다.
+Database 인터페이스에 의존하여 PostgreSQL 데이터베이스와 통신한다.
+
+Database (인터페이스)
+
+"Menu & Inventory Domain" 시스템의 모든 서비스는 Database 인터페이스를 통해 PostgreSQL 데이터베이스와 통신한다.
+이 인터페이스는 실제로는 "Database Layer" 시스템에 구현되어 있으며, SQLAlchemy ORM을 통해 데이터베이스 작업을 수행한다.

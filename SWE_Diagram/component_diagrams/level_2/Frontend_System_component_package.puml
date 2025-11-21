@@ -1,0 +1,49 @@
+@startuml
+title "Frontend System Component Package"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+
+' =======================
+' 인터페이스 정의
+' =======================
+
+interface "Customer UI" as ICustomerUI
+interface "Admin UI" as IAdminUI
+interface "Common Components" as ICommonComponents
+interface "REST API Client" as IRestAPIClient
+interface "WebSocket Client" as IWebSocketClient
+
+' =======================
+' 컴포넌트 정의
+' =======================
+
+component "Customer Web App" as CustomerApp
+component "Admin & Staff Web App" as AdminApp
+component "Common Components" as CommonComp
+
+' =======================
+' Provided Interfaces
+' =======================
+
+CustomerApp -up- ICustomerUI
+AdminApp -up- IAdminUI
+CommonComp -up- ICommonComponents
+
+' =======================
+' Required Interfaces
+' =======================
+
+CustomerApp --( IRestAPIClient
+CustomerApp --( IWebSocketClient
+CustomerApp --( ICommonComponents
+
+AdminApp --( IRestAPIClient
+AdminApp --( IWebSocketClient
+AdminApp --( ICommonComponents
+
+@enduml

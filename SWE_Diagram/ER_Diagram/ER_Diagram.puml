@@ -1,7 +1,9 @@
 @startuml
-' Dinner Service 실제 DB 스키마 기반 ER 다이어그램 (2025)
+' Dinner Service Database Schema ER Diagram (2025)
 
-skinparam defaultFontName "Malgun Gothic"
+top to bottom direction
+
+skinparam defaultFontName "Arial"
 skinparam shadowing false
 skinparam linetype ortho
 skinparam roundcorner 10
@@ -13,9 +15,11 @@ skinparam note {
     backgroundColor #EFEFEF
     borderColor #555
 }
+skinparam nodesep 80
+skinparam ranksep 100
 
 ' ===============================
-' 1. 매장 / 직원 도메인
+' 1. Store / Staff Domain
 ' ===============================
 
 entity "stores" as stores {
@@ -69,12 +73,12 @@ entity "staff_termination_logs" as staff_termination_logs {
 
 note left of users
   **User & Staff Schema**
-  - 로그인/권한(`user_type`)
-  - 직원 상세/해고 이력
+  - Login/Permission (`user_type`)
+  - Staff Details & Termination Log
 end note
 
 ' ===============================
-' 2. 재료 입고 / 재고 도메인
+' 2. Ingredient Intake / Inventory Domain
 ' ===============================
 
 entity "ingredients" as ingredients {
@@ -128,14 +132,14 @@ entity "store_inventory" as store_inventory {
 }
 
 note right of ingredients
-  **재고/입고 관리**
-  - 재료 기본 마스터
-  - 입고 배치 및 단가
-  - 매장별 재고 수량
+  **Inventory & Intake Management**
+  - Ingredient Master Data
+  - Intake Batch & Unit Price
+  - Store-wise Stock Quantity
 end note
 
 ' ===============================
-' 3. 메뉴 / 스타일 / 사이드 메뉴 도메인
+' 3. Menu / Serving Style / Side Dish Domain
 ' ===============================
 
 entity "serving_styles" as serving_styles {
@@ -193,15 +197,15 @@ entity "custom_cake_recipes" as custom_cake_recipes {
 }
 
 note left of menu_items
-  **메뉴/사이드/레시피**
-  - 디너 코스(`menu_items`)
-  - 스타일별 제공 여부
-  - 메뉴/사이드별 기본 재료
-  - 커스텀 케이크 레시피
+  **Menu / Side Dish / Recipe**
+  - Dinner Course (`menu_items`)
+  - Availability by Serving Style
+  - Base Ingredients per Menu/Side
+  - Custom Cake Recipes
 end note
 
 ' ===============================
-' 4. 주문 / 결제 도메인
+' 4. Order / Payment Domain
 ' ===============================
 
 entity "orders" as orders {
@@ -291,14 +295,14 @@ entity "mock_payments" as mock_payments {
 
 note right of orders
   **Order & Payment**
-  - 주문 헤더/라인/커스터마이징
-  - 사이드 디시/케이크 커스터마이징
-  - 재고 예약 및 실제 차감
-  - Mock 결제 이력
+  - Order Header/Line/Customization
+  - Side Dish & Cake Customization
+  - Inventory Reservation & Consumption
+  - Mock Payment History
 end note
 
 ' ===============================
-' 5. 고객 로열티 / 이벤트 / 문의 도메인
+' 5. Customer Loyalty / Event / Inquiry Domain
 ' ===============================
 
 entity "customer_loyalty" as customer_loyalty {
@@ -349,62 +353,62 @@ entity "customer_inquiries" as customer_inquiries {
 }
 
 note right of customer_loyalty
-  **CRM & 이벤트**
-  - 고객별 주문/지출/등급
-  - 프로모션 이벤트 및 메뉴 할인
-  - 고객 문의 관리
+  **CRM & Events**
+  - Customer Orders/Spending/VIP Level
+  - Promotion Events & Menu Discounts
+  - Customer Inquiry Management
 end note
 
 ' ===============================
-' 6. 관계 정의
+' 6. Relationships
 ' ===============================
 
 ' User / Staff
-users "1" --|| "0..1" staff_details : "직원 상세 (STAFF)"
-users "1" --o{ "0..*" staff_termination_logs : "해고 이력(terminated_by)"
-users "1" --o{ "0..*" orders : "고객 주문"
-users "1" --|| "0..1" customer_loyalty : "로열티 정보"
+users "1" --|| "0..1" staff_details : "Staff Details (STAFF)"
+users "1" --o{ "0..*" staff_termination_logs : "Termination Log (terminated_by)"
+users "1" --o{ "0..*" orders : "Customer Orders"
+users "1" --|| "0..1" customer_loyalty : "Loyalty Info"
 
-staff_details "0..*" --|| "1" stores : "소속 매장"
-ingredient_intake_batches "0..*" --|| "1" stores : "입고 매장"
-ingredient_intake_batches "0..*" --|| "1" users : "관리자(manager_id)"
-ingredient_intake_batches "0..*" --o{ "0..1" users : "요리사(cook_id)"
+staff_details "0..*" --|| "1" stores : "Belongs to Store"
+ingredient_intake_batches "0..*" --|| "1" stores : "Intake Store"
+ingredient_intake_batches "0..*" --|| "1" users : "Manager (manager_id)"
+ingredient_intake_batches "0..*" --o{ "0..1" users : "Cook (cook_id)"
 
-' 재료/재고
-ingredient_pricing "1" --|| "1" ingredients : "코드=이름"
-ingredient_intake_items "0..*" --|| "1" ingredient_intake_batches : "배치"
-ingredient_intake_items "0..*" --|| "1" ingredients : "재료"
-store_inventory "0..*" --|| "1" stores : "매장"
-store_inventory "0..*" --|| "1" ingredients : "재료"
+' Ingredients/Inventory
+ingredient_pricing "1" --|| "1" ingredients : "code=name"
+ingredient_intake_items "0..*" --|| "1" ingredient_intake_batches : "Batch"
+ingredient_intake_items "0..*" --|| "1" ingredients : "Ingredient"
+store_inventory "0..*" --|| "1" stores : "Store"
+store_inventory "0..*" --|| "1" ingredients : "Ingredient"
 
-' 메뉴/스타일/사이드
-menu_serving_style_availability "0..*" --|| "1" menu_items : "메뉴"
-menu_serving_style_availability "0..*" --|| "1" serving_styles : "스타일"
-menu_base_ingredients "0..*" --|| "1" ingredients : "기본 재료(ingredient_code)"
-side_dishes "0..*" --o{ "0..*" users : "생성자(created_by)"
-custom_cake_recipes "0..*" --|| "1" ingredients : "케이크 재료"
+' Menu/Style/Side
+menu_serving_style_availability "0..*" --|| "1" menu_items : "Menu"
+menu_serving_style_availability "0..*" --|| "1" serving_styles : "Style"
+menu_base_ingredients "0..*" --|| "1" ingredients : "Base Ingredient (ingredient_code)"
+side_dishes "0..*" --o{ "0..*" users : "Created By (created_by)"
+custom_cake_recipes "0..*" --|| "1" ingredients : "Cake Ingredient"
 
-' 주문/결제
-orders "0..*" --|| "1" stores : "주문 매장"
-orders "0..*" --o{ "0..1" users : "고객(customer_id)"
-orders "1" --o{ "0..*" order_items : "주문 항목"
-orders "1" --o{ "0..*" order_side_dishes : "사이드 디시"
-orders "1" --o{ "0..*" order_inventory_reservations : "재고 예약"
-orders "1" --o{ "0..1" mock_payments : "결제"
+' Order/Payment
+orders "0..*" --|| "1" stores : "Order Store"
+orders "0..*" --o{ "0..1" users : "Customer (customer_id)"
+orders "1" --o{ "0..*" order_items : "Order Items"
+orders "1" --o{ "0..*" order_side_dishes : "Side Dishes"
+orders "1" --o{ "0..*" order_inventory_reservations : "Inventory Reservation"
+orders "1" --o{ "0..1" mock_payments : "Payment"
 
-order_items "0..*" --|| "1" menu_items : "메뉴"
-order_items "0..*" --|| "1" serving_styles : "스타일"
-order_item_customizations "0..*" --|| "1" order_items : "재료 커스터마이징"
-order_side_dishes "0..*" --|| "1" side_dishes : "사이드 디시"
-cake_customizations "0..*" --|| "1" order_items : "케이크"
-cake_customizations "0..*" --o{ "0..1" users : "고객"
-order_inventory_reservations "0..*" --|| "1" orders : "주문별 예약"
-mock_payments "0..*" --|| "1" orders : "주문 결제"
+order_items "0..*" --|| "1" menu_items : "Menu"
+order_items "0..*" --|| "1" serving_styles : "Style"
+order_item_customizations "0..*" --|| "1" order_items : "Ingredient Customization"
+order_side_dishes "0..*" --|| "1" side_dishes : "Side Dish"
+cake_customizations "0..*" --|| "1" order_items : "Cake"
+cake_customizations "0..*" --o{ "0..1" users : "Customer"
+order_inventory_reservations "0..*" --|| "1" orders : "Order Reservation"
+mock_payments "0..*" --|| "1" orders : "Order Payment"
 
-' 로열티/이벤트/문의
-customer_loyalty "1" --|| "1" users : "고객"
-event_promotions "0..*" --o{ "0..1" users : "생성자(created_by)"
-event_menu_discounts "0..*" --|| "1" event_promotions : "이벤트"
-event_menu_discounts "0..*" --|| "1" menu_items : "메뉴"
+' Loyalty/Event/Inquiry
+customer_loyalty "1" --|| "1" users : "Customer"
+event_promotions "0..*" --o{ "0..1" users : "Created By (created_by)"
+event_menu_discounts "0..*" --|| "1" event_promotions : "Event"
+event_menu_discounts "0..*" --|| "1" menu_items : "Menu"
 
 @enduml

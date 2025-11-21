@@ -1,0 +1,83 @@
+2 "Staff Web App" 서브시스템 세부 설계
+
+"Staff Web App" 시스템은 요리사와 배달원이 배정된 주문을 확인하고 상태를 업데이트하는 웹 애플리케이션이다.
+
+직원은 실시간으로 새로운 주문 배정 알림을 받고, 주문 진행 상황에 따라 상태를 변경할 수 있다.
+요리사는 조리 대기 및 조리 중인 주문을 확인하고, 조리 완료 시 상태를 업데이트한다.
+배달원은 배송 대기 및 배송 중인 주문을 확인하고, 배송 완료 시 상태를 업데이트한다.
+WebSocket을 통해 실시간으로 주문 배정 알림을 수신한다.
+포지션이 배정되지 않은 신규 직원은 회원가입 후 매니저의 승인을 기다린다.
+
+"Staff Web App" 시스템은 아래와 같은 중요한 페이지들로 구성되어 있다.
+
+StaffLoginPage
+직원 전용 로그인 페이지를 제공한다.
+email과 password를 입력받아 인증을 수행한다.
+handleLogin() 함수는 백엔드 /api/auth/login 엔드포인트로 로그인 요청을 전송하고, 성공 시 직원 대시보드로 리다이렉트한다.
+
+StaffRegisterPage
+신규 직원 회원가입 페이지를 제공한다.
+기본 정보(이메일, 비밀번호, 이름, 전화번호, 주소)를 입력받는다.
+formData 객체에 회원가입 입력 정보를 저장한다.
+handleRegister() 함수는 백엔드 /api/auth/register-staff 엔드포인트로 회원가입 요청을 전송하며, 포지션 미정 상태(position=null)로 계정이 생성된다.
+
+StaffDashboardPage
+배정된 주문 목록을 실시간으로 표시하는 대시보드 페이지이다.
+orders 배열에 배정된 주문 목록을 저장하고, wsConnected 변수에 WebSocket 연결 상태를 저장한다.
+loadOrders() 함수는 백엔드로부터 배정된 주문 목록을 로드한다.
+updateOrderStatus(orderId, status) 함수는 주문 상태를 업데이트하며, 상태는 PREPARING, IN_DELIVERY, DELIVERED 등이 있다.
+listenRealtimeUpdates() 함수는 WebSocket 연결을 설정하고, 새로운 주문 배정 알림을 실시간으로 수신한다.
+
+
+2.1 메인 클래스도
+
+AuthContext (contexts/AuthContext.tsx)
+
+"Staff Web App" 시스템은 AuthContext를 통해 직원 인증 상태를 전역적으로 관리한다.
+user 변수에 현재 로그인한 직원 정보(이름, 이메일, 포지션 등)를 저장하고, token 변수에 JWT 액세스 토큰을 저장한다.
+login(email, password) 함수는 백엔드 /api/auth/login 엔드포인트로 로그인 요청을 전송하고, 성공 시 토큰을 localStorage에 저장한다.
+logout() 함수는 토큰을 제거하고 사용자 정보를 초기화한다.
+
+ToastContext (contexts/ToastContext.tsx)
+
+"Staff Web App" 시스템은 ToastContext를 통해 알림 메시지를 전역적으로 관리한다.
+toasts 배열에 현재 표시 중인 알림 메시지 목록을 저장한다.
+showToast(message, type) 함수는 새로운 알림 메시지를 추가하며, type은 "success", "error", "warning", "info" 중 하나이다.
+
+StaffDashboardPage (app/dashboard/staff/page.tsx)
+
+StaffDashboardPage는 직원 대시보드 페이지를 나타낸다.
+orders 배열에 직원에게 배정된 주문 목록을 저장한다. 요리사는 조리 대기/진행 중인 주문을, 배달원은 배송 대기/진행 중인 주문을 확인한다.
+wsConnected 변수는 WebSocket 연결 상태를 나타낸다.
+loadOrders() 함수는 백엔드 /api/orders/staff/all 엔드포인트로부터 배정된 주문 목록을 조회한다.
+updateOrderStatus(orderId, status) 함수는 백엔드 /api/orders/{orderId}/status 엔드포인트로 주문 상태 변경 요청을 전송한다.
+요리사의 경우: "조리 시작" 버튼 → PREPARING 상태로 변경, "조리 완료" 버튼 → READY_FOR_DELIVERY 상태로 변경
+배달원의 경우: "배송 시작" 버튼 → IN_DELIVERY 상태로 변경, "배송 완료" 버튼 → DELIVERED 상태로 변경
+listenRealtimeUpdates() 함수는 WebSocket /api/ws 엔드포인트로 연결하고, ORDER_CREATED 및 ORDER_STATUS_CHANGED 메시지를 수신하여 주문 목록을 실시간으로 업데이트한다.
+AuthContext와 ToastContext에 의존하여 직원 인증 상태 및 알림 메시지를 관리한다.
+
+StaffLoginPage (app/login/staff/page.tsx)
+
+StaffLoginPage는 직원 로그인 페이지를 나타낸다.
+email과 password 변수에 입력받은 이메일과 비밀번호를 저장한다.
+handleLogin() 함수는 AuthContext의 login() 함수를 호출하여 로그인을 처리하고, 성공 시 직원 대시보드 페이지(/dashboard/staff)로 리다이렉트한다.
+실패 시 ToastContext를 통해 에러 메시지를 표시한다.
+
+StaffRegisterPage (app/register/staff/page.tsx)
+
+StaffRegisterPage는 신규 직원 회원가입 페이지를 나타낸다.
+formData 객체에 회원가입 입력 정보(이메일, 비밀번호, 이름, 전화번호, 주소)를 저장한다.
+handleRegister() 함수는 백엔드 /api/auth/register-staff 엔드포인트로 회원가입 요청을 전송한다.
+회원가입 성공 시 포지션 미정 상태(position=null)로 계정이 생성되며, 매니저가 포지션(COOK 또는 DELIVERY)을 배정할 때까지 대기한다.
+ToastContext를 통해 회원가입 성공 또는 실패 메시지를 표시한다.
+
+ProtectedRoute (components/ProtectedRoute.tsx)
+
+ProtectedRoute는 인증이 필요한 페이지를 보호하는 컴포넌트이다.
+AuthContext에서 직원 로그인 상태를 확인하고, 미로그인 시 로그인 페이지로 리다이렉트한다.
+render(children) 함수는 인증된 직원에게만 자식 컴포넌트를 렌더링한다.
+
+Backend API (인터페이스)
+
+"Staff Web App" 시스템의 모든 페이지는 Backend API 인터페이스를 통해 백엔드 시스템과 통신한다.
+이 인터페이스는 실제로는 "Order & Checkout Domain", "User & Auth Domain", "AI & Realtime Domain" 등의 백엔드 시스템에 구현되어 있다.

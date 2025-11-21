@@ -1,0 +1,28 @@
+@startuml
+title "Admin & Staff Web App Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "Admin & Staff Web App" as AdminAppComp {
+}
+
+rectangle "AdminDashboard" as AdminDashboard
+rectangle "StaffDashboard" as StaffDashboard
+rectangle "ManagePage" as ManagePage
+rectangle "StaffLoginPage" as StaffLoginPage
+
+AdminDashboard ..> AdminAppComp
+StaffDashboard ..> AdminAppComp
+ManagePage ..> AdminAppComp
+StaffLoginPage ..> AdminAppComp
+
+@enduml

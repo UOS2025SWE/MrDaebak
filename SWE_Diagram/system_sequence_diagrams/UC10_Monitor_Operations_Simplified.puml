@@ -1,0 +1,29 @@
+@startuml
+title "UC-10: Monitor Operations & Handle Inquiries"
+
+actor Manager
+participant "Mr. Daebak System" as System
+
+== Monitor Realtime Operations ==
+Manager -> System: 1. Connect to operations dashboard (WebSocket)
+activate System
+System --> Manager: 2. Connected
+
+... time passes ...
+
+System --> Manager: 3. Realtime notification\n(ORDER_CREATED, ORDER_STATUS_CHANGED)
+deactivate System
+
+== Review Inquiries ==
+Manager -> System: 4. Request inquiry list\n(filter: status=NEW)
+activate System
+System --> Manager: 5. Inquiry list
+deactivate System
+
+== Update Inquiry ==
+Manager -> System: 6. Update inquiry\n(inquiry_id, status, manager_note)
+activate System
+System --> Manager: 7. Inquiry updated successfully
+deactivate System
+
+@enduml

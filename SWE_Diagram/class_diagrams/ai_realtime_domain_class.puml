@@ -1,0 +1,125 @@
+@startuml
+title "AI & Realtime Domain"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Database" as IDatabase
+interface "Gemini LLM API" as ILLMApi
+interface "OpenAI Audio API" as IAudioApi
+
+class "VoiceRouter\n(routers/voice.py)" as VoiceRouter {
+  + POST /api/voice/analyze
+  + POST /api/voice/tts
+  + POST /api/voice/stt
+}
+
+class "VoiceInputRequest" as VoiceInputRequest <<Pydantic>> {
+  transcript: str
+  user_id: str | None
+  session_id: str | None
+}
+
+class "VoiceAnalysisResponse" as VoiceAnalysisResponse <<Pydantic>> {
+  intent: str
+  confidence: float
+  response: str
+  analysis: dict
+  recommended_menu: dict | None
+  alternatives: list[dict]
+  additional_questions: list[str]
+  order_state: dict | None
+  state: str
+  state_decision: int
+  menu_selection: int
+  style_selection: int
+  quantity: int | None
+  customization_overrides: dict
+}
+
+class "TextToSpeechRequest" as TextToSpeechRequest <<Pydantic>> {
+  text: str
+  voice: str | None
+  format: str | None
+}
+
+class "WebSocketRouter\n(routers/websocket.py)" as WebSocketRouter {
+  + WS /api/ws
+  + GET /api/ws/stats
+}
+
+class "GeminiService\n(services/gemini_service.py)" as GeminiService {
+  + analyze_voice_input(transcript, user_id, session_id, db): dict
+  + get_user_order_history(user_id, db): dict
+  + get_active_events(db): dict
+  - build_conversation_context(...): str
+}
+
+class "ConversationSession\n(services/gemini_service.py)" as ConversationSession {
+  - session_id: str
+  - messages: list
+  - context: dict
+  - order_state: dict
+  ---
+  + add_message(role, content): void
+  + get_context_summary(): str
+  + get_order_state_summary(): str
+  + update_context(key, value): void
+  + update_order_state(**kwargs): void
+  + advance_stage(new_stage): void
+}
+
+class "OpenAIAudioService\n(services/openai_audio_service.py)" as OpenAIAudioService {
+  + transcribe_audio(audio_bytes, filename, mime_type, language): str
+  + synthesize_speech(text, voice, audio_format): (bytes, str)
+}
+
+class "GeminiImageService\n(services/gemini_image_service.py)" as GeminiImageService {
+  + generate_image(prompt, aspect_ratio): (bytes, str)
+  + edit_image(base_image_bytes, base_mime_type, prompt, aspect_ratio): (bytes, str)
+}
+
+class "WebSocketManager\n(services/websocket_manager.py)" as WebSocketManager {
+  - active_connections: dict[user_id, WebSocket]
+  ---
+  + connect(user_id, user_type, websocket): void
+  + disconnect(user_id): void
+  + broadcast_to_staff(message): void
+  + send_to_user(user_id, message): void
+  + send_heartbeat(user_id): void
+}
+
+IDatabase -[hidden]down- ILLMApi
+ILLMApi -[hidden]down- IAudioApi
+
+VoiceRouter -[hidden]down- VoiceInputRequest
+VoiceInputRequest -[hidden]down- VoiceAnalysisResponse
+VoiceAnalysisResponse -[hidden]down- TextToSpeechRequest
+
+GeminiService -[hidden]down- ConversationSession
+ConversationSession -[hidden]down- OpenAIAudioService
+OpenAIAudioService -[hidden]down- GeminiImageService
+
+WebSocketRouter -[hidden]down- WebSocketManager
+
+VoiceRouter ..> VoiceInputRequest
+VoiceRouter ..> VoiceAnalysisResponse
+VoiceRouter ..> TextToSpeechRequest
+VoiceRouter ..> GeminiService
+VoiceRouter ..> OpenAIAudioService
+
+WebSocketRouter ..> WebSocketManager
+
+GeminiService ..> ILLMApi
+GeminiService ..> IDatabase
+GeminiService ..> ConversationSession
+
+OpenAIAudioService ..> IAudioApi
+
+GeminiImageService ..> ILLMApi
+
+WebSocketManager ..> IDatabase
+
+@enduml

@@ -1,0 +1,44 @@
+@startuml
+title "Dinner Service System - Component Diagram"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam package {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+
+package "Frontend" as Frontend {
+}
+
+package "Backend" as Backend {
+}
+
+package "Database System" as DatabaseSys {
+  package "PostgreSQL" as PostgreSQL
+}
+
+package "AI Services" as AISys {
+  package "LLM" as LLM
+  package "Image Generation" as ImageGeneration
+}
+
+package "Speech Services" as SpeechSys {
+  package "STT" as STT
+  package "TTS" as TTS
+}
+
+package "Payment Integration" as PaymentSys {
+  package "Mock Payment Gateway" as MockPayment
+}
+
+Frontend ..> Backend
+
+Backend ..> PostgreSQL
+Backend ..> LLM
+Backend ..> ImageGeneration
+Backend ..> STT
+Backend ..> TTS
+Backend ..> MockPayment
+
+@enduml

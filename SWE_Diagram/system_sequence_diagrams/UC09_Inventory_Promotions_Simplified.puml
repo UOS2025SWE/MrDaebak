@@ -1,0 +1,30 @@
+@startuml
+title "UC-09: Manage Inventory & Promotions"
+
+actor Manager
+participant "Mr. Daebak System" as System
+
+== View Inventory ==
+Manager -> System: 1. Request inventory status
+activate System
+System --> Manager: 2. Inventory list\n(ingredients, quantities, low-stock alerts)
+deactivate System
+
+== Adjust Stock ==
+Manager -> System: 3. Update stock quantity\n(ingredient_id, quantity_change)
+activate System
+System --> Manager: 4. Stock updated successfully
+deactivate System
+
+== Manage Promotions ==
+Manager -> System: 5. Request promotion list
+activate System
+System --> Manager: 6. Event/promotion list
+deactivate System
+
+Manager -> System: 7. Create/Update promotion\n(title, period, discount details)
+activate System
+System --> Manager: 8. Promotion saved successfully
+deactivate System
+
+@enduml

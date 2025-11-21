@@ -1,0 +1,39 @@
+@startuml
+title "Backend System Component Package"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+
+interface "REST API" as IRestAPI
+interface "WebSocket API" as IWebSocketAPI
+interface "Business Logic" as IBusinessLogic
+interface "Integration Service" as IIntegrationService
+interface "Data Access" as IDataAccess
+
+component "API Routers" as ApiRouters
+component "Domain Services" as DomainServices
+component "Integration & Realtime" as IntegrationRealtime
+component "Persistence" as Persistence
+
+ApiRouters -up- IRestAPI
+ApiRouters -up- IWebSocketAPI
+
+DomainServices -up- IBusinessLogic
+
+IntegrationRealtime -up- IIntegrationService
+
+Persistence -up- IDataAccess
+
+ApiRouters --( IBusinessLogic
+ApiRouters --( IIntegrationService
+
+DomainServices --( IDataAccess
+DomainServices --( IIntegrationService
+
+IntegrationRealtime --( IDataAccess
+
+@enduml

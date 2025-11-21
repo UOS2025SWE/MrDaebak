@@ -1,0 +1,23 @@
+@startuml
+title "UC-03: Track Order Status"
+
+actor Customer
+participant "Mr. Daebak System" as System
+
+== Initial Load ==
+Customer -> System: 1. Request order list
+activate System
+System --> Customer: 2. Order list with current statuses
+deactivate System
+
+== Realtime Updates ==
+Customer -> System: 3. Connect to realtime updates (WebSocket)
+activate System
+System --> Customer: 4. Connected
+
+... time passes ...
+
+System --> Customer: 5. Order status changed notification\n(order_id, old_status, new_status)
+deactivate System
+
+@enduml

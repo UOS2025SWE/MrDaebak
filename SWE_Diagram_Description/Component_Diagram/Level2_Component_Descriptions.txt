@@ -1,0 +1,96 @@
+Dinner Service System Level 2 컴포넌트 패키지 설명
+
+================================================================================
+
+
+Frontend System - Level 2 컴포넌트 패키지 구성
+================================================================================
+
+Customer Web App 컴포넌트
+
+Customer Web App 컴포넌트는 고객용 웹 애플리케이션으로 주문, 메뉴 조회, 음성 주문, 결제, 주문 내역 등의 기능을 제공한다. Customer UI 인터페이스를 제공하고, REST API Client, WebSocket Client, Common Components 인터페이스를 필요로 한다.
+
+주요 페이지로는 HomePage, MenuPage, OrderPage, VoicePage, CheckoutPage, OrdersPage, OrderCompletePage, EventsPage, ProfilePage, RegisterPage, LoginPage, AboutPage, ContactPage가 있다. HomePage는 메인 페이지로 프로모션을 안내하고, MenuPage는 메뉴 카탈로그와 필터링 기능을 제공한다. OrderPage는 GUI 방식의 주문 생성을 담당하며, VoicePage는 음성 주문 인터페이스를 제공한다. CheckoutPage는 결제를 처리하고, OrdersPage는 주문 내역을 조회한다. OrderCompletePage는 주문 완료를 확인하고, EventsPage는 이벤트 및 프로모션 정보를 보여준다. ProfilePage는 사용자 프로필을 관리하며, RegisterPage와 LoginPage는 회원가입 및 로그인을 처리한다. AboutPage와 ContactPage는 서비스 소개 및 문의를 담당한다.
+
+주요 기능으로는 음성 주문, 실시간 주문 추적, 반응형 디자인, 메뉴 검색 및 필터링, 결제 처리가 있다. 음성 주문은 MediaRecorder API를 통해 음성을 녹음하고 STT/TTS를 통합하여 AI 기반 대화형 주문을 제공한다. 실시간 주문 추적은 WebSocket 기반으로 주문 상태를 업데이트하며 푸시 알림을 전송한다. 반응형 디자인은 모바일, 태블릿, 데스크톱을 지원한다. 메뉴 검색 및 필터링은 카테고리별, 가격별, 인기순 정렬을 제공하며, 결제 처리는 카드 정보 입력 및 결제 확인을 수행한다.
+
+
+Admin & Staff Web App 컴포넌트
+
+Admin & Staff Web App 컴포넌트는 관리자 및 직원용 웹 애플리케이션으로 대시보드, 주문 관리, 메뉴 관리, 재고 관리 등의 기능을 제공한다. Admin UI 인터페이스를 제공하고, REST API Client, WebSocket Client, Common Components 인터페이스를 필요로 한다.
+
+주요 페이지로는 AdminDashboard, StaffDashboard, ManagePage, StaffLoginPage가 있다. AdminDashboard는 관리자 전용 대시보드로 전체 통계 및 모니터링을 제공하고, StaffDashboard는 직원 전용 대시보드로 역할별 작업 목록을 보여준다. ManagePage는 메뉴, 재고, 이벤트 관리를 통합하여 제공하며, StaffLoginPage는 직원 전용 로그인을 처리한다.
+
+역할별 기능으로는 Cook, Delivery Staff, Manager 기능이 있다. Cook은 주방 직원으로 실시간 주문 알림을 수신하고 조리 상태를 대기에서 조리 중, 완료로 업데이트하며 재료 재고를 확인하고 부족 알림을 받는다. Delivery Staff는 배달 직원으로 배달 대기 주문 목록을 조회하고 배달 상태를 픽업, 배달 중, 완료로 업데이트하며 고객 주소 및 연락처를 확인한다. GPS 기반 배달 경로 안내는 향후 확장 예정이다. Manager는 관리자로 전체 주문을 실시간으로 모니터링하고 메뉴를 추가, 수정, 삭제하며 가격을 조정한다. 또한 이벤트 및 프로모션을 관리하고 재고 입출고를 관리하며 직원 계정을 관리하고 권한을 설정한다. 매출 통계 및 리포트를 조회하는 기능도 제공한다.
+
+실시간 기능으로는 WebSocket을 통한 주문 상태 실시간 업데이트, 새로운 주문 발생 시 역할별 알림 전송, 주방과 배달 진행 상황 실시간 동기화가 있다.
+
+
+Common Components 컴포넌트
+
+Common Components 컴포넌트는 Frontend 전역에서 재사용되는 공통 UI 컴포넌트를 제공한다. Common Components 인터페이스를 제공하며, 다른 인터페이스를 필요로 하지 않는다.
+
+주요 컴포넌트로는 Header, Footer, UserDropdown, ProtectedRoute, ToastContainer, ChangePasswordModal이 있다. Header는 네비게이션 메뉴, 로고, 사용자 정보를 표시하고, Footer는 하단 정보, 링크, 저작권을 표시한다. UserDropdown은 사용자 메뉴 드롭다운으로 프로필, 주문내역, 로그아웃 기능을 제공한다. ProtectedRoute는 인증된 사용자만 접근 가능한 라우트를 보호하고, ToastContainer는 전역 알림 메시지를 성공, 오류, 경고로 표시한다. ChangePasswordModal은 비밀번호 변경 모달 다이얼로그를 제공한다.
+
+기술적 특징으로는 React Context API를 통한 전역 상태 관리, 컴포넌트 재사용성을 위한 Props 기반 설계, Tailwind CSS 유틸리티 클래스 활용, 반응형 디자인 패턴 적용이 있다.
+
+
+================================================================================
+
+
+Backend System - Level 2 컴포넌트 패키지 구성
+================================================================================
+
+API Routers 컴포넌트
+
+API Routers 컴포넌트는 HTTP 요청을 라우팅하고 WebSocket 연결을 관리하는 Presentation Layer이다. 클라이언트 요청을 받아 Domain Services로 위임하고, 응답을 JSON 형태로 반환한다. REST API, WebSocket API 인터페이스를 제공하고, Business Logic, Integration Service 인터페이스를 필요로 한다.
+
+14개의 Router로 구성되어 있다. auth 라우터는 회원가입, 로그인, 로그아웃, 토큰 갱신을 처리하고, admin 라우터는 관리자 대시보드와 통계 조회를 제공한다. order 라우터는 주문 생성, 조회, 수정, 삭제, 상태 변경을 담당하며, menu 라우터는 메뉴 CRUD, 가격 조회, 카테고리 필터링을 처리한다. checkout 라우터는 결제 처리와 주문 확인을 수행하고, cake 라우터는 AI 기반 케이크 이미지 생성 및 편집을 제공한다. voice 라우터는 음성 녹음 파일 업로드, STT 변환, TTS 음성 생성을 담당하며, websocket 라우터는 실시간 주문 상태 브로드캐스트를 처리한다. events 라우터는 이벤트 조회, 생성, 수정, 삭제를 관리하고, discount 라우터는 할인 쿠폰 적용과 할인 계산을 수행한다. ingredients 라우터는 재료 재고 조회와 입출고 관리를 담당하며, side_dishes 라우터는 사이드 디시를 관리한다. inquiries 라우터는 고객 문의 접수 및 답변을 처리하고, staff 라우터는 직원 계정 관리와 역할 권한 설정을 담당한다.
+
+책임 범위로는 HTTP 요청 파싱 및 유효성 검증, JWT 토큰 인증 및 권한 확인, 요청을 Domain Services로 위임, 응답 데이터 직렬화, 예외 처리 및 HTTP 상태 코드 반환이 있다. 응답 데이터는 Pydantic 모델을 사용하여 직렬화한다.
+
+
+Domain Services 컴포넌트
+
+Domain Services 컴포넌트는 비즈니스 로직을 캡슐화한 Service Layer이다. 도메인 규칙을 적용하고, 여러 데이터 소스를 조합하여 비즈니스 기능을 제공한다. Business Logic 인터페이스를 제공하고, Data Access, Integration Service 인터페이스를 필요로 한다.
+
+10개의 Service로 구성되어 있다. OrderService는 주문 생성 및 유효성 검증을 수행하고 주문 상태를 대기, 확인, 조리, 배달, 완료 단계로 관리한다. 사용자별, 날짜별, 상태별 주문 조회를 제공하며 주문 취소 및 환불을 처리한다. PaymentService는 Mock 결제 처리 및 검증을 수행하고 결제 상태를 PENDING, PAID, REFUNDED로 추적한다. 결제 내역을 조회하며 카드 번호 마스킹을 처리한다. DiscountService는 메뉴별, 이벤트별 할인율을 계산하고 쿠폰 유효성을 검증한다. 중복 할인 규칙을 적용하며 최종 결제 금액을 산정한다.
+
+EventService는 이벤트 생성 및 관리를 담당하고 프로모션 기간 유효성을 확인한다. 활성 이벤트를 조회하며 이벤트 통계를 집계한다. MenuService는 메뉴 CRUD 작업을 수행하고 메뉴 가격을 조회하며 업데이트한다. 카테고리별 메뉴 필터링을 제공하고 인기 메뉴 순위를 계산한다. IngredientService는 재료 재고를 추적하고 입출고를 관리한다. 재고 부족 알림을 제공하며 재고 소진을 예측한다.
+
+InquiryService는 고객 문의를 접수하고 문의 답변을 작성한다. 문의 상태를 접수, 처리 중, 완료로 관리한다. LoginService는 이메일과 비밀번호로 사용자를 인증하고 JWT 토큰을 생성 및 검증한다. 세션을 관리하며 비밀번호를 bcrypt로 해싱한다. SideDishService는 사이드 디시 메뉴를 관리하고 주문 시 사이드 디시를 추가한다. StaffService는 직원 계정을 생성 및 관리하고 Cook, Delivery, Manager 역할 권한을 설정한다. 직원 근무 시간 기록 기능은 향후 확장 예정이다.
+
+비즈니스 규칙으로는 주문 최소 금액 10,000원 이상, 할인 최대 적용률 50%, 재고 부족 시 주문 제한, 배달 가능 시간 09:00부터 22:00까지가 적용된다.
+
+
+Integration & Realtime 컴포넌트
+
+Integration & Realtime 컴포넌트는 외부 서비스 통합과 실시간 통신을 담당하는 Adapter Layer이다. 외부 API 호출을 캡슐화하고 내부 도메인 모델로 변환한다. Integration Service 인터페이스를 제공하고, Data Access 인터페이스를 필요로 한다.
+
+4개의 Adapter로 구성되어 있다. GeminiService는 Google Gemini LLM API를 호출하여 음성 주문 텍스트를 분석하고 의도를 파악한다. 7단계 주문 플로우를 PROMOTION_GREETING부터 CHECKOUT_READY까지 관리하고 ConversationSession으로 대화 컨텍스트를 유지한다. 과거 주문 이력을 기반으로 개인화 추천을 제공하며 활성 이벤트 정보를 주입한다.
+
+GeminiImageService는 Google Gemini Image API를 호출하여 텍스트 기반 케이크 이미지를 생성한다. Text-to-Image 방식으로 이미지를 생성하고 Image-to-Image 방식으로 이미지를 편집한다. 케이크 전용 가드레일을 적용하며 생성된 이미지를 backend/uploads/cakes/ 경로에 저장한다.
+
+OpenAIAudioService는 OpenAI Audio API를 호출하여 STT와 TTS 기능을 제공한다. STT는 음성 파일을 텍스트로 변환하며 WebM, MP3, WAV 등의 포맷을 지원한다. TTS는 텍스트를 음성으로 변환하여 MP3로 출력한다. 한국어 음성 인식을 최적화하고 nova, alloy, echo 등 다양한 음성 옵션을 지원한다.
+
+WebSocketManager는 WebSocket 연결을 connection pool로 관리하고 클라이언트별 세션을 관리한다. 주문 상태 변경 시 실시간 브로드캐스트를 수행하며 Cook, Delivery, Customer 역할별로 선택적 메시지를 전송한다. 연결 끊김을 감지하고 재연결을 처리한다.
+
+기술적 특징으로는 Adapter 패턴으로 외부 의존성을 격리하고 exponential backoff 방식의 재시도 로직을 적용한다. 에러 핸들링 및 fallback 처리를 수행하며 API 응답 캐싱 기능은 향후 확장 예정이다.
+
+
+Persistence 컴포넌트
+
+Persistence 컴포넌트는 데이터베이스 연결 및 트랜잭션 관리를 담당하는 Data Access Layer이다. SQLAlchemy ORM을 활용하여 데이터베이스 작업을 추상화한다. Data Access 인터페이스를 제공하며, 다른 인터페이스를 필요로 하지 않는다.
+
+주요 구성 요소로는 Database, SessionLocal, Engine이 있다. Database는 데이터베이스를 초기화하고 연결을 설정한다. create_all로 테이블 스키마를 생성하며 Health Check로 연결 상태를 확인한다. SessionLocal은 SQLAlchemy 세션 팩토리로 트랜잭션 범위를 관리한다. autocommit=False와 autoflush=False로 설정되어 있다. Engine은 Connection Pool을 관리하고 pool_pre_ping=True로 연결 유효성을 사전 검증한다. pool_recycle=3600으로 1시간마다 연결을 재생성하며 echo=False로 SQL 로그를 비활성화한다.
+
+데이터베이스 테이블로는 users, orders, order_items, menu_items, serving_styles, ingredients, side_dishes, order_item_customizations, events, menu_discounts, mock_payments, inquiries, staff가 있다. users 테이블은 customer와 staff 사용자 정보를 저장하고, orders 테이블은 주문 헤더를 관리한다. order_items 테이블은 주문 상세로 메뉴 아이템을 저장하며, menu_items 테이블은 메뉴 마스터 데이터를 관리한다. serving_styles 테이블은 Simple, Grand, Deluxe 서빙 스타일을 저장한다. ingredients 테이블은 재료 마스터를 관리하고, side_dishes 테이블은 사이드 디시를 저장한다. order_item_customizations 테이블은 주문별 커스터마이징을 관리하며, events 테이블은 이벤트와 프로모션을 저장한다. menu_discounts 테이블은 메뉴별 할인 정보를 관리하고, mock_payments 테이블은 Mock 결제 트랜잭션을 저장한다. inquiries 테이블은 문의사항을 관리하며, staff 테이블은 직원 정보를 저장한다.
+
+트랜잭션 관리는 FastAPI의 의존성 주입으로 세션을 자동 생성하고 요청 종료 시 세션을 자동 종료한다. 예외 발생 시 자동 롤백을 수행하며 명시적 commit() 호출이 필요하다.
+
+데이터 접근 패턴으로는 Repository 패턴 적용이 향후 확장 가능하며 ORM 기반 쿼리로 type-safe를 보장한다. Raw SQL을 지원하여 복잡한 집계 쿼리를 처리하고 Lazy Loading과 Eager Loading을 최적화한다.
+
+
+================================================================================
+
+이상으로 Frontend와 Backend의 Level 2 컴포넌트 패키지 구성에 대한 설명을 마친다.

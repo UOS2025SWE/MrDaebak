@@ -21,8 +21,8 @@ if (Main goal?) then ([Place New Order])
   if (Use Voice Order?) then ([Voice])
     :Click "음성 주문" 버튼;
     |System|
-    :Open voice widget\n(GeminiService + OpenAIAudioService);
-    :Start STT stream & call GeminiService\nwith current user + events;
+    :Open voice widget\n(LLMService + AudioService);
+    :Start STT stream & call LLMService\nwith current user + events;
     |Customer|
     :Speak dinner requirements;
     |System|
@@ -38,7 +38,7 @@ if (Main goal?) then ([Place New Order])
   if (Need decoration or note?) then (yes)
     :Upload photo or request AI image;
     |System|
-    :Call GeminiService for image prompt\n(or use existing asset);
+    :Call LLMService for image prompt\n(or use existing asset);
   endif
 
   |Customer|

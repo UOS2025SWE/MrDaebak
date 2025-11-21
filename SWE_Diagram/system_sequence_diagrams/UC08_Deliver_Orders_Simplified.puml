@@ -1,0 +1,25 @@
+@startuml
+title "UC-08: Deliver Orders"
+
+actor "Delivery Staff" as Delivery
+participant "Mr. Daebak System" as System
+
+== Load Delivery Orders ==
+Delivery -> System: 1. Request assigned orders
+activate System
+System --> Delivery: 2. Order list\n(PREPARING/DELIVERING status)
+deactivate System
+
+== Start Delivery ==
+Delivery -> System: 3. Update order status\n(order_id, status: DELIVERING)
+activate System
+System --> Delivery: 4. Status updated successfully
+deactivate System
+
+== Complete Delivery ==
+Delivery -> System: 5. Update order status\n(order_id, status: COMPLETED)
+activate System
+System --> Delivery: 6. Delivery completed successfully
+deactivate System
+
+@enduml

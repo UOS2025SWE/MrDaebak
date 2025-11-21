@@ -1,0 +1,17 @@
+5.1 주문 (Order) 객체 상태도
+
+주요 상태 (States):
+- 주문 접수 (RECEIVED): 고객이 주문을 생성하고 결제를 완료한 초기 상태로, 직원의 조리 수락을 대기 중인 상태
+- 조리 중 (PREPARING): 직원(Cook)이 주문을 수락하고 조리를 시작한 상태로, 음식을 준비하는 단계
+- 배달 중 (DELIVERING): 조리가 완료되어 배달 담당자(Delivery Staff)가 주문을 픽업하고 배달을 시작한 상태
+- 배달 완료 (COMPLETED): 배달 담당자가 고객에게 주문을 성공적으로 전달하여 주문이 완료된 최종 상태
+- 주문 취소 (CANCELLED): 고객이 조리 시작 전에 주문을 취소하거나, 재고 부족 등의 사유로 취소된 상태
+- 결제 실패 (PAYMENT_FAILED): 결제 처리 과정에서 오류가 발생하여 결제가 실패한 상태
+
+주요 이벤트 (Triggers / Events):
+- OrderService.create_order() 실행: 고객이 주문을 생성하면 RECEIVED 상태로 시작
+- update_order_status(PREPARING) 호출: 조리사가 주문을 수락하면 RECEIVED에서 PREPARING으로 전이
+- update_order_status(DELIVERING) 호출: 조리 완료 후 배달 시작 시 PREPARING에서 DELIVERING으로 전이
+- update_order_status(COMPLETED) 및 consume_order_inventory() 호출: 배달 완료 시 DELIVERING에서 COMPLETED로 전이하며 실제 재고 차감 수행
+- cancel_order() 호출: 고객이 주문 취소 시 RECEIVED에서 CANCELLED로 전이하고 결제 상태를 REFUNDED로 변경
+- PaymentService.process_mock_payment() 실패: 결제 처리 실패 시 RECEIVED에서 PAYMENT_FAILED로 전이

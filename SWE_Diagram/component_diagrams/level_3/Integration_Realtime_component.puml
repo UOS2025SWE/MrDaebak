@@ -1,0 +1,28 @@
+@startuml
+title "Integration & Realtime Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "Integration & Realtime" as IntegrationRealtimeComp {
+}
+
+rectangle "GeminiService" as GeminiService
+rectangle "GeminiImageService" as GeminiImageService
+rectangle "OpenAIAudioService" as OpenAIAudioService
+rectangle "WebSocketManager" as WebSocketManager
+
+GeminiService ..> IntegrationRealtimeComp
+GeminiImageService ..> IntegrationRealtimeComp
+OpenAIAudioService ..> IntegrationRealtimeComp
+WebSocketManager ..> IntegrationRealtimeComp
+
+@enduml

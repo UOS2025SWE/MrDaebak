@@ -1,0 +1,86 @@
+교류도: Manage Delivery Preferences (MRD-CUS-UC04)
+
+================================================================================
+
+1. 교류: 기본 배달 정보 조회 (주 흐름 및 부 흐름 2a)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 체크아웃 페이지를 열어 배달 정보 조회 시작
+
+2) CustomerWebApp (fe) -> CheckoutRouter (checkoutR)
+- CustomerWebApp이 GET /api/checkout/delivery-info/{user_id} 엔드포인트로 배달 정보 조회 요청을 전송
+- URL 파라미터: user_id (고객 ID)
+
+3) CheckoutRouter (checkoutR) -> CheckoutRouter (checkoutR)
+- CheckoutRouter가 load_delivery_info(user_id) 메서드를 호출하여 해당 고객의 저장된 배달 정보를 조회
+- 조회 대상: 이름(name), 전화번호(phone), 주소(address)
+
+4) 교류 분기 (Alternative Flow):
+- (부 흐름 2a) 저장된 배달 정보 없음 시:
+- CheckoutRouter가 해당 user_id에 대한 배달 정보가 없음을 감지
+- CheckoutRouter가 CustomerWebApp으로 {has_default: false, delivery_info: null} 응답을 반환
+- CustomerWebApp이 빈 폼을 표시하고 "배달 정보를 입력해 주세요." 메시지를 표시
+- 흐름 (7)로 진행
+
+- (주 흐름) 저장된 배달 정보 존재 시:
+- CheckoutRouter가 배달 정보 조회 성공
+- 다음 단계로 진행
+
+5) CheckoutRouter (checkoutR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 배달 정보를 반환
+- 응답 바디: {has_default: true, delivery_info: {name: string, phone: string, address: string}}
+
+6) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 배달 정보 폼에 기존 정보를 자동 입력(pre-fill)
+- 표시 정보: 수령인 이름, 전화번호, 배달 주소
+
+================================================================================
+
+2. 교류: 배달 정보 수정 및 저장 (주 흐름 및 부 흐름 3a, 3b)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 배달 정보 폼에서 주소 또는 수령인 정보를 수정
+
+2) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 '기본 배달지로 저장' 버튼을 클릭
+
+3) CustomerWebApp (fe) -> CheckoutRouter (checkoutR)
+- CustomerWebApp이 PUT /api/checkout/delivery-info/{user_id} 엔드포인트로 배달 정보 업데이트 요청을 전송
+- 요청 바디: DeliveryInfo {name: string, phone: string, address: string}
+- 요청 헤더: Authorization: Bearer JWT 토큰
+
+4) CheckoutRouter (checkoutR) -> CheckoutRouter (checkoutR)
+- CheckoutRouter가 validate_delivery_info(DeliveryInfo) 메서드를 호출하여 입력 검증
+- 검증 항목: 전화번호 형식(10-11자리 숫자), 주소 형식(배달 가능 지역 및 상세 주소 포함)
+
+5) 교류 분기 (Alternative Flow):
+- (부 흐름 3a) 주소 형식 오류 시:
+- CheckoutRouter가 주소 형식이 유효하지 않음을 감지 (예: 배달 불가 지역, 상세 주소 누락)
+- CheckoutRouter가 CustomerWebApp으로 400 Bad Request 오류를 반환
+- 오류 메시지: "올바른 주소를 입력해 주세요."
+- CustomerWebApp이 고객에게 오류 메시지를 표시
+- 흐름 (1)로 복귀하여 고객이 재입력 가능
+
+- (부 흐름 3b) 전화번호 형식 오류 시:
+- CheckoutRouter가 전화번호 형식이 유효하지 않음을 감지 (예: 숫자가 아니거나 자릿수 부족)
+- CheckoutRouter가 CustomerWebApp으로 400 Bad Request 오류를 반환
+- 오류 메시지: "올바른 전화번호를 입력해 주세요."
+- CustomerWebApp이 고객에게 오류 메시지를 표시
+- 흐름 (1)로 복귀하여 고객이 재입력 가능
+
+- (주 흐름) 검증 성공 시:
+- 모든 검증을 통과하면 다음 단계로 진행
+
+6) CheckoutRouter (checkoutR) -> CheckoutRouter (checkoutR)
+- CheckoutRouter가 update_default_address(user_id, DeliveryInfo) 메서드를 호출하여 배달 정보 저장
+- 데이터베이스 operations 테이블 또는 user_delivery_preferences 테이블에 UPSERT 수행
+- 저장되는 데이터: user_id, 수령인 이름, 전화번호, 주소, 업데이트 일시
+
+7) CheckoutRouter (checkoutR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 저장 성공 응답을 반환
+- 응답 바디: {success: true, message: "Default address saved", delivery_info: {...}}
+
+8) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 저장 완료 확인 메시지를 표시
+- 확인 메시지: "기본 배달지로 저장되었습니다."
+- 향후 주문 시 저장된 배달 정보가 자동으로 적용됨을 안내

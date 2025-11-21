@@ -1,0 +1,25 @@
+@startuml
+title "UC-07: Prepare Orders Kitchen"
+
+actor Cook
+participant "Mr. Daebak System" as System
+
+== Load Cook Orders ==
+Cook -> System: 1. Request assigned orders
+activate System
+System --> Cook: 2. Order list\n(RECEIVED/PREPARING status)
+deactivate System
+
+== Start Cooking ==
+Cook -> System: 3. Update order status\n(order_id, status: PREPARING)
+activate System
+System --> Cook: 4. Status updated successfully
+deactivate System
+
+== Complete Cooking ==
+Cook -> System: 5. Update order status\n(order_id, status: DELIVERING)
+activate System
+System --> Cook: 6. Status updated successfully
+deactivate System
+
+@enduml

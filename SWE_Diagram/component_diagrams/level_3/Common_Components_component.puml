@@ -1,0 +1,32 @@
+@startuml
+title "Common Components Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "Common Components" as CommonComp {
+}
+
+rectangle "Header" as Header
+rectangle "Footer" as Footer
+rectangle "UserDropdown" as UserDropdown
+rectangle "ProtectedRoute" as ProtectedRoute
+rectangle "ToastContainer" as ToastContainer
+rectangle "ChangePasswordModal" as ChangePasswordModal
+
+Header ..> CommonComp
+Footer ..> CommonComp
+UserDropdown ..> CommonComp
+ProtectedRoute ..> CommonComp
+ToastContainer ..> CommonComp
+ChangePasswordModal ..> CommonComp
+
+@enduml

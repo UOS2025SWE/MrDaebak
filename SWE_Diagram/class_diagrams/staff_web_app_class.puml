@@ -1,0 +1,64 @@
+@startuml
+title "Staff Web App"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Backend API" as IBackend
+
+class "AuthContext\n(contexts/AuthContext.tsx)" as AuthContext {
+  - user: User | null
+  - token: string | null
+  ---
+  + login(email, password): Promise<void>
+  + logout(): void
+}
+
+class "ToastContext\n(contexts/ToastContext.tsx)" as ToastContext {
+  - toasts: Toast[]
+  ---
+  + showToast(message, type): void
+}
+
+class "StaffDashboardPage\n(app/dashboard/staff/page.tsx)" as StaffDashboardPage {
+  - orders: Order[]
+  - wsConnected: boolean
+  ---
+  + loadOrders(): Promise<void>
+  + updateOrderStatus(orderId, status): Promise<void>
+  + listenRealtimeUpdates(): void
+}
+
+class "StaffLoginPage\n(app/login/staff/page.tsx)" as StaffLoginPage {
+  - email: string
+  - password: string
+  ---
+  + handleLogin(): Promise<void>
+}
+
+class "StaffRegisterPage\n(app/register/staff/page.tsx)" as StaffRegisterPage {
+  - formData: RegisterFormData
+  ---
+  + handleRegister(): Promise<void>
+}
+
+class "ProtectedRoute\n(components/ProtectedRoute.tsx)" as ProtectedRoute {
+  + render(children): JSX.Element
+}
+
+StaffDashboardPage ..> AuthContext
+StaffDashboardPage ..> ToastContext
+StaffDashboardPage ..> IBackend
+
+StaffLoginPage ..> AuthContext
+StaffLoginPage ..> ToastContext
+StaffLoginPage ..> IBackend
+
+StaffRegisterPage ..> ToastContext
+StaffRegisterPage ..> IBackend
+
+ProtectedRoute ..> AuthContext
+
+@enduml

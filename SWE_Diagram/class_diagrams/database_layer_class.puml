@@ -1,0 +1,40 @@
+@startuml
+title "Database Layer"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+class "Database\n(services/database.py)" as Database {
+  + get_db(): Session
+  + init_database(): void
+}
+
+class "PostgreSQL" as PostgreSQL <<database>> {
+  **Tables**
+  + users
+  + staff_details
+  + orders
+  + order_items
+  + order_item_customizations
+  + menu_items
+  + serving_styles
+  + ingredients
+  + ingredient_stock_history
+  + ingredient_intake_records
+  + ingredient_intake_items
+  + side_dishes
+  + side_dish_ingredients
+  + custom_cake_recipes
+  + cake_customizations
+  + event_promotions
+  + event_menu_discounts
+  + loyalty_tier_discounts
+  + mock_payments
+  + inquiries
+}
+
+Database ..> PostgreSQL
+
+@enduml

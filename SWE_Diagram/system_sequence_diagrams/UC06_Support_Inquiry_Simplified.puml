@@ -1,0 +1,13 @@
+@startuml
+title "UC-06: Submit Support Inquiry"
+
+actor Customer
+participant "Mr. Daebak System" as System
+
+== Submit Inquiry ==
+Customer -> System: 1. Submit support inquiry\n(name, email, topic, message)
+activate System
+System --> Customer: 2. Inquiry received\n(inquiry_id, status)
+deactivate System
+
+@enduml

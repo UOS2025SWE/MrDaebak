@@ -10,11 +10,11 @@ participant "voiceR:VoiceRouter" as voiceR
 participant "orderSvc:OrderService" as orderSvc
 participant "paySvc:PaymentService" as paySvc
 participant "discSvc:DiscountService" as discSvc
-participant "geminiSvc:GeminiService" as geminiSvc
-participant "audioSvc:OpenAIAudioService" as audioSvc
+participant "llmSvc:LLMService" as llmSvc
+participant "audioSvc:AudioService" as audioSvc
 actor paymentSystem as "Mock Payment"
-actor geminiAI as "Gemini NLU"
-actor openAIAudio as "OpenAI STT/TTS"
+actor llmAPI as "LLM"
+actor audioAPI as "STT & TTS"
 
 == GUI Order Path ==
 activate customer
@@ -51,51 +51,37 @@ deactivate fe
 
 == Voice Order Path ==
 group Capture & Transcribe
-  activate C
-  C -> FE: Press "Voice Order" & speak
-  deactivate C
-  activate FE
-  FE -> OpenAIAudio: send audio blob
-  deactivate FE
-  activate OpenAIAudio
-  OpenAIAudio -> AudioSvc: transcribe_audio()
-  activate AudioSvc
-  AudioSvc -> OpenAIAudio: call STT API
-  OpenAIAudio --> AudioSvc: transcript
-  deactivate OpenAIAudio
-  AudioSvc --> FE: transcript text
-  deactivate AudioSvc
   activate customer
   customer -> fe: Press "Voice Order" & speak
   deactivate customer
   activate fe
-  fe -> openAIAudio: send audio blob
+  fe -> audioAPI: send audio blob
   deactivate fe
-  activate openAIAudio
-  openAIAudio -> audioSvc: transcribe_audio()
+  activate audioAPI
+  audioAPI -> audioSvc: transcribe_audio()
   activate audioSvc
-  audioSvc -> openAIAudio: call STT API
-  openAIAudio --> audioSvc: transcript
-  deactivate openAIAudio
+  audioSvc -> audioAPI: call STT API
+  audioAPI --> audioSvc: transcript
+  deactivate audioAPI
   audioSvc --> fe: transcript text
   deactivate audioSvc
 end
 
-group Analyze & Recommend (Gemini)
+group Analyze & Recommend (LLM)
   activate fe
   fe -> voiceR: POST /api/voice/analyze\n(transcript, session_id, user_id)
   deactivate fe
   activate voiceR
-  voiceR -> geminiSvc: analyze_voice_input(...)
-  activate geminiSvc
-  geminiSvc -> geminiSvc: get_user_order_history(user_id, db)
-  geminiSvc -> geminiSvc: get_active_events(db)
-  geminiSvc -> geminiAI: generate_content(model, prompt)
-  activate geminiAI
-  geminiAI --> geminiSvc: structured JSON\n(intent, menu, style, qty, customizations)
-  deactivate geminiAI
-  geminiSvc --> voiceR: analysis + proposed order
-  deactivate geminiSvc
+  voiceR -> llmSvc: analyze_voice_input(...)
+  activate llmSvc
+  llmSvc -> llmSvc: get_user_order_history(user_id, db)
+  llmSvc -> llmSvc: get_active_events(db)
+  llmSvc -> llmAPI: generate_content(model, prompt)
+  activate llmAPI
+  llmAPI --> llmSvc: structured JSON\n(intent, menu, style, qty, customizations)
+  deactivate llmAPI
+  llmSvc --> voiceR: analysis + proposed order
+  deactivate llmSvc
   voiceR --> fe: AI response + order preview
   deactivate voiceR
   activate fe

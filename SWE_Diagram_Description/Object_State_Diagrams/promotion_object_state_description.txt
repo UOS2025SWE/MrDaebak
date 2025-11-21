@@ -1,0 +1,16 @@
+5.4 이벤트 프로모션 (Event Promotion) 객체 상태도
+
+주요 상태 (States):
+- 초안 (Draft): 매니저가 이벤트를 생성했으나 아직 공개하지 않은 상태로, event_promotions.is_published가 false인 상태
+- 예약됨 (Scheduled): 이벤트가 공개 설정되었으나 시작 날짜가 아직 도래하지 않은 상태로, is_published가 true이고 start_date가 현재 날짜보다 미래인 상태
+- 진행 중 (Active): 이벤트가 공개되어 현재 진행 중인 상태로, is_published가 true이고 현재 날짜가 시작 날짜와 종료 날짜 사이에 있는 상태
+- 종료됨 (Ended): 이벤트 종료 날짜가 지났거나 매니저가 이벤트를 비활성화하여 종료된 상태
+
+주요 이벤트 (Triggers / Events):
+- EventService.create_event() 실행: 매니저가 이벤트를 생성하면 Draft 상태로 시작하며 is_published는 false로 설정
+- EventService.update_event(is_published=true, start_date>today) 호출: 매니저가 미래 날짜로 이벤트를 공개 설정하면 Draft에서 Scheduled로 전이
+- EventService.update_event(is_published=true, start_date<=today) 호출: 매니저가 현재 또는 과거 날짜로 이벤트를 공개 설정하면 Draft에서 Active로 직접 전이
+- EventService.delete_event() 또는 update_event(is_published=false) 호출: 매니저가 이벤트를 삭제하거나 비활성화하면 Draft에서 Ended로 전이
+- 자동 전이 (start_date 도래): 시스템이 날짜를 확인하여 start_date에 도달하면 Scheduled에서 Active로 자동 전이 (get_active_menu_discounts 메서드에서 날짜 조건으로 필터링)
+- EventService.update_event(is_published=false) 호출: 매니저가 예약된 이벤트를 취소하면 Scheduled에서 Ended로 전이
+- 자동 전이 (end_date 경과) 또는 update_event(is_published=false) 호출: end_date가 지났거나 매니저가 비활성화하면 Active에서 Ended로 전이

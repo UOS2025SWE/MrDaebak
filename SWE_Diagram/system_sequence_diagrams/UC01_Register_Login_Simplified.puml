@@ -1,0 +1,20 @@
+@startuml
+title "UC-01: Register & Log In"
+
+' Actors: Customer, Cook, Delivery Staff, Manager
+actor "User" as User
+participant "Mr. Daebak System" as System
+
+== Sign Up ==
+User -> System: 1. Submit registration\n(email, password, name, phone)
+activate System
+System --> User: 2. Registration successful
+deactivate System
+
+== Log In ==
+User -> System: 3. Submit login credentials\n(email, password)
+activate System
+System --> User: 4. Login successful\n(JWT token + user profile)
+deactivate System
+
+@enduml

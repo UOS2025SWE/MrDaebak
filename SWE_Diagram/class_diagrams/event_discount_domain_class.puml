@@ -1,0 +1,71 @@
+@startuml
+title "Event & Discount Domain"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Database" as IDatabase
+
+class "EventsRouter\n(routers/events.py)" as EventsRouter {
+  + GET /api/events/
+  + POST /api/events/
+  + GET /api/events/{event_id}
+  + PUT /api/events/{event_id}
+  + DELETE /api/events/{event_id}
+  + POST /api/events/{event_id}/upload-image
+  + GET /api/events/image/{filename}
+}
+
+class "EventMenuDiscountItem" as EventMenuDiscountItem <<Pydantic>> {
+  target_type: Literal["MENU", "SIDE_DISH"]
+  target_id: str | None
+  discount_type: Literal["PERCENT", "FIXED"]
+  discount_value: float
+}
+
+class "EventPayload" as EventPayload <<Pydantic>> {
+  title: str
+  description: str
+  start_date: datetime
+  end_date: datetime
+  priority: int
+  is_active: bool
+  menu_discounts: list[EventMenuDiscountItem]
+}
+
+class "DiscountRouter\n(routers/discount.py)" as DiscountRouter {
+  + GET /api/discount/{user_id}
+}
+
+class "EventService\n(services/event_service.py)" as EventService {
+  + list_events(db, is_active_only): dict
+  + get_event(db, event_id): dict
+  + create_event(db, payload): dict
+  + update_event(db, event_id, payload): dict
+  + delete_event(db, event_id): dict
+  + upload_event_image(event_id, file): dict
+}
+
+class "DiscountService\n(services/discount_service.py)" as DiscountService {
+  + get_customer_discount_info(user_id, db): dict
+  + calculate_order_pricing(user_id, original_price, db): dict
+  + increment_user_orders(user_id, db, total_price): void
+  - apply_loyalty_discount(order_count, original_price): Decimal
+  - apply_event_discounts(user_id, price, db): Decimal
+}
+
+EventsRouter ..> EventPayload
+EventsRouter ..> EventMenuDiscountItem
+EventsRouter ..> EventService
+
+EventPayload *-- EventMenuDiscountItem
+
+DiscountRouter ..> DiscountService
+
+EventService ..> IDatabase
+DiscountService ..> IDatabase
+DiscountService ..> EventService
+
+@enduml

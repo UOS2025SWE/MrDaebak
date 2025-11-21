@@ -1,0 +1,48 @@
+@startuml
+title "API Routers Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "API Routers" as ApiRoutersComp {
+}
+
+rectangle "AdminRouter" as AdminRouter
+rectangle "AuthRouter" as AuthRouter
+rectangle "CakeRouter" as CakeRouter
+rectangle "CheckoutRouter" as CheckoutRouter
+rectangle "DiscountRouter" as DiscountRouter
+rectangle "EventsRouter" as EventsRouter
+rectangle "IngredientsRouter" as IngredientsRouter
+rectangle "InquiriesRouter" as InquiriesRouter
+rectangle "MenuRouter" as MenuRouter
+rectangle "OrderRouter" as OrderRouter
+rectangle "SideDishesRouter" as SideDishesRouter
+rectangle "StaffRouter" as StaffRouter
+rectangle "VoiceRouter" as VoiceRouter
+rectangle "WebSocketRouter" as WebSocketRouter
+
+AdminRouter ..> ApiRoutersComp
+AuthRouter ..> ApiRoutersComp
+CakeRouter ..> ApiRoutersComp
+CheckoutRouter ..> ApiRoutersComp
+DiscountRouter ..> ApiRoutersComp
+EventsRouter ..> ApiRoutersComp
+IngredientsRouter ..> ApiRoutersComp
+InquiriesRouter ..> ApiRoutersComp
+MenuRouter ..> ApiRoutersComp
+OrderRouter ..> ApiRoutersComp
+SideDishesRouter ..> ApiRoutersComp
+StaffRouter ..> ApiRoutersComp
+VoiceRouter ..> ApiRoutersComp
+WebSocketRouter ..> ApiRoutersComp
+
+@enduml

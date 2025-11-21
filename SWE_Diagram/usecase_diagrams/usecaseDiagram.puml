@@ -8,8 +8,8 @@ actor Cook as "Cook (Staff)"
 actor Delivery as "Delivery Staff"
 actor Manager as "Manager"
 actor PaymentSystem as "<<External API>>\nMock Payment"
-actor GeminiAI as "<<External API>>\nGemini NLU"
-actor OpenAIAudio as "<<External API>>\nOpenAI STT / TTS"
+actor LLM as "<<External API>>\nLLM"
+actor AudioService as "<<External API>>\nSTT & TTS"
 
 Staff <|-- Cook
 Staff <|-- Delivery
@@ -51,8 +51,8 @@ Manager -- (Monitor Operations & Handle Inquiries)
 
 ' === External API interactions (no extra use cases to keep total <= 10) ===
 PaymentSystem .. (Place Dinner Order - GUI or Voice)
-GeminiAI .. (Place Dinner Order - GUI or Voice)
-OpenAIAudio .. (Place Dinner Order - GUI or Voice)
+LLM .. (Place Dinner Order - GUI or Voice)
+AudioService .. (Place Dinner Order - GUI or Voice)
 
 @enduml
 

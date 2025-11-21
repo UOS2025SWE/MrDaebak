@@ -1,0 +1,20 @@
+5.5 사용자 세션 (User Session) 객체 상태도
+
+주요 상태 (States):
+- 미인증 (Unauthenticated): 사용자가 로그인하지 않은 상태로, localStorage에 토큰이 저장되어 있지 않은 초기 상태
+- 세션 복원 중 (Restoring Session): 페이지 로드 시 localStorage에 저장된 토큰과 사용자 정보를 확인하여 세션을 복원하려는 중간 상태
+- 세션 만료 (Session Expired): 주기적인 토큰 검증에서 토큰이 무효화되거나 서버에서 거부되어 세션이 만료된 상태
+- 고객 인증됨 (Customer Authenticated): 로그인에 성공하여 user_type이 'CUSTOMER'인 고객으로 인증된 상태
+- 직원/매니저 인증됨 (Staff/Manager Authenticated): 로그인에 성공하여 user_type이 'STAFF' 또는 'MANAGER'인 직원으로 인증된 상태
+
+주요 이벤트 (Triggers / Events):
+- useEffect 실행 (페이지 로드 시): localStorage에서 'auth_token'을 확인하여 토큰이 있으면 Unauthenticated에서 Restoring Session으로 전이
+- useEffect에서 JSON.parse(savedUser) 성공 및 user_type='CUSTOMER': 저장된 사용자 정보를 파싱하여 고객으로 확인되면 Restoring Session에서 Customer Authenticated로 전이
+- useEffect에서 JSON.parse(savedUser) 성공 및 user_type∈{'STAFF', 'MANAGER'}: 저장된 사용자 정보를 파싱하여 직원/매니저로 확인되면 Restoring Session에서 Staff/Manager Authenticated로 전이
+- useEffect에서 토큰 파싱 실패 또는 토큰 없음: 토큰이 유효하지 않으면 localStorage에서 제거하고 Restoring Session에서 Unauthenticated로 전이
+- login() 성공 (user_type='CUSTOMER'): POST /api/auth/login 요청이 성공하고 고객으로 로그인되면 Unauthenticated에서 Customer Authenticated로 전이
+- login() 성공 (user_type∈{'STAFF', 'MANAGER'}): POST /api/auth/login 요청이 성공하고 직원/매니저로 로그인되면 Unauthenticated에서 Staff/Manager Authenticated로 전이
+- useEffect + setInterval에서 verifyToken() 실패 (5분 주기): 주기적 토큰 검증에서 토큰이 무효화되면 Customer Authenticated 또는 Staff/Manager Authenticated에서 Session Expired로 전이
+- logout() 호출: Session Expired 상태에서 자동으로 logout()이 호출되어 Unauthenticated로 전이하며 localStorage 토큰 제거
+- logout() 수동 호출: 사용자가 직접 로그아웃하면 Customer Authenticated 또는 Staff/Manager Authenticated에서 Unauthenticated로 전이
+- refreshUserInfo() 호출: GET /api/auth/me 요청으로 사용자 정보를 갱신하며, 동일 상태 내에서 self-transition (Customer Authenticated → Customer Authenticated 또는 Staff/Manager Authenticated → Staff/Manager Authenticated)

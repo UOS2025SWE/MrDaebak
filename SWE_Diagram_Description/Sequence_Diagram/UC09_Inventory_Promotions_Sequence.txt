@@ -1,0 +1,250 @@
+교류도: Manage Inventory & Promotions (MRD-CUS-UC09)
+
+================================================================================
+
+1. 교류: 재고 상태 조회 (주 흐름 및 부 흐름 2a)
+
+1) 관리자 (Manager) -> AdminAppUI (adminUI)
+- 관리자가 '재고 관리(Inventory)' 페이지를 열어 재고 상태 확인
+
+2) AdminAppUI (adminUI) -> IngredientsRouter (ingR)
+- AdminAppUI가 GET /api/ingredients/store 엔드포인트로 재고 조회 요청을 전송
+- 요청 헤더: Authorization: Bearer JWT 토큰
+
+3) IngredientsRouter (ingR) -> LoginService (loginSvc)
+- IngredientsRouter가 get_current_user() 메서드를 호출하여 현재 사용자 정보 조회
+- JWT 토큰에서 사용자 정보 추출 및 관리자 권한 확인
+
+4) LoginService (loginSvc) -> IngredientsRouter (ingR)
+- LoginService가 사용자 정보 반환
+- 반환 데이터: {user_id: string, user_type: MANAGER}
+- 관리자 권한 확인 완료
+
+5) IngredientsRouter (ingR) -> IngredientService (ingSvc)
+- IngredientsRouter가 get_store_inventory(db, store_id) 메서드를 호출하여 매장 재고 조회
+- 재고 정보와 재료 정보를 함께 조회
+
+6) IngredientService (ingSvc) -> PostgreSQL
+- IngredientService가 store_inventory와 ingredients 테이블을 JOIN하여 데이터 조회
+- 조회 쿼리: SELECT si.*, i.ingredient_name, i.unit FROM store_inventory si JOIN ingredients i ON si.ingredient_id = i.ingredient_id WHERE si.store_id = ?
+- 조회되는 데이터: ingredient_id, ingredient_name, unit, quantity_on_hand, reorder_level, last_updated
+- 재고 부족 판단: quantity_on_hand <= reorder_level
+
+7) 교류 분기 (Alternative Flow):
+- (부 흐름 2a) 재고 부족 알림 시:
+- IngredientService가 quantity_on_hand <= reorder_level인 재료들을 감지
+- 재고 부족 재료 목록을 low_stock_items 배열로 표시
+- IngredientService가 IngredientsRouter로 재고 목록과 함께 경고 플래그를 반환
+- 응답 데이터: {inventory: [...], low_stock_items: [...], has_low_stock: true}
+- 다음 단계로 계속 진행
+
+- (주 흐름) 재고 충분 시:
+- 모든 재료의 재고가 충분함
+- 응답 데이터: {inventory: [...], has_low_stock: false}
+- 다음 단계로 진행
+
+8) IngredientService (ingSvc) -> IngredientsRouter (ingR)
+- 재고 조회 성공 응답 반환
+- 응답 데이터: {inventory: array, low_stock_items: array (부족한 재료만), has_low_stock: boolean}
+
+9) IngredientsRouter (ingR) -> AdminAppUI (adminUI)
+- 200 OK 상태 코드와 함께 재고 정보를 반환
+- 응답 바디: 재고 목록 및 재고 부족 알림 포함
+
+10) AdminAppUI (adminUI) -> 관리자 (Manager)
+- AdminAppUI가 재고 목록을 화면에 렌더링
+- 표시 정보: 재료명, 현재 수량, 단위, 재주문 레벨, 마지막 업데이트 일시
+- 재고 부족 재료는 경고 색상(빨간색 또는 주황색)으로 강조 표시
+- 부족한 재료가 있을 경우 "일부 재료의 재고가 부족합니다." 경고 배너 표시
+
+================================================================================
+
+2. 교류: 재고 조정 (주 흐름 및 부 흐름 4a, 4b)
+
+1) 관리자 (Manager) -> AdminAppUI (adminUI)
+- 관리자가 특정 재료의 수량을 수정 (증가 또는 감소)
+- 입력 필드에 변경값(diff) 입력 (예: +50, -20)
+
+2) AdminAppUI (adminUI) -> IngredientsRouter (ingR)
+- AdminAppUI가 POST /api/ingredients/stock/update 엔드포인트로 재고 업데이트 요청을 전송
+- 요청 바디: {ingredient_id: string, diff: number}
+- 요청 헤더: Authorization: Bearer JWT 토큰
+- diff는 변경량 (양수: 재고 추가, 음수: 재고 차감)
+
+3) IngredientsRouter (ingR) -> IngredientService (ingSvc)
+- IngredientsRouter가 update_stock(db, ingredient_id, diff) 메서드를 호출하여 재고 업데이트
+- UPSERT 작업: store_inventory 테이블에 레코드가 있으면 수량 업데이트, 없으면 새로 생성
+
+4) IngredientService (ingSvc) -> PostgreSQL
+- IngredientService가 재고 업데이트 트랜잭션 시작
+- 현재 수량 조회: SELECT quantity_on_hand FROM store_inventory WHERE ingredient_id = ? AND store_id = ?
+- 새 수량 계산: new_quantity = quantity_on_hand + diff
+- 음수 검증: new_quantity >= 0인지 확인
+
+5) 교류 분기 (Alternative Flow):
+- (부 흐름 4b) 음수 재고 시:
+- IngredientService가 업데이트 후 재고가 음수가 됨을 감지 (new_quantity < 0)
+- IngredientService가 IngredientsRouter로 400 Bad Request 오류를 반환
+- 오류 메시지: "재고는 음수가 될 수 없습니다."
+- IngredientsRouter가 AdminAppUI로 오류 응답 전달
+- AdminAppUI가 관리자에게 오류 메시지를 표시
+- 흐름 (1)로 복귀하여 관리자가 올바른 값으로 재입력 가능
+
+- (주 흐름) 재고 업데이트 가능 시:
+- 새 수량이 0 이상이므로 업데이트 진행
+- 다음 단계로 진행
+
+6) IngredientService (ingSvc) -> PostgreSQL
+- IngredientService가 UPSERT 쿼리를 실행
+- INSERT INTO store_inventory (ingredient_id, store_id, quantity_on_hand, last_updated) VALUES (?, ?, ?, NOW()) ON CONFLICT (ingredient_id, store_id) DO UPDATE SET quantity_on_hand = quantity_on_hand + ?, last_updated = NOW()
+- 업데이트되는 필드: quantity_on_hand, last_updated
+
+7) 교류 분기 (Alternative Flow):
+- (부 흐름 4a) 재고 업데이트 실패 시:
+- 데이터베이스 업데이트 중 오류 발생 (예: 연결 실패, 제약 조건 위반)
+- IngredientService가 IngredientsRouter로 500 Internal Server Error 오류를 반환
+- 오류 메시지: "재고 업데이트에 실패했습니다."
+- AdminAppUI가 관리자에게 오류 메시지를 표시
+- 흐름 (1)로 복귀
+
+- (주 흐름) 업데이트 성공 시:
+- UPSERT가 성공적으로 완료
+- 다음 단계로 진행
+
+8) IngredientService (ingSvc) -> IngredientsRouter (ingR)
+- 재고 업데이트 성공 응답 반환
+- 응답 데이터: {success: true, new_quantity: number}
+
+9) IngredientsRouter (ingR) -> AdminAppUI (adminUI)
+- 200 OK 상태 코드와 함께 업데이트 성공 응답을 반환
+- 응답 바디: {success: true, new_quantity: number}
+
+10) AdminAppUI (adminUI) -> 관리자 (Manager)
+- AdminAppUI가 해당 재료의 새로운 수량을 UI에 반영
+- 표시 정보: 업데이트된 수량, 변경 일시
+- "재고가 업데이트되었습니다." 성공 메시지 표시
+- 재고 부족 상태가 해소된 경우 경고 색상 제거
+
+================================================================================
+
+3. 교류: 프로모션 목록 조회 (주 흐름)
+
+1) 관리자 (Manager) -> AdminAppUI (adminUI)
+- 관리자가 '이벤트(Events)' 페이지를 열어 프로모션 관리 시작
+
+2) AdminAppUI (adminUI) -> EventsRouter (evR)
+- AdminAppUI가 GET /api/events/manage 엔드포인트로 프로모션 목록 조회 요청을 전송
+- 요청 헤더: Authorization: Bearer JWT 토큰
+
+3) EventsRouter (evR) -> LoginService (loginSvc)
+- EventsRouter가 get_current_user() 메서드를 호출하여 현재 사용자 정보 조회
+- JWT 토큰에서 사용자 정보 추출 및 관리자 권한 확인
+
+4) LoginService (loginSvc) -> EventsRouter (evR)
+- LoginService가 사용자 정보 반환
+- 반환 데이터: {user_id: string, user_type: MANAGER}
+- 관리자 권한 확인 완료
+
+5) EventsRouter (evR) -> EventService (evSvc)
+- EventsRouter가 list_events(db, include_unpublished=true) 메서드를 호출하여 모든 이벤트 조회
+- include_unpublished=true: 게시되지 않은 이벤트도 포함하여 조회
+
+6) EventService (evSvc) -> PostgreSQL
+- EventService가 events와 event_discounts 테이블을 JOIN하여 데이터 조회
+- 조회 쿼리: SELECT e.*, ed.discount_type, ed.discount_value FROM events e LEFT JOIN event_discounts ed ON e.event_id = ed.event_id ORDER BY e.start_date DESC
+- 조회되는 데이터: event_id, title, description, start_date, end_date, is_active, discounts[]
+
+7) EventService (evSvc) -> EventsRouter (evR)
+- 이벤트 목록 조회 성공 응답 반환
+- 응답 데이터: {events: array}
+- 각 이벤트 객체: event_id, title, description, start_date, end_date, is_active, discounts[]
+
+8) EventsRouter (evR) -> AdminAppUI (adminUI)
+- 200 OK 상태 코드와 함께 이벤트 목록을 반환
+- 응답 바디: {events: [...]}
+
+9) AdminAppUI (adminUI) -> 관리자 (Manager)
+- AdminAppUI가 이벤트/프로모션 목록을 화면에 렌더링
+- 표시 정보: 이벤트 제목, 기간(시작일~종료일), 활성 상태, 할인 상세 정보
+- 각 이벤트마다 '수정' 및 '삭제' 버튼 제공
+- '새 이벤트 생성' 버튼 제공
+
+================================================================================
+
+4. 교류: 프로모션 생성 또는 수정 (주 흐름 및 부 흐름 8a, 8b)
+
+1) 관리자 (Manager) -> AdminAppUI (adminUI)
+- 관리자가 이벤트 폼을 작성 (새 생성 또는 기존 수정)
+- 입력 필드: 제목(title), 설명(description), 시작일(start_date), 종료일(end_date), 할인 정보(discounts)
+- 할인 정보: 할인 유형(percentage, fixed_amount), 할인 값, 적용 메뉴
+
+2) AdminAppUI (adminUI) -> EventsRouter (evR)
+- AdminAppUI가 POST /api/events (새 생성) 또는 PATCH /api/events/{id} (수정) 엔드포인트로 요청을 전송
+- 요청 바디: EventPayload {title, description, start_date, end_date, discounts[]}
+- 요청 헤더: Authorization: Bearer JWT 토큰
+
+3) EventsRouter (evR) -> LoginService (loginSvc)
+- EventsRouter가 get_current_user() 메서드를 호출하여 사용자 정보 조회 및 관리자 권한 확인
+
+4) LoginService (loginSvc) -> EventsRouter (evR)
+- LoginService가 사용자 정보 반환
+- 반환 데이터: {user_id: string, user_type: MANAGER, id: string}
+
+5) EventsRouter (evR) -> EventsRouter (evR)
+- EventsRouter가 입력 검증 수행
+- 검증 항목: 시작일이 종료일보다 이전인지, 필수 필드 존재 여부, 할인 값 유효성
+
+6) EventsRouter (evR) -> EventService (evSvc)
+- EventsRouter가 create_event(...) 또는 update_event(...) 메서드를 호출
+- 파라미터: 이벤트 정보 + 할인 정보 (프로모션 및 할인 정보 함께 저장)
+
+7) EventService (evSvc) -> PostgreSQL
+- EventService가 동일 메뉴에 대한 기간 중복 프로모션 존재 여부를 확인
+- 중복 확인 쿼리: SELECT * FROM events e JOIN event_discounts ed ON e.event_id = ed.event_id WHERE ed.menu_id = ? AND (start_date <= ? AND end_date >= ?)
+
+8) 교류 분기 (Alternative Flow):
+- (부 흐름 8a) 프로모션 기간 중복 시:
+- EventService가 동일 메뉴에 대해 기간이 중복되는 프로모션이 있음을 감지
+- EventService가 EventsRouter로 409 Conflict 경고를 반환
+- 경고 메시지: "해당 기간에 이미 활성화된 프로모션이 있습니다."
+- AdminAppUI가 관리자에게 경고 메시지와 함께 선택지를 제공
+- 선택지: "기간 수정" 또는 "강제 저장" (기존 프로모션 비활성화)
+- 관리자가 기간을 수정하면 흐름 (1)로 복귀
+- 관리자가 강제 저장을 선택하면 다음 단계로 진행 (기존 프로모션 비활성화 처리)
+
+- (주 흐름) 기간 중복 없음 또는 강제 저장 시:
+- 프로모션 저장 진행
+- 다음 단계로 진행
+
+9) EventService (evSvc) -> PostgreSQL
+- EventService가 트랜잭션 시작
+- 이벤트 생성/수정: INSERT INTO events (...) 또는 UPDATE events SET ... WHERE event_id = ?
+- 할인 정보 저장: INSERT INTO event_discounts (event_id, discount_type, discount_value, menu_id, ...) VALUES (...)
+- 트랜잭션 커밋
+
+10) 교류 분기 (Alternative Flow):
+- (부 흐름 8b) 프로모션 저장 실패 시:
+- 데이터베이스 저장 중 오류 발생 (예: 제약 조건 위반, 트랜잭션 실패)
+- EventService가 EventsRouter로 500 Internal Server Error 오류를 반환
+- 오류 메시지: "프로모션 저장에 실패했습니다."
+- EventsRouter가 AdminAppUI로 오류 응답 전달
+- AdminAppUI가 관리자에게 오류 메시지를 표시
+- 흐름 (1)로 복귀
+
+- (주 흐름) 저장 성공 시:
+- INSERT/UPDATE가 성공적으로 완료
+- 다음 단계로 진행
+
+11) EventService (evSvc) -> EventsRouter (evR)
+- 프로모션 생성/수정 성공 응답 반환
+- 응답 데이터: {success: true, event: {event_id, title, start_date, end_date, ...}}
+
+12) EventsRouter (evR) -> AdminAppUI (adminUI)
+- 200 OK (수정) 또는 201 Created (생성) 상태 코드와 함께 성공 응답을 반환
+- 응답 바디: {success: true, event: {...}}
+
+13) AdminAppUI (adminUI) -> 관리자 (Manager)
+- AdminAppUI가 업데이트된 이벤트 목록을 UI에 반영
+- 표시 정보: 새로 생성되거나 수정된 이벤트가 목록에 추가/업데이트됨
+- "프로모션이 저장되었습니다." 성공 메시지 표시
+- 이벤트 목록 페이지로 리디렉션 또는 목록 자동 새로고침

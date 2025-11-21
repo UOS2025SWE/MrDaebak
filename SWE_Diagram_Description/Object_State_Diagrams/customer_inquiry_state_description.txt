@@ -1,0 +1,15 @@
+5.3 고객 문의 (Customer Inquiry) 객체 상태도
+
+주요 상태 (States):
+- 신규 문의 (NEW): 고객이 문의를 접수한 초기 상태로, 매니저의 확인을 대기 중인 상태
+- 처리 중 (IN_PROGRESS): 매니저가 문의를 확인하고 답변을 작성 중인 상태
+- 처리 완료 (RESOLVED): 매니저가 문의에 대한 답변을 완료하고 문의가 종결된 상태
+- 보관됨 (ARCHIVED): 문의가 스팸이거나 중복이거나, 처리가 완료된 후 일정 기간이 지나 보관 처리된 상태
+
+주요 이벤트 (Triggers / Events):
+- InquiryService.create_inquiry() 실행: 고객이 문의를 접수하면 NEW 상태로 생성되며 customer_inquiries.status는 'NEW'로 설정
+- InquiryService.update_inquiry(status='IN_PROGRESS') 호출: 매니저가 문의 확인을 시작하면 NEW에서 IN_PROGRESS로 전이
+- InquiryService.update_inquiry(status='RESOLVED') 호출: 매니저가 답변을 완료하면 IN_PROGRESS에서 RESOLVED로 전이
+- InquiryService.update_inquiry(status='ARCHIVED') 호출: 신규 문의가 스팸/중복으로 판단되면 NEW에서 ARCHIVED로 직접 전이
+- InquiryService.update_inquiry(status='ARCHIVED') 호출: 처리 중인 문의가 불필요하면 IN_PROGRESS에서 ARCHIVED로 전이
+- InquiryService.update_inquiry(status='ARCHIVED') 호출: 완료된 문의를 일정 기간 후 또는 수동으로 보관 시 RESOLVED에서 ARCHIVED로 전이

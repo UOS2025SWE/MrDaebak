@@ -1,7 +1,9 @@
 @startuml
 title "UC-01: Register & Log In"
 
-actor customer as "Customer"
+' Note: This use case applies to all user types:
+' Customer, Cook, Delivery Staff, Manager
+actor customer as "User\n(Customer/Cook/Delivery/Manager)"
 participant "fe:CustomerWebApp" as fe
 participant "authR:AuthRouter" as authR
 participant "loginSvc:LoginService" as loginSvc

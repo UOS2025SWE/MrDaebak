@@ -1,66 +1,54 @@
 @startuml
-title "Dinner Service System Architecture - Package Diagram"
+title "Dinner Service System Architecture"
 
-skinparam defaultFontName "Malgun Gothic"
+skinparam defaultFontName Arial
 skinparam shadowing false
-skinparam package {
-  BackgroundColor #FDF6E3
-  BorderColor #555
-}
+skinparam linetype ortho
 
- ' 최상위 시스템 패키지(클래스 없이 패키지 수준만 표현)
-package "DinnerService" <<system>> {
+package "Customer Web App" as CustomerApp {}
+package "Staff Web App" as StaffApp {}
+package "Admin Web App" as AdminApp {}
+package "Order & Checkout Domain" as OrderDomain {}
+package "Menu & Inventory Domain" as MenuDomain {}
+package "Event & Discount Domain" as EventDomain {}
+package "User & Auth Domain" as UserDomain {}
+package "Staff Management Domain" as StaffMgmt {}
+package "AI & Realtime Domain" as AIDomain {}
+package "Database Layer" as DatabaseLayer {}
+package "External Systems" as ExternalSys <<external>> {}
 
-  ' --- Backend Monolith ---
-  package "Backend" <<subsystem>> {
+CustomerApp --> OrderDomain
+CustomerApp --> MenuDomain
+CustomerApp --> EventDomain
+CustomerApp --> UserDomain
+CustomerApp --> AIDomain
 
-    package "API Routers" as ApiRouters {
-    }
+StaffApp --> OrderDomain
+StaffApp --> UserDomain
+StaffApp --> AIDomain
 
-    package "Domain Services" as DomainServices {
-    }
+AdminApp --> OrderDomain
+AdminApp --> MenuDomain
+AdminApp --> EventDomain
+AdminApp --> UserDomain
+AdminApp --> StaffMgmt
 
-    package "Realtime & AI" as RealtimeAI {
-    }
+OrderDomain --> MenuDomain
+OrderDomain --> EventDomain
+OrderDomain --> DatabaseLayer
+OrderDomain --> ExternalSys
 
-    package "Persistence" as Persistence {
-    }
-  }
+MenuDomain --> DatabaseLayer
 
-  ' --- Frontend Apps ---
-  package "Frontend" {
+EventDomain --> DatabaseLayer
 
-    package "Customer Web App" as CustomerFE {
-    }
+UserDomain --> DatabaseLayer
 
-    package "Admin & Staff Web App" as AdminFE {
-    }
-  }
+StaffMgmt --> DatabaseLayer
 
-  ' --- External Systems ---
-  package "External Systems" as ExternalSys <<external>> {
-  }
-}
+AIDomain --> DatabaseLayer
+AIDomain --> ExternalSys
 
-' =======================
-' 패키지 간 주요 의존 관계 (패키지 단위)
-' =======================
-
-' Frontend → Backend
-CustomerFE ..> ApiRouters  : <<use>>\nHTTP / WebSocket / Voice
-AdminFE    ..> ApiRouters  : <<use>>\n관리자/스태프 기능
-
-' Backend 내부 의존 관계
-ApiRouters   ..> DomainServices : <<use>>
-DomainServices ..> Persistence  : <<use>>
-DomainServices ..> RealtimeAI   : <<use>>
-RealtimeAI    ..> Persistence   : <<use>>
-RealtimeAI    ..> ExternalSys   : <<use>>
-
-' Frontend → Realtime & AI (간접적으로 Routers를 통해 사용하지만, 아키텍처 레벨에서 표현)
-CustomerFE ..> RealtimeAI  : <<use>>\n음성 주문 / 추천 / 실시간 알림
-AdminFE    ..> RealtimeAI  : <<use>>\n실시간 모니터링
+CustomerApp ..> ExternalSys
 
 @enduml
-
-

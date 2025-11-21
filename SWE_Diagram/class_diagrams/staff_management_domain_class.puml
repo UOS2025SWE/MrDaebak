@@ -1,0 +1,51 @@
+@startuml
+title "Staff Management Domain"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Database" as IDatabase
+
+class "StaffRouter\n(routers/staff.py)" as StaffRouter {
+  + GET /api/staff/
+  + GET /api/staff/pending
+  + POST /api/staff/{staff_id}/assign-position
+  + POST /api/staff/{staff_id}/terminate
+  + GET /api/staff/{staff_id}/performance
+}
+
+class "AssignPositionRequest" as AssignPositionRequest <<Pydantic>> {
+  position: str
+}
+
+class "TerminateStaffRequest" as TerminateStaffRequest <<Pydantic>> {
+  reason: str | None
+}
+
+class "AdminRouter\n(routers/admin.py)" as AdminRouter {
+  + GET /api/admin/dashboard/stats
+  + GET /api/admin/dashboard/recent-orders
+  + GET /api/admin/dashboard/staff-summary
+  + GET /api/admin/reports/sales
+  + GET /api/admin/reports/inventory
+}
+
+class "StaffService\n(services/staff_service.py)" as StaffService {
+  + get_staff_with_order_status(db): dict
+  + get_pending_staff(db): list[dict]
+  + assign_position(db, staff_id, position): dict
+  + terminate_staff(db, staff_id, reason): dict
+  + get_staff_performance(db, staff_id): dict
+}
+
+StaffRouter ..> AssignPositionRequest
+StaffRouter ..> TerminateStaffRequest
+StaffRouter ..> StaffService
+
+AdminRouter ..> StaffService
+
+StaffService ..> IDatabase
+
+@enduml

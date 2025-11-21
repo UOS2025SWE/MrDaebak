@@ -1,0 +1,95 @@
+교류도: Submit Support Inquiry (MRD-CUS-UC06)
+
+================================================================================
+
+1. 교류: 지원 문의 제출 (주 흐름 및 부 흐름 1a, 1b, 2a)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 '지원(Support)' 페이지를 열어 문의 폼 확인
+
+2) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 문의 폼에 정보를 입력
+- 입력 필드: 이름(name), 이메일(email), 주제(topic), 메시지(message)
+- 이메일은 선택적으로 자동 입력될 수 있음 (로그인 상태인 경우)
+
+3) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 '제출(Submit)' 버튼을 클릭하여 문의 제출
+
+4) CustomerWebApp (fe) -> CustomerWebApp (fe)
+- CustomerWebApp이 클라이언트 측에서 기본 입력 검증 수행
+- 검증 항목: 필수 필드 누락 여부, 이메일 형식, 메시지 최소 길이(10자 이상)
+
+5) 교류 분기 (Alternative Flow):
+- (부 흐름 1a) 필수 정보 누락 시:
+- CustomerWebApp이 필수 정보(이름, 이메일, 주제, 메시지)가 누락되었음을 감지
+- CustomerWebApp이 클라이언트 측에서 "모든 필수 정보를 입력해 주세요." 오류 메시지를 표시
+- 누락된 필드를 강조 표시
+- 흐름 (2)로 복귀하여 고객이 재입력 가능
+
+- (부 흐름 1b) 이메일 형식 오류 시:
+- CustomerWebApp이 입력된 이메일 형식이 유효하지 않음을 감지 (정규식 검증 실패)
+- CustomerWebApp이 클라이언트 측에서 "올바른 이메일 주소를 입력해 주세요." 오류 메시지를 표시
+- 이메일 필드를 강조 표시
+- 흐름 (2)로 복귀하여 고객이 재입력 가능
+
+- (주 흐름) 클라이언트 검증 통과 시:
+- 모든 클라이언트 측 검증을 통과하면 다음 단계로 진행
+
+6) CustomerWebApp (fe) -> InquiryRouter (inquiryR)
+- CustomerWebApp이 POST /api/inquiries 엔드포인트로 문의 생성 요청을 전송
+- 요청 바디: InquiryPayload {name: string, email: string, topic: string, message: string}
+- Content-Type: application/json
+
+7) InquiryRouter (inquiryR) -> InquiryRouter (inquiryR)
+- InquiryRouter가 서버 측에서 입력 검증 수행
+- 검증 항목: 필수 필드 존재 여부, 이메일 형식, 메시지 최소 길이(10자 이상), 주제 길이 제한
+
+8) 교류 분기 (Alternative Flow):
+- (부 흐름 1a, 1b 재검증) 서버 측 검증 실패 시:
+- InquiryRouter가 검증 실패를 감지
+- InquiryRouter가 CustomerWebApp으로 400 Bad Request 오류를 반환
+- 오류 메시지: "모든 필수 정보를 입력해 주세요." 또는 "올바른 이메일 주소를 입력해 주세요."
+- CustomerWebApp이 고객에게 오류 메시지를 표시
+- 흐름 (2)로 복귀
+
+- (주 흐름) 서버 측 검증 통과 시:
+- 모든 검증을 통과하면 다음 단계로 진행
+
+9) InquiryRouter (inquiryR) -> InquiryService (inquirySvc)
+- InquiryRouter가 create_inquiry(db, payload) 메서드를 호출하여 문의 저장 요청
+- payload 파라미터: {name, email, topic, message}
+
+10) InquiryService (inquirySvc) -> PostgreSQL
+- InquiryService가 inquiries 테이블에 문의 정보를 INSERT
+- 저장되는 데이터: inquiry_id (UUID), 이름, 이메일, 주제, 메시지, 상태(status: "NEW"), 생성 일시(created_at), 관리자 메모(manager_note: null)
+- 상태는 기본값으로 "NEW"로 설정됨
+
+11) 교류 분기 (Alternative Flow):
+- (부 흐름 2a) 서버 오류 시:
+- 데이터베이스 저장 중 오류 발생 (예: 연결 실패, 트랜잭션 오류)
+- PostgreSQL이 오류를 반환하고 InquiryService가 예외 처리
+- InquiryService가 InquiryRouter로 500 Internal Server Error 오류를 반환
+- InquiryRouter가 CustomerWebApp으로 오류 응답 전달
+- CustomerWebApp이 고객에게 "일시적인 문제가 발생했습니다. 잠시 후 다시 시도해 주세요." 메시지를 표시
+- 흐름 (2)로 복귀
+
+- (주 흐름) 저장 성공 시:
+- INSERT가 성공하면 PostgreSQL이 새로 생성된 문의 정보를 반환
+- 다음 단계로 진행
+
+12) InquiryService (inquirySvc) -> InquiryRouter (inquiryR)
+- 문의 생성 성공 응답 반환
+- 응답 데이터: {inquiry_id: string, created_at: timestamp, status: "NEW"}
+- inquiry_id는 문의 추적을 위한 고유 식별자
+
+13) InquiryRouter (inquiryR) -> CustomerWebApp (fe)
+- 201 Created 상태 코드와 함께 문의 접수 정보를 반환
+- 응답 헤더: Location: /api/inquiries/{inquiry_id}
+- 응답 바디: {inquiry_id, created_at, status: "NEW"}
+
+14) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 문의 접수 완료 메시지를 표시
+- 표시 정보: "문의가 접수되었습니다. 문의 ID: {inquiry_id}"
+- 추가 안내: "관리자가 검토 후 이메일로 답변드리겠습니다."
+- 문의 폼을 초기화하거나 메인 페이지로 리디렉션
+- 문의 ID를 화면에 표시하여 고객이 추후 참조할 수 있도록 함

@@ -1,0 +1,118 @@
+교류도: Register & Log In (MRD-CUS-UC01)
+
+================================================================================
+
+1. 교류: 회원가입 (주 흐름 및 부 흐름 2a, 2b)
+
+1) 사용자 (User) -> CustomerWebApp (fe)
+- 사용자가 '회원가입' 페이지를 열면 CustomerWebApp이 회원가입 폼을 표시
+
+2) 사용자 (User) -> CustomerWebApp (fe)
+- 사용자가 회원가입 폼에 정보(이메일, 비밀번호, 이름, 전화번호)를 입력하고 '가입하기' 버튼을 클릭
+
+3) CustomerWebApp (fe) -> AuthRouter (authR)
+- CustomerWebApp이 POST /api/auth/register 엔드포인트로 회원가입 요청을 전송
+- 요청 바디에는 이메일, 비밀번호, 이름, 전화번호가 JSON 형식으로 포함됨
+
+4) AuthRouter (authR) -> LoginService (loginSvc)
+- AuthRouter가 register_user(data) 메서드를 호출하여 사용자 데이터를 데이터베이스에 저장 요청
+- 요청 데이터에는 이메일, 비밀번호(평문), 이름, 전화번호가 포함됨
+
+5) LoginService (loginSvc) -> LoginService (loginSvc)
+- LoginService가 비밀번호 검증 로직을 실행하여 요구사항(최소 8자, 대문자/소문자/숫자/특수문자 각 1개 이상) 충족 여부를 확인
+- 검증 성공 시 bcrypt 알고리즘을 사용하여 비밀번호를 해시 처리
+
+6) LoginService (loginSvc) -> PostgreSQL
+- LoginService가 users 테이블에 사용자 정보를 INSERT
+- 저장되는 데이터: 이메일, 해시된 비밀번호, 이름, 전화번호, 사용자 유형(기본값: CUSTOMER), 생성 일시
+
+7) 교류 분기 (Alternative Flow):
+- (부 흐름 2a) 이메일 중복 시:
+- PostgreSQL이 이메일 고유성 제약 조건(UNIQUE) 위반을 감지하여 오류를 반환
+- 이 오류는 LoginService -> AuthRouter -> CustomerWebApp 순으로 전파됨
+- CustomerWebApp이 사용자에게 "이메일이 이미 사용 중입니다." 메시지를 표시
+- 흐름 (1)로 복귀하여 사용자가 다른 이메일로 재시도 가능
+
+- (부 흐름 2b) 비밀번호 요구사항 미충족 시:
+- LoginService가 비밀번호 검증 로직에서 요구사항 미충족을 감지
+- LoginService가 AuthRouter로 400 Bad Request 오류를 반환
+- CustomerWebApp이 사용자에게 "비밀번호는 최소 8자 이상이어야 하며, 대문자/소문자/숫자/특수문자를 포함해야 합니다." 메시지를 표시
+- 흐름 (1)로 복귀하여 사용자가 올바른 비밀번호로 재시도 가능
+
+- (주 흐름) 성공 시:
+- INSERT가 성공하면 PostgreSQL이 새로 생성된 사용자의 user_id와 함께 성공 응답을 반환
+- LoginService가 성공 응답을 받아 처리
+
+8) LoginService (loginSvc) -> AuthRouter (authR)
+- 회원가입 성공 응답 반환
+- 응답 바디에는 사용자 ID, 이메일, 이름이 포함됨
+
+9) AuthRouter (authR) -> CustomerWebApp (fe)
+- 201 Created 상태 코드와 함께 성공 응답 반환
+- 응답 헤더에는 Location 필드가 포함될 수 있음(예: /users/{user_id})
+
+10) CustomerWebApp (fe) -> 사용자 (User)
+- CustomerWebApp이 "회원가입이 완료되었습니다" 메시지를 표시
+- 자동으로 로그인 페이지로 리디렉션하거나, 사용자의 선택에 따라 자동 로그인 처리
+
+================================================================================
+
+2. 교류: 로그인 (주 흐름 및 부 흐름 4a)
+
+1) 사용자 (User) -> CustomerWebApp (fe)
+- 사용자가 '로그인' 페이지에서 이메일과 비밀번호를 입력하고 '로그인' 버튼을 클릭
+
+2) CustomerWebApp (fe) -> AuthRouter (authR)
+- CustomerWebApp이 POST /api/auth/login 엔드포인트로 로그인 요청을 전송
+- 요청 바디에는 이메일과 비밀번호가 JSON 형식으로 포함됨
+
+3) AuthRouter (authR) -> LoginService (loginSvc)
+- AuthRouter가 authenticate(email, password) 메서드를 호출하여 사용자 인증 요청
+- 요청 파라미터: 이메일(문자열), 비밀번호(평문 문자열)
+
+4) LoginService (loginSvc) -> PostgreSQL
+- LoginService가 입력된 이메일로 users 테이블에서 사용자 정보를 조회
+- 조회되는 데이터: user_id, 이메일, 해시된 비밀번호, 이름, 사용자 유형, 기타 프로필 정보
+
+5) LoginService (loginSvc) -> LoginService (loginSvc)
+- LoginService가 bcrypt.verify() 메서드를 사용하여 입력된 비밀번호(평문)와 저장된 해시를 비교
+- 해시 비교를 통해 비밀번호 일치 여부를 검증
+
+6) 교류 분기 (Alternative Flow):
+- (부 흐름 4a) 잘못된 자격 증명 시:
+- 이메일이 존재하지 않는 경우: PostgreSQL이 빈 결과를 반환하고, LoginService가 인증 실패 처리
+- 비밀번호가 일치하지 않는 경우: bcrypt.verify()가 false를 반환하고, LoginService가 인증 실패 처리
+- LoginService가 AuthRouter로 401 Unauthorized 오류를 반환
+- CustomerWebApp이 사용자에게 "이메일 또는 비밀번호가 올바르지 않습니다." 메시지를 표시
+- 보안을 위해 이메일 오류와 비밀번호 오류를 구분하지 않고 동일한 메시지 표시
+- 흐름 (1)로 복귀하여 사용자가 재시도 가능
+
+- (주 흐름) 인증 성공 시:
+- 비밀번호 검증에 성공하면 다음 단계로 진행
+
+7) LoginService (loginSvc) -> LoginService (loginSvc)
+- LoginService가 create_access_token(JWT) 메서드를 호출하여 JWT 토큰 생성
+- JWT 토큰에는 사용자 ID, 이메일, 사용자 유형이 페이로드로 포함됨
+- JWT 토큰 유효기간: 24시간
+- JWT 서명 알고리즘: HS256 (HMAC with SHA-256)
+
+8) LoginService (loginSvc) -> AuthRouter (authR)
+- 200 OK 상태 코드와 함께 JWT 토큰 및 사용자 프로필 정보를 반환
+- 응답 바디 구조: {access_token: string, token_type: "Bearer", expires_in: 86400, user: {...}}
+
+9) AuthRouter (authR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 JWT 토큰 및 사용자 프로필 정보를 반환
+- 응답 헤더에 Authorization: Bearer {token} 형식으로 토큰이 포함될 수 있음
+
+10) CustomerWebApp (fe) -> CustomerWebApp (fe)
+- CustomerWebApp이 JWT 토큰을 localStorage 또는 컨텍스트(React Context)에 안전하게 저장
+- 토큰 저장 시 보안 고려사항: XSS 공격 방지를 위해 HttpOnly 쿠키 사용 권장
+- 사용자 프로필 정보를 전역 상태 관리 시스템(예: Redux, Context API)에 저장
+- JWT 토큰 발급 및 인증 세션 활성화 완료
+
+11) CustomerWebApp (fe) -> 사용자 (User)
+- 사용자의 역할(user_type)에 따라 적절한 대시보드로 리디렉션
+- 고객(CUSTOMER): 메인 페이지 또는 주문 페이지로 이동
+- 직원(STAFF): 직원 전용 관리 페이지로 이동
+- 매니저(MANAGER): 매니저 전용 운영 관리 페이지로 이동
+- 리디렉션과 함께 환영 메시지 표시 (예: "환영합니다, {사용자 이름}님!")

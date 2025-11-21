@@ -1,0 +1,150 @@
+교류도: View Order History & Reorder (MRD-CUS-UC05)
+
+================================================================================
+
+1. 교류: 주문 내역 조회 (주 흐름 및 부 흐름 2a)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 '내 주문' 페이지를 열어 주문 내역 조회 시작
+
+2) CustomerWebApp (fe) -> OrdersRouter (ordersR)
+- CustomerWebApp이 GET /api/orders/user/{user_id} 엔드포인트로 주문 내역 조회 요청을 전송
+- 요청 헤더: Authorization: Bearer JWT 토큰
+
+3) OrdersRouter (ordersR) -> LoginService (loginSvc)
+- OrdersRouter가 verify_token(JWT) 메서드를 호출하여 JWT 토큰 검증
+- 토큰 유효성 확인 및 사용자 인증
+
+4) LoginService (loginSvc) -> OrdersRouter (ordersR)
+- LoginService가 토큰 검증 결과 반환
+- 반환 데이터: payload {user_id: string, user_type: CUSTOMER}
+- JWT 페이로드에서 추출된 사용자 정보
+
+5) OrdersRouter (ordersR) -> OrderService (orderSvc)
+- OrdersRouter가 get_user_orders(db, user_id) 메서드를 호출하여 해당 고객의 모든 주문 조회
+- 조회 범위: 주문 헤더(orders) + 주문 항목(order_items) + 커스터마이징(order_item_customizations)
+
+6) OrderService (orderSvc) -> PostgreSQL
+- OrderService가 orders, order_items, order_item_customizations 테이블을 JOIN하여 데이터 조회
+- 조회 조건: customer_id = user_id
+- 정렬: created_at DESC (최신 주문부터)
+- 조회되는 데이터: 주문 ID, 주문 번호, 주문 상태, 결제 상태, 총 가격, 배달 정보, 주문 항목, 커스터마이징, 생성 일시
+
+7) 교류 분기 (Alternative Flow):
+- (부 흐름 2a) 주문 내역 없음 시:
+- PostgreSQL이 빈 결과 집합을 반환 (주문 내역이 없음)
+- OrderService가 빈 배열 {success: true, orders: []}을 OrdersRouter로 반환
+- OrdersRouter가 CustomerWebApp으로 200 OK와 함께 빈 배열을 반환
+- CustomerWebApp이 고객에게 "주문 내역이 없습니다." 메시지를 표시
+- 유즈케이스 종료
+
+- (주 흐름) 주문 내역 존재 시:
+- PostgreSQL이 주문 목록 데이터를 반환
+- 다음 단계로 진행
+
+8) OrderService (orderSvc) -> OrdersRouter (ordersR)
+- 주문 내역 조회 성공 응답 반환
+- 응답 데이터: {success: true, orders: [...]}
+- 각 주문 객체 구조: order_id, order_number, order_status, payment_status, total_price, delivery_address, items[], customizations[], created_at
+
+9) OrdersRouter (ordersR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 주문 내역 배열을 반환
+- 응답 바디: orders[] (과거 주문 전체 목록)
+
+10) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 주문 내역 목록을 화면에 렌더링
+- 표시 정보: 주문 번호, 주문 일시, 주문 상태, 총 가격, 메뉴 항목, 커스터마이징 상세
+- 각 주문마다 '재주문' 버튼 제공
+
+================================================================================
+
+2. 교류: 재주문 (주 흐름 및 부 흐름 4a, 4b, 4c)
+
+1) 고객 (Customer) -> CustomerWebApp (fe)
+- 고객이 과거 주문 중 원하는 주문의 '재주문(Reorder)' 버튼을 클릭
+
+2) CustomerWebApp (fe) -> OrdersRouter (ordersR)
+- CustomerWebApp이 POST /api/orders/reorder/{order_id} 엔드포인트로 재주문 요청을 전송
+- 요청 헤더: Authorization: Bearer JWT 토큰
+- URL 파라미터: order_id (재주문할 원본 주문 ID)
+
+3) OrdersRouter (ordersR) -> LoginService (loginSvc)
+- OrdersRouter가 verify_token(JWT) 메서드를 호출하여 JWT 토큰 검증
+- 사용자 인증 및 권한 확인
+
+4) LoginService (loginSvc) -> OrdersRouter (ordersR)
+- LoginService가 토큰 검증 결과 반환
+- 반환 데이터: payload {user_id: string, user_type: CUSTOMER}
+
+5) OrdersRouter (ordersR) -> OrdersRouter (ordersR)
+- OrdersRouter가 SELECT 쿼리를 실행하여 원본 주문 정보를 조회
+- 조회 대상: 원본 주문(original order) + 메뉴 항목(menu_items) + 스타일(serving_styles) + 커스터마이징
+
+6) OrdersRouter (ordersR) -> OrdersRouter (ordersR)
+- OrdersRouter가 조회된 원본 주문 데이터를 바탕으로 reorder_data 구성
+- reorder_data 구조: {dinner_code: string, style: string, quantity: number, customizations: array, delivery_address: string, user_id: string}
+
+7) OrdersRouter (ordersR) -> PostgreSQL
+- OrdersRouter가 메뉴 가용성 및 가격 정보를 조회
+- 검증 항목: 메뉴가 여전히 제공되는지(is_available), 현재 가격
+
+8) 교류 분기 (Alternative Flow):
+- (부 흐름 4a) 메뉴 단종 시:
+- OrdersRouter가 원본 주문의 메뉴가 더 이상 제공되지 않음을 감지 (is_available = false 또는 메뉴 삭제됨)
+- OrdersRouter가 CustomerWebApp으로 404 Not Found 또는 410 Gone 오류를 반환
+- 오류 메시지: "해당 메뉴는 더 이상 제공되지 않습니다."
+- CustomerWebApp이 고객에게 오류 메시지를 표시
+- 흐름 (1)로 복귀하여 다른 주문 선택 가능
+
+- (부 흐름 4c) 가격 변경 시:
+- OrdersRouter가 원본 주문 대비 가격이 변경되었음을 감지
+- OrdersRouter가 CustomerWebApp으로 가격 변경 알림을 반환
+- 알림 메시지: "가격이 변경되었습니다. 현재 가격: [새 가격]"
+- CustomerWebApp이 고객에게 확인 대화상자를 표시
+- 고객이 확인하면 흐름 (9)로 계속 진행
+- 고객이 취소하면 흐름 (1)로 복귀
+
+- (주 흐름) 메뉴 가용 및 가격 확인 완료 시:
+- 메뉴가 여전히 제공되고 있으며 재주문 가능
+- 다음 단계로 진행
+
+9) OrdersRouter (ordersR) -> OrderService (orderSvc)
+- OrdersRouter가 create_order(db, reorder_data) 메서드를 호출하여 새 주문 생성
+- reorder_data 파라미터: {dinner_code, style, quantity, customizations, delivery_address, user_id}
+- 새 주문 생성 프로세스: 주문 저장, 재고 예약, 가격 계산
+
+10) OrderService (orderSvc) -> PostgreSQL
+- OrderService가 재고 확인을 수행
+- 조회 대상: store_inventory 테이블에서 필요한 재료의 수량(quantity_on_hand)
+
+11) 교류 분기 (Alternative Flow):
+- (부 흐름 4b) 재고 부족 시:
+- OrderService가 필요한 재료의 재고가 부족함을 감지
+- OrderService가 OrdersRouter로 재고 부족 오류를 반환
+- OrdersRouter가 CustomerWebApp으로 409 Conflict 오류를 반환
+- 오류 메시지: "선택하신 메뉴의 재료가 부족합니다. 다른 메뉴를 선택해 주세요."
+- CustomerWebApp이 고객에게 오류 메시지를 표시
+- 흐름 (1)로 복귀
+
+- (주 흐름) 재고 충분 시:
+- 재고가 충분하여 주문 생성 가능
+- 다음 단계로 진행
+
+12) OrderService (orderSvc) -> PostgreSQL
+- OrderService가 orders, order_items, order_item_customizations, order_inventory_reservations 테이블에 데이터를 INSERT
+- 저장되는 데이터: 새 주문 ID, 새 주문 번호, 고객 ID, 메뉴 정보, 수량, 커스터마이징, 현재 가격, 배달 정보, 생성 일시
+- 결제 상태: pending (결제는 별도 프로세스로 진행)
+
+13) OrderService (orderSvc) -> OrdersRouter (ordersR)
+- 주문 생성 성공 응답 반환
+- 응답 데이터: {success: true, order: {order_id, order_number, total_price, ...}}
+
+14) OrdersRouter (ordersR) -> CustomerWebApp (fe)
+- 200 OK 상태 코드와 함께 새 주문 정보를 반환
+- 응답 바디: {order: {order_id, order_number, total_price, status: "pending"}}
+
+15) CustomerWebApp (fe) -> 고객 (Customer)
+- CustomerWebApp이 재주문 성공 메시지와 새 주문 번호를 표시
+- 표시 정보: "재주문이 완료되었습니다. 주문 번호: {새 주문 번호}"
+- 고객을 결제 페이지 또는 주문 확인 페이지로 리디렉션
+- 고객에게 결제 진행 안내

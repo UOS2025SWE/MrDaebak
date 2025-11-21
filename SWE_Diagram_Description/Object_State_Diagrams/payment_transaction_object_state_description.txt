@@ -1,0 +1,13 @@
+5.2 결제 트랜잭션 (Payment Transaction) 객체 상태도
+
+주요 상태 (States):
+- 결제 대기 (PENDING): 주문이 생성된 직후로 결제 처리를 대기 중인 초기 상태
+- 결제 완료 (PAID): 결제가 성공적으로 완료되어 주문 처리가 진행 가능한 상태
+- 결제 실패 (FAILED): 결제 처리 중 오류 발생, 카드 승인 거부, 잔액 부족 등의 사유로 결제가 실패한 상태
+- 환불 완료 (REFUNDED): 주문 취소로 인해 결제 금액이 환불된 상태
+
+주요 이벤트 (Triggers / Events):
+- OrderService.create_order() 실행: 주문 생성 시 결제 상태는 PENDING으로 시작
+- PaymentService.process_mock_payment() 성공: 결제 처리 성공 시 PENDING에서 PAID로 전이하며 orders.payment_status를 'PAID'로 업데이트
+- PaymentService.process_mock_payment() 실패: 결제 처리 실패 시 PENDING에서 FAILED로 전이하며 orders.payment_status를 'FAILED'로 업데이트
+- cancel_order() 호출: 주문 취소 시 PAID에서 REFUNDED로 전이하며 orders.payment_status를 'REFUNDED'로 변경하고 주문 상태도 'CANCELLED'로 변경

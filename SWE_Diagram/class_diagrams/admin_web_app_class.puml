@@ -1,0 +1,64 @@
+@startuml
+title "Admin Web App"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Backend API" as IBackend
+
+class "AuthContext\n(contexts/AuthContext.tsx)" as AuthContext {
+  - user: User | null
+  - token: string | null
+  ---
+  + login(email, password): Promise<void>
+  + logout(): void
+  + isAdmin(): boolean
+}
+
+class "ToastContext\n(contexts/ToastContext.tsx)" as ToastContext {
+  - toasts: Toast[]
+  ---
+  + showToast(message, type): void
+}
+
+class "AdminDashboardPage\n(app/dashboard/admin/page.tsx)" as AdminDashboardPage {
+  - stats: DashboardStats
+  - recentOrders: Order[]
+  - staffSummary: StaffSummary[]
+  ---
+  + loadDashboardData(): Promise<void>
+  + exportSalesReport(): Promise<void>
+  + exportInventoryReport(): Promise<void>
+}
+
+class "ManagePage\n(app/manage/page.tsx)" as ManagePage {
+  - activeTab: string
+  - menus: MenuItem[]
+  - ingredients: Ingredient[]
+  - events: Event[]
+  - staff: StaffMember[]
+  ---
+  + loadData(): Promise<void>
+  + createMenu(data): Promise<void>
+  + updateIngredient(id, data): Promise<void>
+  + createEvent(data): Promise<void>
+  + assignStaffPosition(staffId, position): Promise<void>
+}
+
+class "ProtectedRoute\n(components/ProtectedRoute.tsx)" as ProtectedRoute {
+  + render(children): JSX.Element
+}
+
+AdminDashboardPage ..> AuthContext
+AdminDashboardPage ..> ToastContext
+AdminDashboardPage ..> IBackend
+
+ManagePage ..> AuthContext
+ManagePage ..> ToastContext
+ManagePage ..> IBackend
+
+ProtectedRoute ..> AuthContext
+
+@enduml

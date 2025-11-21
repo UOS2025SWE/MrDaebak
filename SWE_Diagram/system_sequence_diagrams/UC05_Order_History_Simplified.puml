@@ -1,0 +1,19 @@
+@startuml
+title "UC-05: View Order History & Reorder"
+
+actor Customer
+participant "Mr. Daebak System" as System
+
+== View Order History ==
+Customer -> System: 1. Request order history
+activate System
+System --> Customer: 2. Order history list\n(past orders with details)
+deactivate System
+
+== Reorder Past Dinner ==
+Customer -> System: 3. Request reorder\n(order_id)
+activate System
+System --> Customer: 4. Reorder successful\n(new order_id, order_number)
+deactivate System
+
+@enduml

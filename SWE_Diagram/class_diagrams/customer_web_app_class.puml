@@ -1,0 +1,162 @@
+@startuml
+title "Customer Web App"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Backend API" as IBackend
+
+class "AuthContext\n(contexts/AuthContext.tsx)" as AuthContext {
+  - user: User | null
+  - token: string | null
+  - loading: boolean
+  ---
+  + login(email, password): Promise<void>
+  + logout(): void
+  + isLoggedIn(): boolean
+}
+
+class "ToastContext\n(contexts/ToastContext.tsx)" as ToastContext {
+  - toasts: Toast[]
+  ---
+  + showToast(message, type): void
+  + removeToast(id): void
+}
+
+class "HomePage\n(app/page.tsx)" as HomePage {
+  - featuredEvents: Event[]
+  - featuredMenus: MenuItem[]
+  ---
+  + loadHomeData(): Promise<void>
+}
+
+class "MenuPage\n(app/menu/page.tsx)" as MenuPage {
+  - menus: MenuItem[]
+  - selectedMenu: MenuItem | null
+  - selectedStyle: string | null
+  - customizations: dict
+  ---
+  + loadMenu(): Promise<void>
+  + selectMenu(code): void
+  + selectStyle(style): void
+  + updateCustomization(ingredient, qty): void
+  + addToCart(): void
+}
+
+class "CheckoutPage\n(app/checkout/page.tsx)" as CheckoutPage {
+  - deliveryInfo: DeliveryInfo
+  - paymentInfo: PaymentInfo
+  - pricing: PricingSummary
+  ---
+  + loadDefaultDeliveryInfo(userId): Promise<void>
+  + submitCheckout(): Promise<void>
+}
+
+class "OrdersPage\n(app/orders/page.tsx)" as OrdersPage {
+  - orders: OrderSummary[]
+  ---
+  + loadOrders(userId): Promise<void>
+  + reorder(orderId): Promise<void>
+}
+
+class "OrderDetailPage\n(app/orders/[orderId]/page.tsx)" as OrderDetailPage {
+  - order: OrderDetail | null
+  - wsConnected: boolean
+  ---
+  + loadOrder(orderId): Promise<void>
+  + listenOrderStatus(): void
+}
+
+class "VoiceOrderPage\n(app/voice/page.tsx)" as VoiceOrderPage {
+  - transcript: string
+  - aiResponse: string
+  - orderPreview: VoiceOrderPreview | null
+  ---
+  + startRecording(): void
+  + stopRecording(): Promise<void>
+  + sendTranscript(): Promise<void>
+  + confirmOrder(): Promise<void>
+}
+
+class "EventsPage\n(app/events/page.tsx)" as EventsPage {
+  - events: Event[]
+  ---
+  + loadEvents(): Promise<void>
+}
+
+class "ProfilePage\n(app/profile/page.tsx)" as ProfilePage {
+  - userInfo: UserInfo
+  ---
+  + loadProfile(): Promise<void>
+  + updateProfile(data): Promise<void>
+}
+
+class "ProtectedRoute\n(components/ProtectedRoute.tsx)" as ProtectedRoute {
+  + render(children): JSX.Element
+}
+
+class "Header\n(components/Header.tsx)" as Header {
+  + render(): JSX.Element
+}
+
+class "Footer\n(components/Footer.tsx)" as Footer {
+  + render(): JSX.Element
+}
+
+class "ToastContainer\n(components/ToastContainer.tsx)" as ToastContainer {
+  + render(): JSX.Element
+}
+
+AuthContext -[hidden]down- ToastContext
+ToastContext -[hidden]down- IBackend
+
+HomePage -[hidden]down- MenuPage
+MenuPage -[hidden]down- CheckoutPage
+CheckoutPage -[hidden]down- OrdersPage
+
+OrderDetailPage -[hidden]down- VoiceOrderPage
+VoiceOrderPage -[hidden]down- EventsPage
+EventsPage -[hidden]down- ProfilePage
+
+ProtectedRoute -[hidden]down- Header
+Header -[hidden]down- Footer
+Footer -[hidden]down- ToastContainer
+
+HomePage ..> AuthContext
+HomePage ..> ToastContext
+HomePage ..> IBackend
+
+MenuPage ..> AuthContext
+MenuPage ..> ToastContext
+MenuPage ..> IBackend
+
+CheckoutPage ..> AuthContext
+CheckoutPage ..> ToastContext
+CheckoutPage ..> IBackend
+
+OrdersPage ..> AuthContext
+OrdersPage ..> ToastContext
+OrdersPage ..> IBackend
+
+OrderDetailPage ..> AuthContext
+OrderDetailPage ..> ToastContext
+OrderDetailPage ..> IBackend
+
+VoiceOrderPage ..> AuthContext
+VoiceOrderPage ..> ToastContext
+VoiceOrderPage ..> IBackend
+
+EventsPage ..> ToastContext
+EventsPage ..> IBackend
+
+ProfilePage ..> AuthContext
+ProfilePage ..> ToastContext
+ProfilePage ..> IBackend
+
+ProtectedRoute ..> AuthContext
+
+ToastContainer ..> ToastContext
+
+@enduml

@@ -1,7 +1,6 @@
 @startuml
-title "고객 문의 (customer_inquiries.status) 상태도"
+title "Customer Inquiry State Diagram (customer_inquiries.status)"
 
-skinparam defaultFontName "Malgun Gothic"
 skinparam shadowing false
 skinparam state {
   BackgroundColor #FDF6E3
@@ -9,29 +8,29 @@ skinparam state {
   RoundCorner 10
 }
 
-' --- 상태 정의 (States) ---
-state "신규 문의\n(NEW)" as New
-state "처리 중\n(IN_PROGRESS)" as InProgress
-state "처리 완료\n(RESOLVED)" as Resolved
-state "보관됨\n(ARCHIVED)" as Archived
+' --- States ---
+state "New Inquiry\n(NEW)" as New
+state "In Progress\n(IN_PROGRESS)" as InProgress
+state "Resolved\n(RESOLVED)" as Resolved
+state "Archived\n(ARCHIVED)" as Archived
 
-' --- 상태 전이 (Transitions) ---
+' --- Transitions ---
 
-' 시작점 (Entry Point)
-[*] --> New : InquiryService.create_inquiry()\n(status='NEW')
+' Entry Point
+[*] --> New : InquiryService.create_inquiry()\n(inquiry_service.py:64)\nstatus='NEW'
 
-' "NEW" 상태에서 가능한 전이
-New --> InProgress : Manager가 문의 확인 시작\n(update_inquiry status='IN_PROGRESS')
-New --> Archived : 스팸/중복으로 바로 보관\n(status='ARCHIVED')
+' From NEW state
+New --> InProgress : InquiryService.update_inquiry()\n(inquiry_service.py:147)\nstatus='IN_PROGRESS'
+New --> Archived : InquiryService.update_inquiry()\n(inquiry_service.py:147)\nstatus='ARCHIVED'\n(spam/duplicate)
 
-' "IN_PROGRESS" 상태에서 가능한 전이
-InProgress --> Resolved : 답변 완료\n(status='RESOLVED')
-InProgress --> Archived : 처리 불필요 / 정리\n(status='ARCHIVED')
+' From IN_PROGRESS state
+InProgress --> Resolved : InquiryService.update_inquiry()\n(inquiry_service.py:147)\nstatus='RESOLVED'\n(response completed)
+InProgress --> Archived : InquiryService.update_inquiry()\n(inquiry_service.py:147)\nstatus='ARCHIVED'\n(no action needed)
 
-' "RESOLVED" 상태에서 가능한 전이
-Resolved --> Archived : 일정 기간 후 보관\n또는 수동 보관
+' From RESOLVED state
+Resolved --> Archived : InquiryService.update_inquiry()\n(inquiry_service.py:147)\nstatus='ARCHIVED'\n(archive after period\nor manual archive)
 
-' 최종 상태 (End State)
+' End State
 Archived --> [*]
 
 @enduml

@@ -1,0 +1,148 @@
+@startuml
+title "Menu & Inventory Domain"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Database" as IDatabase
+
+class "MenuRouter\n(routers/menu.py)" as MenuRouter {
+  + GET /api/menu/
+  + GET /api/menu/{menu_code}
+  + GET /api/menu/base-ingredients
+  + PUT /api/menu/base-ingredients/{menu_code}/{style}
+  + DELETE /api/menu/base-ingredients/{menu_code}/{style}/{ingredient_code}
+}
+
+class "BaseIngredientUpsertRequest" as BaseIngredientUpsertRequest <<Pydantic>> {
+  ingredient_code: str
+  base_quantity: int
+}
+
+class "IngredientsRouter\n(routers/ingredients.py)" as IngredientsRouter {
+  + GET /api/ingredients/
+  + GET /api/ingredients/{ingredient_code}
+  + POST /api/ingredients/
+  + PATCH /api/ingredients/{ingredient_code}/pricing
+  + POST /api/ingredients/intake
+  + GET /api/ingredients/intake/{intake_id}
+  + POST /api/ingredients/intake/{intake_id}/confirm
+  + POST /api/ingredients/restock
+  + POST /api/ingredients/restock/bulk
+}
+
+class "IngredientIntakeRequest" as IngredientIntakeRequest <<Pydantic>> {
+  intake_items: list[IngredientIntakeItem]
+  intake_note: str | None
+}
+
+class "IngredientIntakeItem" as IngredientIntakeItem <<Pydantic>> {
+  ingredient_code: str
+  expected_quantity: Decimal
+  unit_price: Decimal
+  remarks: str | None
+}
+
+class "IngredientRestockRequest" as IngredientRestockRequest <<Pydantic>> {
+  items: list[IngredientRestockItem]
+}
+
+class "IngredientRestockItem" as IngredientRestockItem <<Pydantic>> {
+  ingredient_code: str
+  quantity: int
+}
+
+class "IngredientCreateRequest" as IngredientCreateRequest <<Pydantic>> {
+  name: str
+  unit: str
+  unit_price: Decimal
+  initial_stock: Decimal | None
+}
+
+class "SideDishesRouter\n(routers/side_dishes.py)" as SideDishesRouter {
+  + GET /api/side-dishes/
+  + POST /api/side-dishes/
+  + GET /api/side-dishes/{code}
+  + PATCH /api/side-dishes/{code}/availability
+  + POST /api/side-dishes/{code}/ingredients
+  + DELETE /api/side-dishes/{code}/ingredients/{ingredient_code}
+}
+
+class "SideDishCreateRequest" as SideDishCreateRequest <<Pydantic>> {
+  code: str
+  name: str
+  description: str | None
+  base_price: Decimal
+  ingredients: list[SideDishIngredientInput]
+}
+
+class "SideDishIngredientInput" as SideDishIngredientInput <<Pydantic>> {
+  ingredient_code: str
+  quantity: Decimal
+}
+
+class "MenuService\n(services/menu_service.py)" as MenuService {
+  + get_menu_data(db): dict
+  + get_base_ingredient_data(db, menu_code): dict
+  + upsert_base_ingredient(...): dict
+  + remove_base_ingredient(...): dict
+}
+
+class "IngredientService\n(services/ingredient_service.py)" as IngredientService {
+  + get_all_ingredients(): dict
+  + get_ingredient(ingredient_code): dict
+  + create_ingredient(...): dict
+  + update_pricing(...): dict
+  + create_intake(...): dict
+  + confirm_intake(...): dict
+  + restock_ingredients(...): dict
+  + bulk_restock(): dict
+}
+
+class "SideDishService\n(services/side_dish_service.py)" as SideDishService {
+  + list_side_dishes(db, include_inactive): dict
+  + get_side_dish(db, code): dict
+  + create_side_dish(db, ...): dict
+  + update_availability(db, code, is_available): dict
+  + add_or_update_ingredient(db, ...): dict
+  + remove_ingredient(db, code, ingredient_code): dict
+}
+
+IDatabase -[hidden]down- MenuRouter
+MenuRouter -[hidden]down- BaseIngredientUpsertRequest
+BaseIngredientUpsertRequest -[hidden]down- MenuService
+
+IngredientsRouter -[hidden]down- IngredientIntakeRequest
+IngredientIntakeRequest -[hidden]down- IngredientIntakeItem
+IngredientIntakeItem -[hidden]down- IngredientRestockRequest
+IngredientRestockRequest -[hidden]down- IngredientRestockItem
+IngredientRestockItem -[hidden]down- IngredientCreateRequest
+IngredientCreateRequest -[hidden]down- IngredientService
+
+SideDishesRouter -[hidden]down- SideDishCreateRequest
+SideDishCreateRequest -[hidden]down- SideDishIngredientInput
+SideDishIngredientInput -[hidden]down- SideDishService
+
+MenuRouter ..> BaseIngredientUpsertRequest
+MenuRouter ..> MenuService
+
+IngredientsRouter ..> IngredientIntakeRequest
+IngredientsRouter ..> IngredientRestockRequest
+IngredientsRouter ..> IngredientCreateRequest
+IngredientsRouter ..> IngredientService
+
+IngredientIntakeRequest *-- IngredientIntakeItem
+IngredientRestockRequest *-- IngredientRestockItem
+
+SideDishesRouter ..> SideDishCreateRequest
+SideDishesRouter ..> SideDishService
+
+SideDishCreateRequest *-- SideDishIngredientInput
+
+MenuService ..> IDatabase
+IngredientService ..> IDatabase
+SideDishService ..> IDatabase
+
+@enduml

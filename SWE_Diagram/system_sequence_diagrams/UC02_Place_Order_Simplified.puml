@@ -1,0 +1,24 @@
+@startuml
+title "UC-02: Place Dinner Order - GUI or Voice"
+
+actor Customer
+participant "Mr. Daebak System" as System
+
+== GUI Order Path ==
+Customer -> System: 1. Select menu and customize options\n(menu, style, quantity, customizations,\nside dishes, cake, delivery info, payment)
+activate System
+System --> Customer: 2. Order confirmed\n(order_id, order_number, pricing, payment status)
+deactivate System
+
+== Voice Order Path ==
+Customer -> System: 3. Submit voice order (audio)
+activate System
+System --> Customer: 4. Transcribed text + AI recommendations\n(suggested menu, style, quantity, customizations)
+deactivate System
+
+Customer -> System: 5. Confirm AI-suggested order
+activate System
+System --> Customer: 6. Order created\n(order_id, pricing)
+deactivate System
+
+@enduml

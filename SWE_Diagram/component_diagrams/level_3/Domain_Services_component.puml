@@ -1,0 +1,40 @@
+@startuml
+title "Domain Services Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "Domain Services" as DomainServicesComp {
+}
+
+rectangle "OrderService" as OrderService
+rectangle "PaymentService" as PaymentService
+rectangle "DiscountService" as DiscountService
+rectangle "EventService" as EventService
+rectangle "MenuService" as MenuService
+rectangle "IngredientService" as IngredientService
+rectangle "InquiryService" as InquiryService
+rectangle "LoginService" as LoginService
+rectangle "SideDishService" as SideDishService
+rectangle "StaffService" as StaffService
+
+OrderService ..> DomainServicesComp
+PaymentService ..> DomainServicesComp
+DiscountService ..> DomainServicesComp
+EventService ..> DomainServicesComp
+MenuService ..> DomainServicesComp
+IngredientService ..> DomainServicesComp
+InquiryService ..> DomainServicesComp
+LoginService ..> DomainServicesComp
+SideDishService ..> DomainServicesComp
+StaffService ..> DomainServicesComp
+
+@enduml

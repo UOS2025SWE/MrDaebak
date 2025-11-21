@@ -1,0 +1,26 @@
+@startuml
+title "Persistence Component"
+
+skinparam defaultFontName "Malgun Gothic"
+skinparam shadowing false
+skinparam component {
+  BackgroundColor #FDF6E3
+  BorderColor #555
+}
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+}
+
+component "Persistence" as PersistenceComp {
+}
+
+rectangle "Database" as Database
+rectangle "SessionLocal" as SessionLocal
+rectangle "SQLAlchemy Engine" as Engine
+
+Database ..> PersistenceComp
+SessionLocal ..> PersistenceComp
+Engine ..> PersistenceComp
+
+@enduml

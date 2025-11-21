@@ -21,8 +21,8 @@ actor "Browser\n(Admin/Staff FE)" as BrowserAdmin
 
 component "PostgreSQL DB" as PostgreSQL <<database>>
 component "Mock Payment\n(외부 PG)" as MockPayment <<external>>
-component "Gemini AI\n(LLM API)" as GeminiAI <<external>>
-component "OpenAI STT/TTS\n(Audio API)" as OpenAIAPI <<external>>
+component "LLM API" as LLM <<external>>
+component "STT & TTS API" as AudioAPI <<external>>
 
 
 ' ==========================================
@@ -58,8 +58,8 @@ package "Backend (FastAPI Monolith)" {
 
   ' 실시간/AI 계층
   [WebSocket Manager] as WsComp <<component>>
-  [Gemini Voice Orchestrator] as GeminiComp <<component>>
-  [OpenAI Audio Adapter] as AudioComp <<component>>
+  [LLM Voice Orchestrator] as LLMComp <<component>>
+  [Audio Service Adapter] as AudioComp <<component>>
 
 }
 
@@ -94,7 +94,7 @@ ApiLayer --> InquiryComp : uses
 ApiLayer --> MenuComp : uses
 ApiLayer --> InventoryComp : uses
 ApiLayer --> AuthComp : uses
-ApiLayer --> GeminiComp : uses\n(voice ordering)
+ApiLayer --> LLMComp : uses\n(voice ordering)
 ApiLayer --> WsComp : uses\n(realtime endpoints)
 
 
@@ -119,10 +119,10 @@ AuthComp --> PostgreSQL
 
 ' Realtime & AI
 WsComp --> PostgreSQL : persist notifications\n(order status log)
-GeminiComp --> PostgreSQL : query history/events
-GeminiComp --> GeminiAI
-AudioComp --> OpenAIAPI
-GeminiComp --> AudioComp : STT/TTS 협력
+LLMComp --> PostgreSQL : query history/events
+LLMComp --> LLM
+AudioComp --> AudioAPI
+LLMComp --> AudioComp : STT/TTS 협력
 
 
 ' ==========================================

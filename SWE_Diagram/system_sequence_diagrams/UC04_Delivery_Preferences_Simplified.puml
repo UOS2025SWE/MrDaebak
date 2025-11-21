@@ -1,0 +1,19 @@
+@startuml
+title "UC-04: Manage Delivery Preferences"
+
+actor Customer
+participant "Mr. Daebak System" as System
+
+== Load Default Delivery Info ==
+Customer -> System: 1. Request delivery info
+activate System
+System --> Customer: 2. Default delivery info\n(name, phone, address)
+deactivate System
+
+== Update Default Delivery Info ==
+Customer -> System: 3. Update delivery preferences\n(name, phone, address)
+activate System
+System --> Customer: 4. Delivery info saved successfully
+deactivate System
+
+@enduml

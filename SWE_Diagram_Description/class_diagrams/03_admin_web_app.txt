@@ -1,0 +1,88 @@
+3 "Admin Web App" 서브시스템 세부 설계
+
+"Admin Web App" 시스템은 매니저가 시스템 전반을 관리하고 모니터링하는 웹 애플리케이션이다.
+
+매니저는 통계 대시보드를 통해 시스템 현황을 파악하고, 판매 및 재고 리포트를 내보낼 수 있다.
+메뉴, 재료, 이벤트, 직원 등을 종합적으로 관리하는 통합 관리 페이지를 제공한다.
+실시간 통계 조회 및 최근 주문 현황을 모니터링할 수 있다.
+신규 직원의 포지션 배정(COOK 또는 DELIVERY) 기능을 제공한다.
+메뉴 추가, 재료 가격 및 재고 수정, 프로모션 이벤트 생성 등 핵심 운영 업무를 수행한다.
+
+"Admin Web App" 시스템은 아래와 같은 중요한 페이지들로 구성되어 있다.
+
+AdminDashboardPage
+매니저 전용 통계 대시보드 페이지를 제공한다.
+시스템 전반의 운영 현황을 한눈에 파악할 수 있도록 통계 정보를 시각화한다.
+stats 변수에 총 매출, 주문 수, 직원 수 등의 대시보드 통계를 저장한다.
+recentOrders 배열에 최근 주문 목록을 저장하여 실시간 주문 현황을 모니터링한다.
+staffSummary 배열에 직원 요약 정보(포지션별 인원, 근무 현황)를 저장한다.
+loadDashboardData() 함수는 백엔드로부터 대시보드에 표시할 통계 및 주문 현황 데이터를 조회한다.
+exportSalesReport() 함수는 매출 리포트를 CSV 또는 PDF 형식으로 내보내는 기능을 제공한다.
+exportInventoryReport() 함수는 재고 현황 리포트를 내보내어 재고 관리 및 입고 계획에 활용할 수 있도록 한다.
+
+ManagePage
+시스템의 모든 관리 기능을 통합한 종합 관리 페이지를 제공한다.
+activeTab 변수에 현재 활성화된 탭(메뉴, 재료, 이벤트, 직원 중 하나)을 저장한다.
+menus 배열에 전체 메뉴 목록을 저장하고, 매니저가 신규 메뉴를 추가하거나 기존 메뉴를 수정할 수 있다.
+ingredients 배열에 전체 재료 목록 및 재고 현황을 저장하며, 재료 가격 및 재고 수정 기능을 제공한다.
+events 배열에 프로모션 이벤트 목록을 저장하고, 신규 이벤트를 생성하거나 기존 이벤트를 종료할 수 있다.
+staff 배열에 전체 직원 목록을 저장하며, 신규 직원의 포지션 배정 및 해고 처리를 수행한다.
+loadData() 함수는 백엔드로부터 메뉴, 재료, 이벤트, 직원 데이터를 모두 조회하여 관리 페이지를 초기화한다.
+createMenu(data) 함수는 백엔드 /api/menu/ 엔드포인트로 신규 메뉴 생성 요청을 전송한다.
+updateIngredient(id, data) 함수는 백엔드 /api/ingredients/{id}/pricing 엔드포인트로 재료 가격 및 정보 수정 요청을 전송한다.
+createEvent(data) 함수는 백엔드 /api/events/ 엔드포인트로 신규 프로모션 이벤트 생성 요청을 전송한다.
+assignStaffPosition(staffId, position) 함수는 백엔드 /api/staff/{staffId}/assign-position 엔드포인트로 직원 포지션 배정 요청을 전송하며, position은 COOK 또는 DELIVERY 값을 가진다.
+
+
+3.1 메인 클래스도
+
+AuthContext (contexts/AuthContext.tsx)
+
+"Admin Web App" 시스템은 AuthContext를 통해 매니저 인증 상태를 전역적으로 관리한다.
+user 변수에 현재 로그인한 매니저 정보(이름, 이메일, 역할 등)를 저장하고, token 변수에 JWT 액세스 토큰을 저장한다.
+login(email, password) 함수는 백엔드 /api/auth/login 엔드포인트로 로그인 요청을 전송하고, 성공 시 토큰을 localStorage에 저장한다.
+logout() 함수는 토큰을 제거하고 사용자 정보를 초기화한다.
+isAdmin() 함수는 현재 로그인한 사용자가 매니저 권한을 가지고 있는지 확인하며, AdminDashboardPage 및 ManagePage 접근 권한을 제어한다.
+
+ToastContext (contexts/ToastContext.tsx)
+
+"Admin Web App" 시스템은 ToastContext를 통해 알림 메시지를 전역적으로 관리한다.
+toasts 배열에 현재 표시 중인 알림 메시지 목록을 저장한다.
+showToast(message, type) 함수는 새로운 알림 메시지를 추가하며, type은 "success", "error", "warning", "info" 중 하나이다.
+
+AdminDashboardPage (app/dashboard/admin/page.tsx)
+
+AdminDashboardPage는 매니저 대시보드 페이지를 나타낸다.
+stats 객체에 대시보드 통계 정보(총 매출, 총 주문 수, 활성 직원 수, 평균 주문 금액 등)를 저장한다.
+recentOrders 배열에 최근 주문 목록(주문 번호, 고객명, 상태, 금액 등)을 저장하여 실시간 주문 모니터링을 제공한다.
+staffSummary 배열에 직원 요약 정보(포지션별 인원, 근무 중인 직원 수, 평균 성과 등)를 저장한다.
+loadDashboardData() 함수는 백엔드 /api/admin/dashboard 엔드포인트로부터 통계 데이터, 최근 주문, 직원 요약 정보를 조회한다.
+exportSalesReport() 함수는 백엔드 /api/admin/reports/sales 엔드포인트로 매출 리포트 생성 요청을 전송하고, 생성된 리포트 파일을 다운로드한다.
+exportInventoryReport() 함수는 백엔드 /api/admin/reports/inventory 엔드포인트로 재고 리포트 생성 요청을 전송하고, 현재 재고 현황 및 입고 필요 재료 정보를 포함한 리포트를 다운로드한다.
+AuthContext와 ToastContext에 의존하여 매니저 인증 상태 및 알림 메시지를 관리한다.
+
+ManagePage (app/manage/page.tsx)
+
+ManagePage는 시스템 종합 관리 페이지를 나타낸다.
+activeTab 변수는 현재 활성화된 관리 탭을 나타내며, "menus", "ingredients", "events", "staff" 중 하나의 값을 가진다.
+menus 배열에 전체 메뉴 목록을 저장하며, 각 메뉴의 코드, 이름, 가격, 스타일 정보를 포함한다.
+ingredients 배열에 전체 재료 목록 및 재고 정보를 저장하며, 재료 코드, 이름, 단위, 단가, 현재 재고량을 포함한다.
+events 배열에 프로모션 이벤트 목록을 저장하며, 이벤트명, 할인율, 시작일, 종료일, 활성 여부를 포함한다.
+staff 배열에 전체 직원 목록을 저장하며, 직원 ID, 이름, 이메일, 포지션, 근무 상태를 포함한다.
+loadData() 함수는 백엔드로부터 메뉴(/api/menu/), 재료(/api/ingredients/), 이벤트(/api/events/), 직원(/api/staff/) 데이터를 모두 조회한다.
+createMenu(data) 함수는 백엔드 /api/menu/ 엔드포인트로 신규 메뉴 생성 요청을 전송하며, data 객체에 메뉴 코드, 이름, 설명, 가격 정보를 포함한다.
+updateIngredient(id, data) 함수는 백엔드 /api/ingredients/{id}/pricing 엔드포인트로 재료 정보 수정 요청을 전송하며, 단가 변경 또는 재고 조정을 수행한다.
+createEvent(data) 함수는 백엔드 /api/events/ 엔드포인트로 신규 이벤트 생성 요청을 전송하며, data 객체에 이벤트명, 할인율, 시작일, 종료일 정보를 포함한다.
+assignStaffPosition(staffId, position) 함수는 백엔드 /api/staff/{staffId}/assign-position 엔드포인트로 직원 포지션 배정 요청을 전송하며, 신규 가입한 직원에게 COOK 또는 DELIVERY 포지션을 배정한다.
+ToastContext를 통해 작업 성공 또는 실패 메시지를 표시한다.
+
+ProtectedRoute (components/ProtectedRoute.tsx)
+
+ProtectedRoute는 인증이 필요한 페이지를 보호하는 컴포넌트이다.
+AuthContext에서 매니저 로그인 상태를 확인하고, 미로그인 시 로그인 페이지로 리다이렉트한다.
+render(children) 함수는 인증된 매니저에게만 자식 컴포넌트를 렌더링하며, 매니저 권한이 없는 경우 접근을 차단한다.
+
+Backend API (인터페이스)
+
+"Admin Web App" 시스템의 모든 페이지는 Backend API 인터페이스를 통해 백엔드 시스템과 통신한다.
+이 인터페이스는 실제로는 "Order & Checkout Domain", "Menu & Inventory Domain", "Event & Discount Domain", "User & Auth Domain", "Staff Management Domain" 등의 백엔드 시스템에 구현되어 있다.

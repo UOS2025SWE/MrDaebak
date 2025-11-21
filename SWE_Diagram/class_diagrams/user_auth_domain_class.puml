@@ -1,0 +1,105 @@
+@startuml
+title "User & Auth Domain"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Database" as IDatabase
+
+class "AuthRouter\n(routers/auth.py)" as AuthRouter {
+  + POST /api/auth/login
+  + POST /api/auth/register
+  + POST /api/auth/register-staff
+  + POST /api/auth/verify-token
+  + GET /api/auth/me
+  + POST /api/auth/change-password
+  + POST /api/auth/admin/verify
+}
+
+class "LoginRequest" as LoginRequest <<Pydantic>> {
+  email: EmailStr
+  password: str
+}
+
+class "RegisterRequest" as RegisterRequest <<Pydantic>> {
+  email: EmailStr
+  password: str
+  name: str
+  phone: str
+  address: str
+}
+
+class "StaffRegisterRequest" as StaffRegisterRequest <<Pydantic>> {
+  email: EmailStr
+  password: str
+  name: str
+  phone_number: str
+  address: str
+  store_id: str | None
+}
+
+class "ChangePasswordRequest" as ChangePasswordRequest <<Pydantic>> {
+  current_password: str
+  new_password: str
+}
+
+class "LoginResponse" as LoginResponse <<Pydantic>> {
+  success: bool
+  access_token: str | None
+  token_type: str | None
+  expires_in: int | None
+  user: dict | None
+  show_admin_button: bool | None
+  message: str
+  error: str | None
+}
+
+class "InquiriesRouter\n(routers/inquiries.py)" as InquiriesRouter {
+  + POST /api/inquiries
+  + GET /api/inquiries
+  + GET /api/inquiries/{inquiry_id}
+  + PATCH /api/inquiries/{inquiry_id}/status
+}
+
+class "InquiryCreateRequest" as InquiryCreateRequest <<Pydantic>> {
+  title: str
+  content: str
+  category: str
+  user_id: str | None
+}
+
+class "LoginService\n(services/login_service.py)" as LoginService {
+  + authenticate_user(db, email, password): dict
+  + create_login_response(user_data): dict
+  + register_customer(db, ...): dict
+  + register_staff_user(db, ...): dict
+  + create_access_token(data): str
+  + verify_token(token): dict | None
+  + verify_admin_access(db, user_id): bool
+  + get_current_user(credentials, db): dict
+}
+
+class "InquiryService\n(services/inquiry_service.py)" as InquiryService {
+  + create_inquiry(db, ...): dict
+  + get_inquiries(db, status, user_id): list[dict]
+  + get_inquiry(db, inquiry_id): dict
+  + update_inquiry_status(db, inquiry_id, status): dict
+}
+
+AuthRouter ..> LoginRequest
+AuthRouter ..> RegisterRequest
+AuthRouter ..> StaffRegisterRequest
+AuthRouter ..> ChangePasswordRequest
+AuthRouter ..> LoginResponse
+AuthRouter ..> LoginService
+
+InquiriesRouter ..> InquiryCreateRequest
+InquiriesRouter ..> InquiryService
+InquiriesRouter ..> LoginService
+
+LoginService ..> IDatabase
+InquiryService ..> IDatabase
+
+@enduml

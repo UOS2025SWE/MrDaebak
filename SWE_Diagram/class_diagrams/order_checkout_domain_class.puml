@@ -1,0 +1,160 @@
+@startuml
+title "Order & Checkout Domain"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Database" as IDatabase
+interface "External Payment API" as IPaymentAPI
+
+class "OrderRouter\n(routers/order.py)" as OrderRouter {
+  + POST /api/orders/
+  + GET /api/orders/{order_id}
+  + GET /api/orders/user/{user_id}
+  + GET /api/orders/{order_id}/customizations
+  + POST /api/orders/reorder/{order_id}
+  + GET /api/orders/staff/all
+  + PATCH /api/orders/{order_id}/status
+  + POST /api/orders/{order_id}/cancel
+}
+
+class "OrderRequest" as OrderRequest <<Pydantic>> {
+  dinner_code: str
+  style: str
+  quantity: int
+  delivery_address: str
+  user_id: str | None
+  customizations: dict[str, int] | None
+  notes: str
+  order_type: str
+}
+
+class "UpdateOrderStatusRequest" as UpdateOrderStatusRequest <<Pydantic>> {
+  new_status: str
+}
+
+class "CheckoutRouter\n(routers/checkout.py)" as CheckoutRouter {
+  + POST /api/checkout/checkout
+  + GET /api/checkout/delivery-info/{user_id}
+  + PUT /api/checkout/delivery-info/{user_id}
+  + GET /api/checkout/payment-info/{order_id}
+  + GET /api/checkout/payments/user/{user_id}
+}
+
+class "DeliveryInfo" as DeliveryInfo <<Pydantic>> {
+  address: str
+  recipient_name: str | None
+  recipient_phone: str | None
+  delivery_notes: str | None
+  scheduled_date: date | None
+  scheduled_time_slot: str | None
+}
+
+class "PaymentInfo" as PaymentInfo <<Pydantic>> {
+  card_number: str
+  cardholder_name: str
+  expiry_date: str
+  cvc: str
+}
+
+class "CheckoutRequest" as CheckoutRequest <<Pydantic>> {
+  menu_code: str
+  style: str
+  quantity: int
+  delivery: DeliveryInfo
+  payment: PaymentInfo
+  user_id: str | None
+  save_as_default_address: bool
+  customizations: dict[str, int] | None
+  side_dishes: list[dict] | None
+  cake_customization: dict | None
+}
+
+class "CheckoutResponse" as CheckoutResponse <<Pydantic>> {
+  success: bool
+  order_id: str
+  order_number: str
+  payment_id: str
+  transaction_id: str
+  total_price: float
+  delivery_address: str
+  masked_card_number: str
+  payment_status: str
+  message: str
+}
+
+class "CakeRouter\n(routers/cake.py)" as CakeRouter {
+  + POST /api/cake/customizations/upload-image
+  + POST /api/cake/customizations/generate-ai-image
+  + POST /api/cake/customizations/edit-ai-image
+  + GET /api/cake/customizations/image/{filename}
+}
+
+class "UploadImageResponse" as UploadImageResponse <<Pydantic>> {
+  success: bool
+  image_path: str
+  filename: str
+}
+
+class "GenerateCakeImageRequest" as GenerateCakeImageRequest <<Pydantic>> {
+  prompt: str
+  aspect_ratio: str
+}
+
+class "OrderService\n(services/order_service.py)" as OrderService {
+  + create_order(db, order_data): dict
+  + get_user_orders(db, user_id): dict
+  + consume_order_inventory(db, order_id): dict
+  + get_base_ingredients(db, menu_code, style): dict
+  - calculate_customization_price(): Decimal
+  - calculate_side_dish_price(): Decimal
+}
+
+class "PaymentService\n(services/payment_service.py)" as PaymentService {
+  + process_mock_payment(order_id, amount, ...): dict
+  + validate_card_number(card_number): bool
+  + mask_card_number(card_number): str
+  + get_payment_info(order_id, db): dict | None
+  + get_user_payments(user_id, db): list[dict]
+}
+
+IDatabase -[hidden]down- IPaymentAPI
+IPaymentAPI -[hidden]down- OrderRouter
+OrderRouter -[hidden]down- OrderRequest
+OrderRequest -[hidden]down- UpdateOrderStatusRequest
+
+CheckoutRouter -[hidden]down- DeliveryInfo
+DeliveryInfo -[hidden]down- PaymentInfo
+PaymentInfo -[hidden]down- CheckoutRequest
+CheckoutRequest -[hidden]down- CheckoutResponse
+
+CakeRouter -[hidden]down- UploadImageResponse
+UploadImageResponse -[hidden]down- GenerateCakeImageRequest
+GenerateCakeImageRequest -[hidden]down- OrderService
+OrderService -[hidden]down- PaymentService
+
+OrderRouter ..> OrderRequest
+OrderRouter ..> UpdateOrderStatusRequest
+OrderRouter ..> OrderService
+OrderRouter ..> IDatabase
+
+CheckoutRouter ..> CheckoutRequest
+CheckoutRouter ..> CheckoutResponse
+CheckoutRouter ..> DeliveryInfo
+CheckoutRouter ..> PaymentInfo
+CheckoutRouter ..> OrderService
+CheckoutRouter ..> PaymentService
+
+CheckoutRequest *-- DeliveryInfo
+CheckoutRequest *-- PaymentInfo
+
+CakeRouter ..> UploadImageResponse
+CakeRouter ..> GenerateCakeImageRequest
+
+OrderService ..> IDatabase
+PaymentService ..> IDatabase
+PaymentService ..> IPaymentAPI
+
+@enduml
