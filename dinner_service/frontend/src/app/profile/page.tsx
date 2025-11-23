@@ -171,7 +171,7 @@ export default function ProfilePage() {
     if (user?.user_type === 'STAFF' && user?.position) {
       if (user.position === 'COOK') {
         return '요리사'
-      } else if (user.position === 'RIDER') {
+      } else if (user.position === 'DELIVERY') {
         return '배달원'
       }
       return '직원'  // fallback

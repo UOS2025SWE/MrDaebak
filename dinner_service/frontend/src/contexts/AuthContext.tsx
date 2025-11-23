@@ -9,7 +9,7 @@ interface User {
   name: string;
   is_admin?: boolean;
   user_type?: 'CUSTOMER' | 'STAFF' | 'MANAGER';  // 직원/고객 구분용
-  position?: 'COOK' | 'RIDER' | 'STAFF';  // 직원 직종 (요리사/배달원)
+  position?: 'COOK' | 'DELIVERY' | 'STAFF';  // 직원 직종 (요리사/배달원)
 }
 
 interface LoginResult {

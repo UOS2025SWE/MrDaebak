@@ -94,9 +94,6 @@ export default function VoicePage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isSpeechSupported, setIsSpeechSupported] = useState(false)
-  const [ttsEnabled, setTtsEnabled] = useState(false)
-  const [isTtsPlaying, setIsTtsPlaying] = useState(false)
-  const [ttsError, setTtsError] = useState<string | null>(null)
   const [showCustomizationModal, setShowCustomizationModal] = useState(false)
   const [selectedMenuInfo, setSelectedMenuInfo] = useState<any>(null)
   const [isInitialized, setIsInitialized] = useState(false)
@@ -411,9 +408,6 @@ export default function VoicePage() {
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const audioPlayerRef = useRef<HTMLAudioElement | null>(null)
-  const currentAudioUrlRef = useRef<string | null>(null)
-  const lastTtsMessageIdRef = useRef<string | null>(null)
   
   // 채팅 세션 초기화
   const initChatSession = useCallback(async () => {
@@ -478,13 +472,6 @@ export default function VoicePage() {
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
         mediaStreamRef.current = null
-      }
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.pause()
-      }
-      if (typeof window !== 'undefined' && currentAudioUrlRef.current) {
-        URL.revokeObjectURL(currentAudioUrlRef.current)
-        currentAudioUrlRef.current = null
       }
     }
   }, [])
@@ -810,7 +797,6 @@ export default function VoicePage() {
             return
           }
           
-          // TTS 기능 제거됨 - 음성 출력하지 않음
         } else {
           await response.json().catch(() => null)
           setMessages(prev => [...prev, {
@@ -990,81 +976,6 @@ export default function VoicePage() {
     startRecording()
   }, [isSpeechSupported, isProcessing, isListening, startRecording, stopRecording])
 
-  const speakAssistantMessage = useCallback(async (message: ChatMessage) => {
-    if (!ttsEnabled || typeof window === 'undefined') return
-    const text = (message?.content || '').trim()
-    if (!text) return
-    const messageId = message.timestamp ?? `${message.role}-${message.content}`
-
-    try {
-      setTtsError(null)
-      setIsTtsPlaying(true)
-      const response = await fetch('/api/voice/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ text })
-      })
-
-      if (!response.ok) {
-        throw new Error(`TTS 실패: ${response.status}`)
-      }
-
-      const audioBuffer = await response.arrayBuffer()
-      const mimeType = response.headers.get('content-type') || 'audio/mpeg'
-      const blob = new Blob([audioBuffer], { type: mimeType })
-
-      if (currentAudioUrlRef.current) {
-        URL.revokeObjectURL(currentAudioUrlRef.current)
-      }
-      const objectUrl = URL.createObjectURL(blob)
-      currentAudioUrlRef.current = objectUrl
-
-      if (!audioPlayerRef.current && typeof Audio !== 'undefined') {
-        audioPlayerRef.current = new Audio()
-      }
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.pause()
-        audioPlayerRef.current.src = objectUrl
-        audioPlayerRef.current.onended = () => {
-          setIsTtsPlaying(false)
-        }
-        audioPlayerRef.current.play().catch((error: unknown) => {
-          console.error('오디오 재생 실패:', error)
-          setIsTtsPlaying(false)
-        })
-      } else {
-        setIsTtsPlaying(false)
-      }
-
-      lastTtsMessageIdRef.current = messageId
-    } catch (error) {
-      console.error('TTS 실패:', error)
-      setTtsError('음성 출력에 실패했습니다. 네트워크 상태를 확인해주세요.')
-      setIsTtsPlaying(false)
-    }
-  }, [ttsEnabled])
-
-  // TTS 활성화/비활성화 시 오디오 정지
-  useEffect(() => {
-    if (!ttsEnabled && audioPlayerRef.current) {
-      audioPlayerRef.current.pause()
-    }
-  }, [ttsEnabled])
-
-  // 챗봇 응답이 도착하면 자동으로 음성 재생
-  useEffect(() => {
-    if (!ttsEnabled) return
-    if (!messages.length) return
-
-    const lastMessage = messages[messages.length - 1]
-    if (lastMessage.role !== 'assistant') return
-    const messageId = lastMessage.timestamp ?? `${lastMessage.role}-${lastMessage.content}`
-    if (lastTtsMessageIdRef.current === messageId) return
-
-    speakAssistantMessage(lastMessage)
-  }, [messages, ttsEnabled, speakAssistantMessage])
   // 메뉴 주문 - checkout 페이지로 직접 이동
   const openCheckoutModalFromState = async (
     menuCode: string,
@@ -1292,13 +1203,15 @@ export default function VoicePage() {
             )}
           </div>
         </main>
-        <Footer />
+        <div className="hidden lg:block">
+          <Footer />
+        </div>
       </div>
     )
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50 flex flex-col">
+    <div className="min-h-[100dvh] bg-gradient-to-b from-blue-50 via-white to-gray-50 flex flex-col">
       <Header currentPage="voice" />
       
       <main className="flex-1 w-full py-8 px-4">
@@ -1312,7 +1225,7 @@ export default function VoicePage() {
             </p>
           </div>
           
-          <div className="flex flex-col lg:flex-row gap-6 h-[600px]">
+          <div className="flex flex-col lg:flex-row gap-6 h-[calc(100dvh-16rem)] lg:h-[600px] min-h-[500px]">
             {/* 왼쪽: 음성 컨트롤 */}
             <div className="lg:w-1/3">
               <div className="bg-white rounded-2xl shadow-xl p-8 h-full flex flex-col">
@@ -1388,44 +1301,12 @@ export default function VoicePage() {
                     </button>
                   </div>
                 </div>
-
-                <div className="mt-6 border-t border-stone-100 pt-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-stone-700">음성 출력 (베타)</p>
-                      <p className="text-xs text-stone-500">챗봇 답변을 음성으로 들을 수 있어요.</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setTtsError(null)
-                        setTtsEnabled(prev => !prev)
-                      }}
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                        ttsEnabled
-                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                          : 'bg-stone-100 text-stone-600 border border-stone-200'
-                      }`}
-                      type="button"
-                      aria-pressed={ttsEnabled}
-                    >
-                      {ttsEnabled ? '음성 출력 ON' : '음성 출력 OFF'}
-                    </button>
-                  </div>
-                  {ttsEnabled && (
-                    <p className="text-xs text-amber-600 mt-2">
-                      {isTtsPlaying ? '답변을 읽어드리는 중이에요...' : '챗봇 응답을 자동으로 읽어드릴게요.'}
-                    </p>
-                  )}
-                  {ttsError && (
-                    <p className="text-xs text-red-500 mt-2">{ttsError}</p>
-                  )}
-                </div>
               </div>
             </div>
             
             {/* 오른쪽: 채팅 UI */}
-            <div className="lg:w-2/3">
-              <div className="bg-white rounded-2xl shadow-xl h-full flex flex-col">
+            <div className="lg:w-2/3 relative z-20">
+              <div className="bg-white rounded-2xl shadow-xl h-full flex flex-col relative">
                 {/* 채팅 헤더 */}
                 <div className="px-6 py-4 border-b bg-gradient-to-r from-amber-50 to-stone-50 rounded-t-2xl">
                   <h2 className="text-xl font-bold text-stone-900">AI 상담사와 대화</h2>
@@ -1856,7 +1737,7 @@ export default function VoicePage() {
                 </div>
                 
                 {/* 채팅 입력창 */}
-                <div className="p-4 border-t">
+                <div className="p-4 border-t pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white rounded-b-2xl sticky bottom-0 z-30">
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -2022,7 +1903,9 @@ export default function VoicePage() {
         </div>
       )}
       
-      <Footer />
+      <div className="hidden lg:block">
+        <Footer />
+      </div>
     </div>
   )
 }

@@ -8,11 +8,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, field_validator
 
-from ..services.gemini_image_service import (
-    ALLOWED_ASPECT_RATIOS,
-    GeminiImageService,
-    get_gemini_image_service,
-    guess_extension,
+from ..services.image_generation_service import (
+    ImageGenerationService,
+    get_image_generation_service,
 )
 
 router = APIRouter(tags=["cake"])
@@ -20,6 +18,17 @@ router = APIRouter(tags=["cake"])
 CAKE_UPLOAD_DIR = Path(__file__).parent.parent / "uploads" / "cakes"
 CAKE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+ALLOWED_ASPECT_RATIOS: tuple[str, ...] = (
+    "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
+)
+
+def guess_extension(mime_type: str | None) -> str:
+    if not mime_type:
+        return ".png"
+    guessed = mimetypes.guess_extension(mime_type)
+    if not guessed:
+        return ".png"
+    return guessed
 
 class UploadImageResponse(BaseModel):
     success: bool
@@ -99,10 +108,10 @@ async def upload_cake_image(file: UploadFile = File(...)) -> UploadImageResponse
 
 @router.post("/customizations/generate-ai-image", response_model=UploadImageResponse)
 async def generate_cake_image(request: GenerateCakeImageRequest) -> UploadImageResponse:
-    """Gemini를 사용해 케이크 이미지를 생성"""
-    service: GeminiImageService = get_gemini_image_service()
+    """AI 서버를 사용해 케이크 이미지를 생성"""
+    service: ImageGenerationService = get_image_generation_service()
     try:
-        image_bytes, mime_type = service.generate_image(
+        image_bytes, mime_type = await service.generate_image(
             prompt=request.prompt,
             aspect_ratio=request.aspect_ratio,
         )
@@ -121,48 +130,8 @@ async def edit_cake_image(
     file: UploadFile | None = File(None),
     existing_image_path: str | None = Form(None),
 ) -> UploadImageResponse:
-    """기존 이미지를 Gemini로 수정"""
-    service: GeminiImageService = get_gemini_image_service()
-
-    try:
-        validated = GenerateCakeImageRequest(aspect_ratio=aspect_ratio, prompt=prompt)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    normalized_ratio = validated.aspect_ratio
-    prompt_text = validated.prompt
-
-    base_bytes: bytes | None = None
-    base_mime: str | None = None
-
-    if file is not None:
-        if not file.content_type or not file.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="이미지 파일만 업로드할 수 있습니다")
-        try:
-            base_bytes = await file.read()
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"이미지를 읽을 수 없습니다: {exc}") from exc
-        base_mime = file.content_type
-    elif existing_image_path:
-        base_bytes, base_mime = _load_existing_image(existing_image_path)
-    else:
-        raise HTTPException(status_code=400, detail="기존 이미지를 선택하거나 새 이미지를 업로드해주세요.")
-
-    try:
-        image_bytes, mime_type = service.edit_image(
-            base_image_bytes=base_bytes,
-            base_mime_type=base_mime or "image/png",
-            prompt=prompt_text,
-            aspect_ratio=normalized_ratio,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - 외부 API 오류
-        raise HTTPException(status_code=500, detail=f"AI 이미지 수정에 실패했습니다: {exc}") from exc
-
-    return _store_image_bytes(image_bytes, mime_type)
+    """기존 이미지를 AI로 수정 (현재 미지원)"""
+    raise HTTPException(status_code=501, detail="이미지 편집 기능은 현재 지원되지 않습니다.")
 
 
 @router.get("/customizations/image/{filename}")

@@ -1,19 +1,19 @@
 """
 음성 주문 API 라우터
-STT + Gemini AI 기반 메뉴 추천 및 주문 처리
+STT + AI Server 기반 메뉴 추천 및 주문 처리
 """
 
 import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..services.gemini_service import get_gemini_service
+from ..services.voice_analysis_service import get_voice_analysis_service, VoiceAnalysisService
 from ..services.database import get_db
-from ..services.openai_audio_service import get_audio_service, OpenAIAudioService
+from ..services.stt_service import get_stt_service, STTService
 
 router = APIRouter(tags=["voice"])
 
@@ -24,7 +24,7 @@ class VoiceInputRequest(BaseModel):
     session_id: str | None = Field(None, description="대화 세션 ID")
 
 class VoiceAnalysisResponse(BaseModel):
-    """음성 분석 응답 모델 (고도화 버전)"""
+    """음성 분석 응답 모델"""
     intent: str = Field(..., description="의도 (recommendation, order, question, greeting, other)")
     confidence: float = Field(..., ge=0.0, le=1.0, description="신뢰도")
     response: str = Field(..., description="AI 응답 메시지")
@@ -40,19 +40,6 @@ class VoiceAnalysisResponse(BaseModel):
     quantity: int | None = Field(1, description="선택된 수량")
     customization_overrides: dict[str, Any] = Field(default_factory=dict, description="재료 커스터마이징 기록")
 
-class TextToSpeechRequest(BaseModel):
-    """텍스트를 음성으로 변환하는 요청"""
-    text: str = Field(..., min_length=1, max_length=1200, description="변환할 텍스트")
-    voice: str | None = Field(None, description="사용할 음성 (기본값 alloy)")
-    format: str | None = Field(None, description="오디오 포맷 (mp3, wav, aac, opus)")
-
-class ChatMessage(BaseModel):
-    """채팅 메시지 모델"""
-    role: str = Field(..., description="메시지 역할 (user, assistant)")
-    content: str = Field(..., description="메시지 내용")
-    timestamp: str | None = Field(None, description="타임스탬프")
-    menu_info: dict[str, Any] | None = Field(None, description="메뉴 정보")
-
 @router.post("/analyze", response_model=VoiceAnalysisResponse)
 async def analyze_voice_input(
     request: VoiceInputRequest,
@@ -60,18 +47,13 @@ async def analyze_voice_input(
 ) -> dict[str, Any]:
     """
     음성 입력 분석 및 메뉴 추천 (고도화 버전)
-
-    - STT로 변환된 텍스트를 받아서
-    - Gemini AI가 의도 분석 및 메뉴 추천
-    - 과거 주문 이력 및 대화 컨텍스트 활용
-    - 대화형 응답 생성
     """
     try:
-        # Gemini 서비스 인스턴스
-        gemini_service = get_gemini_service()
+        # Voice Service 인스턴스
+        voice_service = get_voice_analysis_service()
 
-        # 음성 입력 분석 (과거 이력 + 대화 컨텍스트 포함)
-        result = await gemini_service.analyze_voice_input(
+        # 음성 입력 분석
+        result = await voice_service.analyze_voice_input(
             transcript=request.transcript,
             user_id=request.user_id,
             session_id=request.session_id,
@@ -81,16 +63,14 @@ async def analyze_voice_input(
         return result
 
     except ValueError as e:
-        # 값 오류 (API 키 누락, 응답 파싱 실패 등)
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Gemini 서비스 값 오류: {e}", exc_info=True)
+        logger.error(f"Voice 서비스 값 오류: {e}", exc_info=True)
         raise HTTPException(
             status_code=400,
             detail=f"요청 처리 오류: {str(e)}"
         )
     except Exception as e:
-        # 기타 예외
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"음성 분석 중 예상치 못한 오류: {e}", exc_info=True)
@@ -102,16 +82,16 @@ async def analyze_voice_input(
 
 @router.post("/stt")
 async def speech_to_text(
-    audio_service: Annotated[OpenAIAudioService, Depends(get_audio_service)],
+    stt_service: Annotated[STTService, Depends(get_stt_service)],
     audio_file: UploadFile = File(...),
     language: str = Form("ko"),
 ) -> dict[str, Any]:
     """
-    업로드된 오디오 파일을 OpenAI STT 모델로 변환
+    업로드된 오디오 파일을 AI Server STT 모델로 변환
     """
     try:
         file_bytes = await audio_file.read()
-        transcript = audio_service.transcribe_audio(
+        transcript = await stt_service.transcribe_audio(
             audio_bytes=file_bytes,
             filename=audio_file.filename or "recording.webm",
             mime_type=audio_file.content_type,
@@ -120,36 +100,8 @@ async def speech_to_text(
         return {"success": True, "transcript": transcript}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:  # pragma: no cover - 외부 API 오류
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"STT 처리 중 오류: {exc}") from exc
-
-
-@router.post("/tts")
-async def text_to_speech(
-    audio_service: Annotated[OpenAIAudioService, Depends(get_audio_service)],
-    request: TextToSpeechRequest,
-) -> Response:
-    """
-    텍스트를 음성으로 변환하여 바이너리 오디오로 반환
-    """
-    try:
-        audio_bytes, mime_type = audio_service.synthesize_speech(
-            request.text,
-            voice=request.voice,
-            audio_format=request.format,  # type: ignore[arg-type]
-        )
-        return Response(
-            content=audio_bytes,
-            media_type=mime_type,
-            headers={
-                "Cache-Control": "no-store",
-                "Content-Disposition": 'inline; filename="assistant-voice"'
-            }
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=500, detail=f"TTS 처리 중 오류: {exc}") from exc
 
 
 @router.post("/chat/init")
@@ -158,8 +110,6 @@ async def init_chat_session(
 ) -> dict[str, Any]:
     """
     채팅 세션 초기화
-
-    새로운 대화 세션을 시작하고 환영 메시지 반환 (user_id: UUID 문자열)
     """
     session_id = str(uuid.uuid4())
     
@@ -179,5 +129,3 @@ async def init_chat_session(
         "message": welcome_message,
         "timestamp": datetime.now().isoformat()
     }
-
-

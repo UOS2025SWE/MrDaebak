@@ -101,10 +101,10 @@ function OrderCard({
 }: {
   order: Order;
   onStatusChange: (orderId: string, newStatus: string) => Promise<void>;
-  userPosition?: 'COOK' | 'RIDER' | 'STAFF';
+  userPosition?: 'COOK' | 'DELIVERY' | 'STAFF';
   canPerformAction: boolean;
 }) {
-  const getNextAction = (status: string, position?: 'COOK' | 'RIDER' | 'STAFF') => {
+  const getNextAction = (status: string, position?: 'COOK' | 'DELIVERY' | 'STAFF') => {
     switch (status) {
       case 'RECEIVED':
         // 조리 수락: COOK만 가능
@@ -116,13 +116,13 @@ function OrderCard({
         if (position === 'COOK' || position === 'STAFF') {
           return { label: '조리 완료', nextStatus: 'DELIVERING', color: 'amber' };
         }
-        if (position === 'RIDER') {
+        if (position === 'DELIVERY') {
           return { label: '배달 시작', nextStatus: 'DELIVERING', color: 'green' };
         }
         return null;
       case 'DELIVERING':
         // 배달 완료: DELIVERY만 가능
-        if (position === 'RIDER' || position === 'STAFF') {
+        if (position === 'DELIVERY' || position === 'STAFF') {
           return { label: '배달 완료', nextStatus: 'COMPLETED', color: 'green' };
         }
         return null;
@@ -754,7 +754,7 @@ function StaffDashboardContent() {
               <div className="flex items-center gap-4">
                 <div className="text-right">
                   <p className="text-xs text-gray-500">
-                    {user?.position === 'RIDER'
+                    {user?.position === 'DELIVERY'
                       ? '배달원'
                       : user?.position === 'STAFF'
                         ? '직원'
@@ -960,7 +960,7 @@ function StaffDashboardContent() {
                 </span>
               </div>
               <p className="text-2xl font-bold text-gray-900 mb-2">
-                {user?.position === 'RIDER'
+                {user?.position === 'DELIVERY'
                   ? '배달원'
                   : user?.position === 'STAFF'
                     ? '직원'
@@ -1069,7 +1069,7 @@ function StaffDashboardContent() {
                 )}
               </div>
             </div>
-          ) : user?.position === 'RIDER' ? (
+          ) : user?.position === 'DELIVERY' ? (
             /* DELIVERY: 배달 컬럼만 표시 */
             <div>
               <div className="bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-xl p-4 shadow-md">

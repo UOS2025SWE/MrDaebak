@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+vllm
+diffusers
+torch
+transformers
+accelerate
+soundfile
+librosa
+pydantic-settings
+python-multipart
+protobuf
+sentencepiece
+peft
+redis
+
+
