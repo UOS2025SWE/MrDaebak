@@ -150,7 +150,12 @@ const CUSTOM_CAKE_SIZES = [
   { code: 'size_3', label: '3호 (4~6인)' }
 ] as const
 
-type CustomCakeRecipeMap = Record<string, Record<string, Array<{ ingredient_code: string; quantity: number }>>>;
+type CustomCakeRecipeVariant = {
+  ingredients: Array<{ ingredient_code: string; quantity: number }>
+  price: number
+}
+
+type CustomCakeRecipeMap = Record<string, Record<string, CustomCakeRecipeVariant>>;
 
 type InquiryStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED' | 'ARCHIVED'
 
@@ -265,8 +270,8 @@ function AdminDashboardContent() {
   } | null>(null)
 
   // 재고 관리 데이터
-  const [categorizedIngredients, setCategorizedIngredients] = useState<{[key: string]: IngredientCategory}>({})
-  
+  const [categorizedIngredients, setCategorizedIngredients] = useState<{ [key: string]: IngredientCategory }>({})
+
   // 입고 승인 대기 목록
   const [pendingIntakes, setPendingIntakes] = useState<PendingIntakeBatch[]>([])
   const [intakeHistory, setIntakeHistory] = useState<IntakeHistoryItem[]>([])
@@ -534,21 +539,21 @@ function AdminDashboardContent() {
       if (data.success) {
         const items: SideDishSummary[] = Array.isArray(data.data)
           ? data.data.map((dish: any) => ({
-              side_dish_id: dish.side_dish_id ?? dish.code ?? `fallback-${Math.random().toString(36).slice(2)}`,
-              code: dish.code,
-              name: dish.name,
-              description: dish.description,
-              base_price: Number(dish.base_price ?? 0),
-              is_available: dish.is_available,
-              ingredients: Array.isArray(dish.ingredients)
-                ? dish.ingredients.map((item: any) => ({
-                    ingredient_code: item.ingredient_code,
-                    ingredient_id: item.ingredient_id,
-                    quantity: Number(item.quantity ?? 0)
-                  }))
-                : [],
-              created_at: dish.created_at ?? null
-            }))
+            side_dish_id: dish.side_dish_id ?? dish.code ?? `fallback-${Math.random().toString(36).slice(2)}`,
+            code: dish.code,
+            name: dish.name,
+            description: dish.description,
+            base_price: Number(dish.base_price ?? 0),
+            is_available: dish.is_available,
+            ingredients: Array.isArray(dish.ingredients)
+              ? dish.ingredients.map((item: any) => ({
+                ingredient_code: item.ingredient_code,
+                ingredient_id: item.ingredient_id,
+                quantity: Number(item.quantity ?? 0)
+              }))
+              : [],
+            created_at: dish.created_at ?? null
+          }))
           : []
         setSideDishList(items)
       }
@@ -573,14 +578,25 @@ function AdminDashboardContent() {
         Object.entries(data.data as Record<string, Record<string, any>>).forEach(([flavor, sizeMap]) => {
           recipeMap[flavor] = {}
           if (sizeMap && typeof sizeMap === 'object') {
-            Object.entries(sizeMap).forEach(([size, ingredients]) => {
-              const processed = Array.isArray(ingredients)
-                ? ingredients.map((item: any) => ({
-                    ingredient_code: item?.ingredient_code ?? '',
-                    quantity: Number(item?.quantity ?? 0)
-                  })).filter((item) => item.ingredient_code)
+            Object.entries(sizeMap).forEach(([size, variantPayload]) => {
+              const rawIngredients = Array.isArray(variantPayload)
+                ? variantPayload
+                : Array.isArray(variantPayload?.ingredients)
+                  ? variantPayload.ingredients
+                  : []
+              const processedIngredients = Array.isArray(rawIngredients)
+                ? rawIngredients.map((item: any) => ({
+                  ingredient_code: item?.ingredient_code ?? '',
+                  quantity: Number(item?.quantity ?? 0)
+                })).filter((item) => item.ingredient_code)
                 : []
-              recipeMap[flavor][size] = processed
+              const priceCandidate = Array.isArray(variantPayload)
+                ? 0
+                : Number(variantPayload?.price ?? 0)
+              recipeMap[flavor][size] = {
+                ingredients: processedIngredients,
+                price: Number.isFinite(priceCandidate) ? Math.max(0, priceCandidate) : 0
+              }
             })
           }
         })
@@ -1136,14 +1152,14 @@ function AdminDashboardContent() {
       prev.map((row, idx) =>
         idx === index
           ? {
-              ...row,
-              [field]: field === 'quantity'
-                ? (() => {
-                    const numeric = typeof value === 'number' ? value : Number(value)
-                    return Number.isNaN(numeric) ? 0 : Math.max(0, Math.round(numeric * 100) / 100)
-                  })()
-                : (value as string)
-            }
+            ...row,
+            [field]: field === 'quantity'
+              ? (() => {
+                const numeric = typeof value === 'number' ? value : Number(value)
+                return Number.isNaN(numeric) ? 0 : Math.max(0, Math.round(numeric * 100) / 100)
+              })()
+              : (value as string)
+          }
           : row
       )
     )
@@ -1600,14 +1616,14 @@ function AdminDashboardContent() {
   // 입고 승인 대기 목록 조회
   const fetchPendingIntakes = useCallback(async () => {
     if (!token) return
-    
+
     try {
       const response = await fetch('/api/ingredients/intake/pending', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         if (data.success && Array.isArray(data.batches)) {
@@ -1827,10 +1843,8 @@ function AdminDashboardContent() {
 
   const currentCustomCakeRecipe = useMemo(() => {
     const flavorMap = customCakeRecipes[selectedCakeFlavor]
-    if (flavorMap && flavorMap[selectedCakeSize]) {
-      return flavorMap[selectedCakeSize]
-    }
-    return []
+    const variant = flavorMap?.[selectedCakeSize]
+    return variant?.ingredients ?? []
   }, [customCakeRecipes, selectedCakeFlavor, selectedCakeSize])
 
   useEffect(() => {
@@ -1862,18 +1876,18 @@ function AdminDashboardContent() {
 
       const items: InquiryItem[] = Array.isArray(data.items)
         ? data.items
-            .map((item: any): InquiryItem => ({
-              id: item.inquiry_id ?? item.id ?? '',
-              name: item.name ?? '익명',
-              email: item.email ?? '',
-              topic: item.topic ?? '',
-              message: item.message ?? '',
-              status: (item.status ?? 'NEW') as InquiryStatus,
-              managerNote: item.manager_note ?? null,
-              createdAt: item.created_at ?? '',
-              updatedAt: item.updated_at ?? ''
-            }))
-            .filter((item: InquiryItem) => !!item.id)
+          .map((item: any): InquiryItem => ({
+            id: item.inquiry_id ?? item.id ?? '',
+            name: item.name ?? '익명',
+            email: item.email ?? '',
+            topic: item.topic ?? '',
+            message: item.message ?? '',
+            status: (item.status ?? 'NEW') as InquiryStatus,
+            managerNote: item.manager_note ?? null,
+            createdAt: item.created_at ?? '',
+            updatedAt: item.updated_at ?? ''
+          }))
+          .filter((item: InquiryItem) => !!item.id)
         : []
 
       setInquiries(items)
@@ -1913,40 +1927,40 @@ function AdminDashboardContent() {
 
       const items: AdminEventItem[] = Array.isArray(data.events)
         ? data.events.map((event: any) => ({
-            id: event.event_id ?? event.id ?? '',
-            title: event.title ?? '',
-            description: event.description ?? '',
-            imagePath: event.image_path ?? null,
-            discountLabel: event.discount_label ?? null,
-            startDate: event.start_date ?? null,
-            endDate: event.end_date ?? null,
-            tags: Array.isArray(event.tags) ? event.tags : [],
-            isPublished: Boolean(event.is_published ?? true),
-            createdAt: event.created_at ?? '',
-            updatedAt: event.updated_at ?? '',
-            menuDiscounts: Array.isArray(event.menu_discounts)
-              ? event.menu_discounts
-                  .map((discount: any) => {
-                    const targetType: 'MENU' | 'SIDE_DISH' =
-                      (discount.target_type ?? discount.targetType ?? 'MENU') === 'SIDE_DISH' ? 'SIDE_DISH' : 'MENU'
-                    const menuId = String(discount.menu_item_id ?? discount.menuItemId ?? discount.target_id ?? discount.targetId ?? '')
-                    const sideId = String(discount.side_dish_id ?? discount.sideDishId ?? '')
-                    const resolvedId = targetType === 'SIDE_DISH' ? (sideId || menuId) : menuId
-                    const mapped: EventMenuDiscount = {
-                      menuItemId: resolvedId,
-                      menuCode: discount.menu_code ?? discount.menuCode ?? undefined,
-                      menuName: discount.menu_name ?? discount.menuName ?? discount.side_dish_name ?? discount.sideDishName ?? '',
-                      sideDishCode: discount.side_dish_code ?? discount.sideDishCode ?? undefined,
-                      sideDishName: discount.side_dish_name ?? discount.sideDishName ?? undefined,
-                      discountType: (discount.discount_type ?? discount.discountType ?? 'PERCENT') as DiscountType,
-                      discountValue: Number(discount.discount_value ?? discount.discountValue ?? 0),
-                      targetType
-                    }
-                    return mapped
-                  })
-                  .filter((discount: EventMenuDiscount) => Boolean(discount.menuItemId))
-              : []
-          })).filter((event: AdminEventItem) => !!event.id)
+          id: event.event_id ?? event.id ?? '',
+          title: event.title ?? '',
+          description: event.description ?? '',
+          imagePath: event.image_path ?? null,
+          discountLabel: event.discount_label ?? null,
+          startDate: event.start_date ?? null,
+          endDate: event.end_date ?? null,
+          tags: Array.isArray(event.tags) ? event.tags : [],
+          isPublished: Boolean(event.is_published ?? true),
+          createdAt: event.created_at ?? '',
+          updatedAt: event.updated_at ?? '',
+          menuDiscounts: Array.isArray(event.menu_discounts)
+            ? event.menu_discounts
+              .map((discount: any) => {
+                const targetType: 'MENU' | 'SIDE_DISH' =
+                  (discount.target_type ?? discount.targetType ?? 'MENU') === 'SIDE_DISH' ? 'SIDE_DISH' : 'MENU'
+                const menuId = String(discount.menu_item_id ?? discount.menuItemId ?? discount.target_id ?? discount.targetId ?? '')
+                const sideId = String(discount.side_dish_id ?? discount.sideDishId ?? '')
+                const resolvedId = targetType === 'SIDE_DISH' ? (sideId || menuId) : menuId
+                const mapped: EventMenuDiscount = {
+                  menuItemId: resolvedId,
+                  menuCode: discount.menu_code ?? discount.menuCode ?? undefined,
+                  menuName: discount.menu_name ?? discount.menuName ?? discount.side_dish_name ?? discount.sideDishName ?? '',
+                  sideDishCode: discount.side_dish_code ?? discount.sideDishCode ?? undefined,
+                  sideDishName: discount.side_dish_name ?? discount.sideDishName ?? undefined,
+                  discountType: (discount.discount_type ?? discount.discountType ?? 'PERCENT') as DiscountType,
+                  discountValue: Number(discount.discount_value ?? discount.discountValue ?? 0),
+                  targetType
+                }
+                return mapped
+              })
+              .filter((discount: EventMenuDiscount) => Boolean(discount.menuItemId))
+            : []
+        })).filter((event: AdminEventItem) => !!event.id)
         : []
 
       setManagerEvents(items)
@@ -2549,11 +2563,10 @@ function AdminDashboardContent() {
             <div className="hidden lg:flex gap-2">
               <button
                 onClick={() => setActiveTab('accounting')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                  activeTab === 'accounting'
-                    ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${activeTab === 'accounting'
+                  ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-50'
+                  }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">💰</span>
@@ -2562,11 +2575,10 @@ function AdminDashboardContent() {
               </button>
               <button
                 onClick={() => setActiveTab('staff')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                  activeTab === 'staff'
-                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${activeTab === 'staff'
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-50'
+                  }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">👥</span>
@@ -2575,11 +2587,10 @@ function AdminDashboardContent() {
               </button>
               <button
                 onClick={() => setActiveTab('inventory')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                  activeTab === 'inventory'
-                    ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${activeTab === 'inventory'
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-50'
+                  }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">📦</span>
@@ -2588,11 +2599,10 @@ function AdminDashboardContent() {
               </button>
               <button
                 onClick={() => setActiveTab('menu')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                  activeTab === 'menu'
-                    ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${activeTab === 'menu'
+                  ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-50'
+                  }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">🍽️</span>
@@ -2601,11 +2611,10 @@ function AdminDashboardContent() {
               </button>
               <button
                 onClick={() => setActiveTab('events')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                  activeTab === 'events'
-                    ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${activeTab === 'events'
+                  ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-50'
+                  }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">🎉</span>
@@ -2614,11 +2623,10 @@ function AdminDashboardContent() {
               </button>
               <button
                 onClick={() => setActiveTab('inquiries')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                  activeTab === 'inquiries'
-                    ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${activeTab === 'inquiries'
+                  ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-50'
+                  }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xl">📨</span>
@@ -2633,18 +2641,16 @@ function AdminDashboardContent() {
                 <button
                   type="button"
                   onClick={() => setTabPage(1)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                    tabPage === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-stone-600 border-stone-200'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${tabPage === 1 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-stone-600 border-stone-200'
+                    }`}
                 >
                   1 / 2
                 </button>
                 <button
                   type="button"
                   onClick={() => setTabPage(2)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                    tabPage === 2 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-stone-600 border-stone-200'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${tabPage === 2 ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-stone-600 border-stone-200'
+                    }`}
                 >
                   2 / 2
                 </button>
@@ -2654,11 +2660,10 @@ function AdminDashboardContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setActiveTab('accounting')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
-                      activeTab === 'accounting'
-                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${activeTab === 'accounting'
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-lg">💰</span>
@@ -2667,11 +2672,10 @@ function AdminDashboardContent() {
                   </button>
                   <button
                     onClick={() => setActiveTab('staff')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
-                      activeTab === 'staff'
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${activeTab === 'staff'
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-lg">👥</span>
@@ -2680,11 +2684,10 @@ function AdminDashboardContent() {
                   </button>
                   <button
                     onClick={() => setActiveTab('inventory')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
-                      activeTab === 'inventory'
-                        ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${activeTab === 'inventory'
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-lg">📦</span>
@@ -2696,11 +2699,10 @@ function AdminDashboardContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setActiveTab('menu')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
-                      activeTab === 'menu'
-                        ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${activeTab === 'menu'
+                      ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-lg">🍽️</span>
@@ -2709,11 +2711,10 @@ function AdminDashboardContent() {
                   </button>
                   <button
                     onClick={() => setActiveTab('events')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
-                      activeTab === 'events'
-                        ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${activeTab === 'events'
+                      ? 'bg-gradient-to-r from-pink-600 to-pink-700 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-lg">🎉</span>
@@ -2722,11 +2723,10 @@ function AdminDashboardContent() {
                   </button>
                   <button
                     onClick={() => setActiveTab('inquiries')}
-                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
-                      activeTab === 'inquiries'
-                        ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-50'
-                    }`}
+                    className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${activeTab === 'inquiries'
+                      ? 'bg-gradient-to-r from-teal-600 to-teal-700 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <span className="text-lg">📨</span>
@@ -2810,12 +2810,11 @@ function AdminDashboardContent() {
                     accountingStats.popular_menus.map((menu, index) => (
                       <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                            index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${index === 0 ? 'bg-yellow-100 text-yellow-700' :
                             index === 1 ? 'bg-gray-200 text-gray-700' :
-                            index === 2 ? 'bg-orange-100 text-orange-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
+                              index === 2 ? 'bg-orange-100 text-orange-700' :
+                                'bg-blue-100 text-blue-700'
+                            }`}>
                             {index + 1}
                           </div>
                           <div>
@@ -2920,54 +2919,53 @@ function AdminDashboardContent() {
                   </div>
 
                   <div className="space-y-3">
-                  {cookStaff.map((staff) => {
-                    let statusLabel = '근무중';
-                    let statusClasses = 'bg-red-100 text-red-700';
-                    if (staff.status === 'free') {
-                      statusLabel = '출근';
-                      statusClasses = 'bg-green-100 text-green-700';
-                    } else if (staff.status === 'off-duty') {
-                      statusLabel = '퇴근';
-                      statusClasses = 'bg-gray-100 text-gray-600';
-                    }
-                    return (
-                      <div
-                        key={staff.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          staff.status === 'free'
+                    {cookStaff.map((staff) => {
+                      let statusLabel = '근무중';
+                      let statusClasses = 'bg-red-100 text-red-700';
+                      if (staff.status === 'free') {
+                        statusLabel = '출근';
+                        statusClasses = 'bg-green-100 text-green-700';
+                      } else if (staff.status === 'off-duty') {
+                        statusLabel = '퇴근';
+                        statusClasses = 'bg-gray-100 text-gray-600';
+                      }
+                      return (
+                        <div
+                          key={staff.id}
+                          className={`p-4 rounded-xl border-2 transition-all ${staff.status === 'free'
                             ? 'bg-green-50 border-green-200'
                             : 'bg-red-50 border-red-200'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-4 mb-2">
-                          <div>
-                            <h3 className="font-bold text-gray-900">{staff.name}</h3>
-                            <p className="text-xs text-gray-500">{staff.id}</p>
+                            }`}
+                        >
+                          <div className="flex items-center justify-between gap-4 mb-2">
+                            <div>
+                              <h3 className="font-bold text-gray-900">{staff.name}</h3>
+                              <p className="text-xs text-gray-500">{staff.id}</p>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusClasses}`}>
+                              {statusLabel}
+                            </span>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusClasses}`}>
-                            {statusLabel}
-                          </span>
+                          {staff.currentTask && (
+                            <p className="text-sm text-gray-600">{staff.currentTask}</p>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              onClick={() => toggleStaffStatus(staff.id)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
+                            >
+                              출퇴근 토글
+                            </button>
+                            <button
+                              onClick={() => handleTerminateStaff(staff.id)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                            >
+                              계약 종료
+                            </button>
+                          </div>
                         </div>
-                        {staff.currentTask && (
-                          <p className="text-sm text-gray-600">{staff.currentTask}</p>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            onClick={() => toggleStaffStatus(staff.id)}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
-                          >
-                            출퇴근 토글
-                          </button>
-                          <button
-                            onClick={() => handleTerminateStaff(staff.id)}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-                          >
-                            계약 종료
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -2982,54 +2980,53 @@ function AdminDashboardContent() {
                   </div>
 
                   <div className="space-y-3">
-                  {deliveryStaff.map((staff) => {
-                    let statusLabel = '근무중';
-                    let statusClasses = 'bg-blue-100 text-blue-700';
-                    if (staff.status === 'free') {
-                      statusLabel = '출근';
-                      statusClasses = 'bg-green-100 text-green-700';
-                    } else if (staff.status === 'off-duty') {
-                      statusLabel = '퇴근';
-                      statusClasses = 'bg-gray-100 text-gray-600';
-                    }
-                    return (
-                      <div
-                        key={staff.id}
-                        className={`p-4 rounded-xl border-2 transition-all ${
-                          staff.status === 'free'
+                    {deliveryStaff.map((staff) => {
+                      let statusLabel = '근무중';
+                      let statusClasses = 'bg-blue-100 text-blue-700';
+                      if (staff.status === 'free') {
+                        statusLabel = '출근';
+                        statusClasses = 'bg-green-100 text-green-700';
+                      } else if (staff.status === 'off-duty') {
+                        statusLabel = '퇴근';
+                        statusClasses = 'bg-gray-100 text-gray-600';
+                      }
+                      return (
+                        <div
+                          key={staff.id}
+                          className={`p-4 rounded-xl border-2 transition-all ${staff.status === 'free'
                             ? 'bg-green-50 border-green-200'
                             : 'bg-blue-50 border-blue-200'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-4 mb-2">
-                          <div>
-                            <h3 className="font-bold text-gray-900">{staff.name}</h3>
-                            <p className="text-xs text-gray-500">{staff.id}</p>
+                            }`}
+                        >
+                          <div className="flex items-center justify-between gap-4 mb-2">
+                            <div>
+                              <h3 className="font-bold text-gray-900">{staff.name}</h3>
+                              <p className="text-xs text-gray-500">{staff.id}</p>
+                            </div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusClasses}`}>
+                              {statusLabel}
+                            </span>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusClasses}`}>
-                            {statusLabel}
-                          </span>
+                          {staff.currentTask && (
+                            <p className="text-sm text-gray-600">{staff.currentTask}</p>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              onClick={() => toggleStaffStatus(staff.id)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+                            >
+                              출퇴근 토글
+                            </button>
+                            <button
+                              onClick={() => handleTerminateStaff(staff.id)}
+                              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                            >
+                              계약 종료
+                            </button>
+                          </div>
                         </div>
-                        {staff.currentTask && (
-                          <p className="text-sm text-gray-600">{staff.currentTask}</p>
-                        )}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            onClick={() => toggleStaffStatus(staff.id)}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
-                          >
-                            출퇴근 토글
-                          </button>
-                          <button
-                            onClick={() => handleTerminateStaff(staff.id)}
-                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-                          >
-                            계약 종료
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -3051,12 +3048,12 @@ function AdminDashboardContent() {
               {menuError && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
                   <p className="text-sm text-red-700">{menuError}</p>
-                    <button
+                  <button
                     onClick={refreshMenuData}
                     className="mt-3 inline-flex items-center px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg"
                   >
                     다시 불러오기
-                    </button>
+                  </button>
                 </div>
               )}
 
@@ -3075,7 +3072,7 @@ function AdminDashboardContent() {
                       ? menu.styles
                       : [{ id: 'default', code: 'simple', name: '기본 구성', price: menu.base_price, description: '기본 제공 구성' }]
 
-                        return (
+                    return (
                       <div key={menu.code} className="bg-white rounded-2xl shadow-lg p-6 border border-orange-100">
                         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
                           <div>
@@ -3088,13 +3085,13 @@ function AdminDashboardContent() {
                               <p className="mt-2 text-gray-700 text-sm leading-relaxed max-w-2xl">
                                 {menu.description}
                               </p>
-                      )}
-                    </div>
+                            )}
+                          </div>
                           <div className="text-right">
                             <p className="text-sm text-gray-500">기본 가격</p>
                             <p className="text-xl font-semibold text-amber-600">{menu.base_price.toLocaleString()}원</p>
-                    </div>
-                  </div>
+                          </div>
+                        </div>
 
                         <div className="space-y-5">
                           {styles.map((style) => {
@@ -3125,10 +3122,10 @@ function AdminDashboardContent() {
                                   </div>
                                   <div className="text-sm text-gray-500">
                                     제공 가격 {displayPrice.toLocaleString()}원
-                      </div>
-                    </div>
+                                  </div>
+                                </div>
 
-                    <div className="space-y-3">
+                                <div className="space-y-3">
                                   {ingredientEntries.length === 0 ? (
                                     <p className="text-sm text-gray-500">구성된 재료가 없습니다. 아래에서 재료를 추가해주세요.</p>
                                   ) : (
@@ -3141,106 +3138,106 @@ function AdminDashboardContent() {
                                       const isChanged = editedQuantity !== baseQuantity
                                       const isProcessing = menuActionLoading[key] ?? false
 
-                        return (
+                                      return (
                                         <div key={ingredientCode} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white border border-gray-200 rounded-lg p-3">
-                            <div>
+                                          <div>
                                             <p className="font-medium text-gray-900">{displayName}</p>
                                             <p className="text-xs text-gray-500">코드: {ingredientCode}</p>
-                            </div>
+                                          </div>
                                           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                              <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2">
                                               <label className="text-xs text-gray-500">수량</label>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={editedQuantity}
+                                              <input
+                                                type="number"
+                                                min={0}
+                                                value={editedQuantity}
                                                 onChange={(e) => handleMenuIngredientQuantityChange(menu.code, normalizedStyle, ingredientCode, Number(e.target.value))}
-                                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                                className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                                 disabled={isProcessing}
-                                />
+                                              />
                                               {unitLabel && (
                                                 <span className="text-xs text-gray-400">{unitLabel}</span>
                                               )}
                                             </div>
                                             <div className="flex gap-2">
-                          <button
+                                              <button
                                                 onClick={() => handleSaveMenuIngredient(menu.code, normalizedStyle, ingredientCode)}
                                                 disabled={!isChanged || isProcessing}
                                                 className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                               >
                                                 {isProcessing ? '저장 중...' : '수량 저장'}
-                          </button>
+                                              </button>
                                               <button
                                                 onClick={() => handleRemoveMenuIngredient(menu.code, normalizedStyle, ingredientCode)}
                                                 disabled={isProcessing}
                                                 className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                               >
                                                 제거
-                                </button>
-                              </div>
+                                              </button>
+                                            </div>
                                           </div>
                                         </div>
                                       )
                                     })
                                   )}
-                  </div>
+                                </div>
 
                                 <div className="mt-4 bg-white border border-dashed border-gray-300 rounded-lg p-4">
                                   <h5 className="text-sm font-semibold text-gray-700 mb-3">재료 추가</h5>
                                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                        <select
+                                    <select
                                       value={additionDraft.ingredient_code}
                                       onChange={(e) => handleMenuIngredientDraftChange(menu.code, normalizedStyle, 'ingredient_code', e.target.value)}
                                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                       disabled={isAdding || availableIngredients.length === 0}
-                        >
-                          <option value="">재료 선택</option>
+                                    >
+                                      <option value="">재료 선택</option>
                                       {availableIngredients.length === 0 ? (
                                         <option value="" disabled>추가 가능한 재료가 없습니다</option>
                                       ) : (
                                         availableIngredients.map((ingredient) => (
-                            <option key={ingredient.id} value={ingredient.name}>
+                                          <option key={ingredient.id} value={ingredient.name}>
                                             {(ingredient.korean_name || ingredient.name)} · 재고 {ingredient.currentStock}{ingredient.korean_unit || ingredient.unit}
-                            </option>
+                                          </option>
                                         ))
                                       )}
-                        </select>
-                              <div className="flex items-center gap-2">
+                                    </select>
+                                    <div className="flex items-center gap-2">
                                       <label className="text-xs text-gray-500">수량</label>
-                        <input
-                          type="number"
+                                      <input
+                                        type="number"
                                         min={1}
                                         value={additionDraft.quantity > 0 ? additionDraft.quantity : ''}
                                         onChange={(e) => handleMenuIngredientDraftChange(menu.code, normalizedStyle, 'quantity', e.target.value)}
-                          className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                         disabled={isAdding}
-                        />
-                              </div>
-                        <button
+                                      />
+                                    </div>
+                                    <button
                                       onClick={() => handleAddMenuIngredient(menu.code, normalizedStyle)}
                                       disabled={isAdding || !additionDraft.ingredient_code || (additionDraft.quantity ?? 0) <= 0}
                                       className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
+                                    >
                                       {isAdding ? '추가 중...' : '재료 추가'}
-                        </button>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
                     )
                   })}
 
                   <div className="bg-white rounded-2xl shadow-lg p-6 border border-pink-100">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="text-2xl">🍰</span>
-                  <div>
+                      <div>
                         <h3 className="text-xl font-bold text-gray-800">사이드 메뉴 구성 관리</h3>
                         <p className="text-sm text-gray-600">커스터마이징 케이크를 포함한 사이드 메뉴의 재료를 관리하세요.</p>
-                  </div>
-                  </div>
+                      </div>
+                    </div>
 
                     {sideDishList.length === 0 ? (
                       <p className="text-sm text-gray-500">등록된 사이드 메뉴가 없습니다. 아래에서 새 사이드 메뉴를 등록하세요.</p>
@@ -3264,7 +3261,7 @@ function AdminDashboardContent() {
                           return (
                             <div key={dish.side_dish_id} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
                               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-                  <div>
+                                <div>
                                   <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                                     <span>{dish.code === 'custom_cake' ? '🎂' : '🥗'}</span>
                                     {dish.name}
@@ -3273,14 +3270,13 @@ function AdminDashboardContent() {
                                     <p className="text-sm text-gray-600">{dish.description}</p>
                                   )}
                                   <p className="text-xs text-gray-500 mt-1">코드: {dish.code}</p>
-                  </div>
+                                </div>
                                 <div className="text-right space-y-1">
                                   <div className="text-sm text-gray-500">기본 가격</div>
                                   <div className="text-lg font-semibold text-pink-600">{Number(dish.base_price ?? 0).toLocaleString()}원</div>
                                   <span
-                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                      dish.is_available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                                    }`}
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${dish.is_available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                      }`}
                                   >
                                     {dish.is_available ? '판매중' : '일시 중지'}
                                   </span>
@@ -3311,30 +3307,30 @@ function AdminDashboardContent() {
                                     const displayName = ingredientInfo?.korean_name || ingredientCode
                                     const unitLabel = ingredientInfo?.korean_unit || ingredientInfo?.unit || ''
 
-                        return (
+                                    return (
                                       <div key={ingredientCode} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-white border border-gray-200 rounded-lg p-3">
-                            <div>
+                                        <div>
                                           <p className="font-medium text-gray-900">{displayName}</p>
                                           <p className="text-xs text-gray-500">코드: {ingredientCode}</p>
-                            </div>
+                                        </div>
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                              <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2">
                                             <label className="text-xs text-gray-500">수량</label>
-                                <input
-                                  type="number"
-                                  min={0}
+                                            <input
+                                              type="number"
+                                              min={0}
                                               step={0.01}
-                                  value={editedQuantity}
+                                              value={editedQuantity}
                                               onChange={(e) => handleSideDishIngredientChange(dish.side_dish_id, ingredientCode, Number(e.target.value))}
-                                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                              className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                               disabled={isProcessing}
-                                />
+                                            />
                                             {unitLabel && (
                                               <span className="text-xs text-gray-400">{unitLabel}</span>
                                             )}
                                           </div>
                                           <div className="flex gap-2">
-                                <button
+                                            <button
                                               onClick={() => handleSaveSideDishIngredient(dish.side_dish_id, ingredientCode)}
                                               disabled={!isChanged || isProcessing}
                                               className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3347,13 +3343,13 @@ function AdminDashboardContent() {
                                               className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                               제거
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })
+                                )}
                               </div>
 
                               <div className="mt-4 bg-white border border-dashed border-gray-300 rounded-lg p-4">
@@ -3376,10 +3372,10 @@ function AdminDashboardContent() {
                                       ))
                                     )}
                                   </select>
-                              <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2">
                                     <label className="text-xs text-gray-500">수량</label>
-                                <input
-                                  type="number"
+                                    <input
+                                      type="number"
                                       min={0.01}
                                       step={0.01}
                                       value={additionDraft.quantity > 0 ? additionDraft.quantity : ''}
@@ -3388,14 +3384,14 @@ function AdminDashboardContent() {
                                       disabled={isAdding}
                                     />
                                   </div>
-                                <button
+                                  <button
                                     onClick={() => handleAddSideDishIngredient(dish.side_dish_id)}
                                     disabled={isAdding || !additionDraft.ingredient_code || (additionDraft.quantity ?? 0) <= 0}
                                     className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
+                                  >
                                     {isAdding ? '추가 중...' : '재료 추가'}
-                                </button>
-                              </div>
+                                  </button>
+                                </div>
                               </div>
 
                               {dish.code === 'custom_cake' && (
@@ -3412,7 +3408,7 @@ function AdminDashboardContent() {
                                           <option key={flavor.code} value={flavor.code}>{flavor.label}</option>
                                         ))}
                                       </select>
-                            </div>
+                                    </div>
                                     <div className="flex items-center gap-2">
                                       <label className="text-sm font-semibold text-pink-700">사이즈</label>
                                       <select
@@ -3424,13 +3420,13 @@ function AdminDashboardContent() {
                                           <option key={size.code} value={size.code}>{size.label}</option>
                                         ))}
                                       </select>
-                          </div>
-                    </div>
+                                    </div>
+                                  </div>
 
                                   {customCakeRecipeError && (
                                     <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
                                       {customCakeRecipeError}
-                  </div>
+                                    </div>
                                   )}
 
                                   {customCakeRecipeLoading ? (
@@ -3451,16 +3447,16 @@ function AdminDashboardContent() {
 
                                           return (
                                             <div key={item.ingredient_code} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border border-pink-100 rounded-lg p-3">
-                  <div>
+                                              <div>
                                                 <p className="font-medium text-gray-900">{displayName}</p>
                                                 <p className="text-xs text-gray-500">코드: {item.ingredient_code}</p>
-                  </div>
+                                              </div>
                                               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                                                 <div className="flex items-center gap-2">
                                                   <label className="text-xs text-gray-500">수량</label>
-                    <input
-                      type="number"
-                      min={0}
+                                                  <input
+                                                    type="number"
+                                                    min={0}
                                                     step={0.01}
                                                     value={editedQuantity}
                                                     onChange={(e) => handleCustomCakeRecipeQuantityChange(item.ingredient_code, Number(e.target.value))}
@@ -3468,9 +3464,9 @@ function AdminDashboardContent() {
                                                     disabled={isProcessing}
                                                   />
                                                   {unitLabel && <span className="text-xs text-gray-400">{unitLabel}</span>}
-                  </div>
+                                                </div>
                                                 <div className="flex gap-2">
-                <button
+                                                  <button
                                                     onClick={() => handleSaveCustomCakeRecipeIngredient(item.ingredient_code)}
                                                     disabled={!isChanged || isProcessing}
                                                     className="px-3 py-2 bg-pink-600 text-white text-sm font-semibold rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -3483,9 +3479,9 @@ function AdminDashboardContent() {
                                                     className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                                   >
                                                     제거
-                </button>
-              </div>
-            </div>
+                                                  </button>
+                                                </div>
+                                              </div>
                                             </div>
                                           )
                                         })
@@ -3520,7 +3516,7 @@ function AdminDashboardContent() {
                                               className="w-24 px-3 py-2 border border-pink-200 rounded-lg text-sm"
                                             />
                                           </div>
-                  <button
+                                          <button
                                             onClick={handleAddCustomCakeRecipeIngredient}
                                             className="px-4 py-2 bg-pink-600 text-white text-sm font-semibold rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             disabled={
@@ -3534,63 +3530,63 @@ function AdminDashboardContent() {
                                             {customCakeRecipeDraft.ingredient_code && customCakeRecipeActionLoading[buildCustomCakeRecipeKey(selectedCakeFlavor, selectedCakeSize, customCakeRecipeDraft.ingredient_code)]
                                               ? '추가 중...'
                                               : '추가'}
-                  </button>
-                </div>
-                        </div>
-                        </div>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
                                   )}
-                      </div>
-                  )}
-                </div>
+                                </div>
+                              )}
+                            </div>
                           )
                         })}
-              </div>
-                  )}
+                      </div>
+                    )}
 
                     <div className="mt-8 border-t border-gray-200 pt-6">
-                <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-4">
                         <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                           <span className="text-2xl">🆕</span>
                           신규 사이드 메뉴 등록
                         </h4>
-                  {managerSideDishMessage && (
+                        {managerSideDishMessage && (
                           <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">
-                      {managerSideDishMessage}
-                    </span>
-                  )}
-                </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                            {managerSideDishMessage}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">사이드 메뉴 코드</label>
-                      <input
-                        type="text"
-                        value={managerSideDishForm.code}
+                          <input
+                            type="text"
+                            value={managerSideDishForm.code}
                             onChange={(e) => setManagerSideDishForm((prev) => ({ ...prev, code: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
                             placeholder="예: cheese_plate"
-                      />
-                    </div>
-                    <div>
+                          />
+                        </div>
+                        <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">사이드 메뉴 이름</label>
-                      <input
-                        type="text"
-                        value={managerSideDishForm.name}
+                          <input
+                            type="text"
+                            value={managerSideDishForm.name}
                             onChange={(e) => setManagerSideDishForm((prev) => ({ ...prev, name: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
                             placeholder="예: 치즈 플레이터"
-                      />
-                    </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">기본 가격 (원)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={managerSideDishForm.basePrice}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">기본 가격 (원)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={managerSideDishForm.basePrice}
                             onChange={(e) => setManagerSideDishForm((prev) => ({ ...prev, basePrice: Number(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                      placeholder="예: 15000"
-                    />
-                  </div>
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            placeholder="예: 15000"
+                          />
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">설명 (선택)</label>
                           <textarea
@@ -3601,7 +3597,7 @@ function AdminDashboardContent() {
                             placeholder="예: 매일 구운 치즈와 과일을 함께 제공합니다."
                           />
                         </div>
-                    </div>
+                      </div>
 
                       <div className="mt-4 space-y-3">
                         {managerSideDishIngredients.map((row, index) => {
@@ -3612,39 +3608,39 @@ function AdminDashboardContent() {
                           return (
                             <div key={index} className="flex flex-col md:flex-row md:items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
                               <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-3">
-                          <select
-                            value={row.ingredientCode}
-                            onChange={(e) => handleManagerSideDishIngredientChange(index, 'ingredientCode', e.target.value)}
+                                <select
+                                  value={row.ingredientCode}
+                                  onChange={(e) => handleManagerSideDishIngredientChange(index, 'ingredientCode', e.target.value)}
                                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          >
-                            <option value="">재료 선택</option>
+                                >
+                                  <option value="">재료 선택</option>
                                   {ingredientOptions.map((ingredient) => (
                                     <option key={`${ingredient.id}-${index}`} value={ingredient.name}>
                                       {(ingredient.korean_name || ingredient.name)} · 재고 {ingredient.currentStock}{ingredient.korean_unit || ingredient.unit}
-                              </option>
-                            ))}
-                          </select>
+                                    </option>
+                                  ))}
+                                </select>
                                 <div className="flex items-center gap-2">
                                   <label className="text-xs text-gray-500">수량</label>
-                          <input
-                            type="number"
+                                  <input
+                                    type="number"
                                     min={0.01}
                                     step={0.01}
                                     value={row.quantity > 0 ? row.quantity : ''}
-                            onChange={(e) => handleManagerSideDishIngredientChange(index, 'quantity', Number(e.target.value))}
+                                    onChange={(e) => handleManagerSideDishIngredientChange(index, 'quantity', Number(e.target.value))}
                                     className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
+                                  />
                                 </div>
                               </div>
                               {managerSideDishIngredients.length > 1 && (
-                          <button
-                            onClick={() => handleRemoveManagerSideDishIngredientRow(index)}
+                                <button
+                                  onClick={() => handleRemoveManagerSideDishIngredientRow(index)}
                                   className="px-3 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600"
-                          >
+                                >
                                   행 삭제
-                          </button>
+                                </button>
                               )}
-                        </div>
+                            </div>
                           )
                         })}
                         <button
@@ -3654,17 +3650,17 @@ function AdminDashboardContent() {
                           <span className="text-base">+</span>
                           재료 행 추가
                         </button>
-                  </div>
+                      </div>
 
-                  <button
-                    onClick={handleSubmitManagerSideDish}
-                    disabled={isSubmittingManagerSideDish}
+                      <button
+                        onClick={handleSubmitManagerSideDish}
+                        disabled={isSubmittingManagerSideDish}
                         className="mt-4 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
+                      >
                         {isSubmittingManagerSideDish ? '등록 중...' : '사이드 메뉴 등록'}
-                  </button>
-                </div>
-              </div>
+                      </button>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -3770,13 +3766,12 @@ function AdminDashboardContent() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              entry.status === 'COMPLETED'
-                                ? 'bg-green-100 text-green-700'
-                                : entry.status === 'AWAITING_COOK'
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${entry.status === 'COMPLETED'
+                              ? 'bg-green-100 text-green-700'
+                              : entry.status === 'AWAITING_COOK'
                                 ? 'bg-yellow-100 text-yellow-700'
                                 : 'bg-gray-100 text-gray-600'
-                            }`}>
+                              }`}>
                               {entry.status === 'COMPLETED' ? '완료' : entry.status === 'AWAITING_COOK' ? '검수 대기' : entry.status}
                             </span>
                           </div>
@@ -3822,16 +3817,15 @@ function AdminDashboardContent() {
                         <h2 className="text-xl font-bold text-gray-800">{metadata.title}</h2>
                         <p className="text-sm text-gray-500">{metadata.subtitle}</p>
                       </div>
-                      <div className={`ml-auto px-3 py-1 rounded-full text-sm font-medium ${
-                        category?.restock_frequency === 'daily'
-                          ? 'bg-green-100 text-green-800'
-                          : category?.restock_frequency === 'twice_weekly'
+                      <div className={`ml-auto px-3 py-1 rounded-full text-sm font-medium ${category?.restock_frequency === 'daily'
+                        ? 'bg-green-100 text-green-800'
+                        : category?.restock_frequency === 'twice_weekly'
                           ? 'bg-blue-100 text-blue-800'
                           : 'bg-gray-100 text-gray-800'
-                      }`}>
+                        }`}>
                         {category?.restock_frequency === 'daily' ? '매일 추가 가능' :
-                         category?.restock_frequency === 'twice_weekly' ? '주 2회 추가' :
-                         '필요시 추가'}
+                          category?.restock_frequency === 'twice_weekly' ? '주 2회 추가' :
+                            '필요시 추가'}
                       </div>
                     </div>
 
@@ -3856,13 +3850,13 @@ function AdminDashboardContent() {
                             ))
                           )}
                         </select>
-                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
                           <label className="text-xs text-gray-500">추가 수량</label>
-                        <input
-                          type="number"
-                          min={1}
+                          <input
+                            type="number"
+                            min={1}
                             value={form.quantity || ''}
-                          onChange={(e) => {
+                            onChange={(e) => {
                               const rawValue = e.target.value
                               setQuickRestockForms(prev => ({
                                 ...prev,
@@ -3871,21 +3865,20 @@ function AdminDashboardContent() {
                                   quantity: rawValue === '' ? 0 : Math.max(1, Math.floor(Number(rawValue)))
                                 }
                               }))
-                          }}
-                          className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                        />
-                          </div>
+                            }}
+                            className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                          />
+                        </div>
                       </div>
                       <button
                         onClick={() => handleQuickCategoryRestock(categoryKey)}
                         disabled={isLoading || options.length === 0 || form.quantity <= 0}
-                        className={`w-full py-3 px-4 text-white font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-                          categoryKey === 'alcohol'
-                            ? 'bg-rose-600 hover:bg-rose-700'
-                            : categoryKey === 'ingredients'
-                              ? 'bg-green-600 hover:bg-green-700'
-                              : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
+                        className={`w-full py-3 px-4 text-white font-semibold rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${categoryKey === 'alcohol'
+                          ? 'bg-rose-600 hover:bg-rose-700'
+                          : categoryKey === 'ingredients'
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
                       >
                         {isLoading ? '입고 요청 중...' : '입고 요청 등록'}
                       </button>
@@ -3902,14 +3895,13 @@ function AdminDashboardContent() {
                             return (
                               <div key={item.id} className="flex items-center justify-between text-sm text-gray-600">
                                 <span>{item.korean_name || item.name}</span>
-                                <span className={`text-xs font-medium ${
-                                  isLowStock ? 'text-red-600' : 'text-green-600'
-                                }`}>
+                                <span className={`text-xs font-medium ${isLowStock ? 'text-red-600' : 'text-green-600'
+                                  }`}>
                                   {item.currentStock}{item.korean_unit || item.unit}
                                 </span>
-                          </div>
-                )
-              })}
+                              </div>
+                            )
+                          })}
                           {options.length > sampleItems.length && (
                             <p className="text-xs text-gray-500">…외 {options.length - sampleItems.length}개 항목</p>
                           )}
@@ -3949,10 +3941,10 @@ function AdminDashboardContent() {
                             </p>
                           </div>
                           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                      <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                               <label className="text-sm text-gray-600">단가</label>
-                        <input
-                          type="number"
+                              <input
+                                type="number"
                                 min={0}
                                 value={editedPrice}
                                 onChange={(e) => handlePriceChange(ingredient.name, Number(e.target.value))}
@@ -4274,18 +4266,18 @@ function AdminDashboardContent() {
                       </p>
                     </div>
 
-                     <div>
-                       <label className="block text-sm font-medium text-gray-700 mb-1">대표 이미지 (최대 5MB)</label>
-                       <input
-                         type="file"
-                         accept="image/*"
-                         onChange={(e) => handleEventImageInput(e.target.files?.[0] ?? null)}
-                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
-                       />
-                       {eventImageFile && (
-                         <p className="text-xs text-gray-500 mt-1">선택한 파일: {eventImageFile.name}</p>
-                       )}
-                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">대표 이미지 (최대 5MB)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleEventImageInput(e.target.files?.[0] ?? null)}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
+                      />
+                      {eventImageFile && (
+                        <p className="text-xs text-gray-500 mt-1">선택한 파일: {eventImageFile.name}</p>
+                      )}
+                    </div>
 
                     <button
                       onClick={handleCreateEvent}
@@ -4354,7 +4346,7 @@ function AdminDashboardContent() {
                                 <input
                                   type="file"
                                   accept="image/*"
-                          onChange={(e) => {
+                                  onChange={(e) => {
                                     const file = e.target.files?.[0]
                                     if (file) {
                                       handleUploadEventImage(event.id, file)
@@ -4367,7 +4359,7 @@ function AdminDashboardContent() {
                                 {eventImageUploading[event.id] && (
                                   <p className="text-xs text-pink-600 mt-1">이미지를 업로드하는 중입니다...</p>
                                 )}
-                      </div>
+                              </div>
                               <div className="flex items-center gap-2 text-xs text-gray-500">
                                 <span>생성: {event.createdAt ? new Date(event.createdAt).toLocaleString('ko-KR') : '-'}</span>
                                 <span>·</span>
@@ -4615,11 +4607,11 @@ function AdminDashboardContent() {
                                 </button>
                               </div>
                             </div>
-                           </div>
-                         </div>
-                       )
-                     })}
-                   </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -4651,11 +4643,10 @@ function AdminDashboardContent() {
                     <button
                       key={option}
                       onClick={() => setInquiryStatusFilter(option)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
-                        inquiryStatusFilter === option
-                          ? 'bg-teal-600 border-teal-600 text-white'
-                          : 'border-gray-200 text-gray-600 hover:bg-gray-100'
-                      }`}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${inquiryStatusFilter === option
+                        ? 'bg-teal-600 border-teal-600 text-white'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
                     >
                       {option === 'ALL' ? '전체' : INQUIRY_STATUS_LABELS[option]}
                     </button>
@@ -4689,15 +4680,14 @@ function AdminDashboardContent() {
                             </p>
                             <p className="text-sm text-gray-600 mt-2">주제: <span className="font-medium text-gray-800">{inquiry.topic}</span></p>
                           </div>
-                          <span className={`self-start px-3 py-1 rounded-full text-xs font-semibold ${
-                            inquiry.status === 'NEW'
-                              ? 'bg-red-100 text-red-700'
-                              : inquiry.status === 'IN_PROGRESS'
+                          <span className={`self-start px-3 py-1 rounded-full text-xs font-semibold ${inquiry.status === 'NEW'
+                            ? 'bg-red-100 text-red-700'
+                            : inquiry.status === 'IN_PROGRESS'
                               ? 'bg-amber-100 text-amber-700'
                               : inquiry.status === 'RESOLVED'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}>
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
                             {INQUIRY_STATUS_LABELS[inquiry.status]}
                           </span>
                         </div>

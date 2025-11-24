@@ -12,19 +12,20 @@ from sqlalchemy.orm import Session
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
+
 class DiscountService:
     """단골 할인 관련 비즈니스 로직 처리"""
-    
+
     # 할인 정책 설정
     REGULAR_CUSTOMER_THRESHOLD = 5      # 단골 최소 주문 횟수
     VIP_CUSTOMER_THRESHOLD = 10         # VIP 단골 최소 주문 횟수
     REGULAR_DISCOUNT_RATE = 0.10        # 단골 할인율 (10%)
     VIP_DISCOUNT_RATE = 0.20           # VIP 할인율 (20%)
-    
+
     @classmethod
     def get_customer_discount_info(cls, user_id: str, db: Session) -> dict[str, Any]:
         """고객의 할인 정보 조회 (UUID 기반)
-        
+
         주의: COOK이 조리 시작한(PREPARING 이상) 주문만 카운트합니다.
         취소된 주문(RECEIVED 상태에서 취소)은 제외됩니다.
         """
@@ -43,7 +44,8 @@ class DiscountService:
                 GROUP BY u.user_id, u.name, u.email
                 """
             )
-            order_result = db.execute(order_query, {"user_id": user_id}).fetchone()
+            order_result = db.execute(
+                order_query, {"user_id": user_id}).fetchone()
 
             loyalty_query = text(
                 """
@@ -52,7 +54,8 @@ class DiscountService:
                 WHERE customer_id = CAST(:user_id AS uuid)
                 """
             )
-            loyalty_result = db.execute(loyalty_query, {"user_id": user_id}).fetchone()
+            loyalty_result = db.execute(
+                loyalty_query, {"user_id": user_id}).fetchone()
 
             if not order_result and not loyalty_result:
                 user_query = text("""
@@ -60,7 +63,8 @@ class DiscountService:
                     FROM users
                     WHERE user_id = CAST(:user_id AS uuid)
                 """)
-                user_result = db.execute(user_query, {"user_id": user_id}).fetchone()
+                user_result = db.execute(
+                    user_query, {"user_id": user_id}).fetchone()
 
                 if not user_result:
                     return {
@@ -68,7 +72,8 @@ class DiscountService:
                         "discount_rate": 0.0,
                         "customer_type": "신규고객",
                         "total_orders": 0,
-                        "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
+                        "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD,
+                        "discount_message": "🎉 맛있는 디너를 즐겨주셔서 감사합니다!"
                     }
 
                 return {
@@ -80,7 +85,8 @@ class DiscountService:
                     "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
                 }
 
-            total_orders_from_orders = (order_result[0] if order_result else 0) or 0
+            total_orders_from_orders = (
+                order_result[0] if order_result else 0) or 0
             customer_name = (order_result[1] if order_result else None) or "고객"
 
             loyalty_order_count = 0
@@ -105,14 +111,14 @@ class DiscountService:
                 }
             elif is_regular:
                 vip_remaining = cls.VIP_CUSTOMER_THRESHOLD - total_orders
-                
+
                 # 8번 이상 구매한 단골 고객만 VIP 혜택 메시지 표시
                 if total_orders >= 8:
                     discount_message = f"⭐ 단골 고객님, {int(cls.REGULAR_DISCOUNT_RATE * 100)}% 할인 적용! 💎 VIP까지 {vip_remaining}번 더!"
                 else:
                     # 5-7번 구매한 단골 고객에게는 VIP 메시지 없이
                     discount_message = f"⭐ 단골 고객님, {int(cls.REGULAR_DISCOUNT_RATE * 100)}% 할인 적용!"
-                
+
                 return {
                     "eligible": True,
                     "discount_rate": cls.REGULAR_DISCOUNT_RATE,
@@ -124,14 +130,14 @@ class DiscountService:
                 }
             else:
                 remaining_orders = cls.REGULAR_CUSTOMER_THRESHOLD - total_orders
-                
+
                 # 3번 이상 구매한 고객만 단골 혜택 메시지 표시
                 if total_orders >= 3:
                     discount_message = f"💡 {remaining_orders}번 더 주문하시면 단골 할인 혜택을 받으실 수 있어요!"
                 else:
                     # 신규 고객 (0-2번 구매)에게는 일반적인 환영 메시지
                     discount_message = f"🎉 맛있는 디너를 즐겨주셔서 감사합니다!"
-                
+
                 return {
                     "eligible": False,
                     "discount_rate": 0.0,
@@ -141,7 +147,7 @@ class DiscountService:
                     "next_tier_orders": remaining_orders,
                     "discount_message": discount_message
                 }
-                
+
         except Exception as e:
             logger.error(f"할인 정보 조회 중 오류: {e}")
             return {
@@ -149,36 +155,40 @@ class DiscountService:
                 "discount_rate": 0.0,
                 "customer_type": "신규고객",
                 "total_orders": 0,
-                "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD
+                "next_tier_orders": cls.REGULAR_CUSTOMER_THRESHOLD,
+                "discount_message": "🎉 맛있는 디너를 즐겨주셔서 감사합니다!"
             }
-    
+
     @classmethod
     def apply_discount(cls, original_price: float, discount_rate: float) -> tuple[float, int]:
         """할인 적용 계산"""
         discount_amount = original_price * discount_rate
         discounted_price = original_price - discount_amount
-        
+
         return round(discounted_price), int(discount_amount)
-    
+
     @classmethod
     def calculate_order_pricing(cls, user_id: str, original_price: float, db: Session) -> dict[str, Any]:
         """주문의 최종 가격 계산 (할인 포함, UUID 기반)"""
         try:
             discount_info = cls.get_customer_discount_info(user_id, db)
-            
-            if discount_info["eligible"]:
+
+            discount_message = discount_info.get(
+                "discount_message", "🎉 맛있는 디너를 즐겨주셔서 감사합니다!")
+
+            if discount_info.get("eligible", False):
                 discounted_price, discount_amount = cls.apply_discount(
-                    original_price, 
-                    discount_info["discount_rate"]
+                    original_price,
+                    discount_info.get("discount_rate", 0.0)
                 )
-                
+
                 return {
                     "original_price": int(original_price),
-                    "discount_rate": discount_info["discount_rate"],
+                    "discount_rate": discount_info.get("discount_rate", 0.0),
                     "discount_amount": discount_amount,
                     "final_price": discounted_price,
-                    "customer_type": discount_info["customer_type"],
-                    "discount_message": discount_info["discount_message"],
+                    "customer_type": discount_info.get("customer_type", "신규고객"),
+                    "discount_message": discount_message,
                     "savings": discount_amount
                 }
             else:
@@ -187,11 +197,11 @@ class DiscountService:
                     "discount_rate": 0.0,
                     "discount_amount": 0,
                     "final_price": int(original_price),
-                    "customer_type": discount_info["customer_type"],
-                    "discount_message": discount_info["discount_message"],
+                    "customer_type": discount_info.get("customer_type", "신규고객"),
+                    "discount_message": discount_message,
                     "savings": 0
                 }
-                
+
         except Exception as e:
             logger.error(f"주문 가격 계산 중 오류: {e}")
             return {
@@ -245,4 +255,3 @@ class DiscountService:
             logger.error(f"주문 횟수 업데이트 중 오류: {e}")
             # db.rollback() 제거 - 상위 트랜잭션에서 관리
             raise  # 예외를 상위로 전파하여 전체 트랜잭션 롤백
-

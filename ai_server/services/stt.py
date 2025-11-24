@@ -27,7 +27,7 @@ class STTService:
         try:
             # Try to read with soundfile first (for wav, flac, etc.)
             try:
-            data, samplerate = sf.read(io.BytesIO(audio_data))
+                data, samplerate = sf.read(io.BytesIO(audio_data))
             except Exception:
                 # If soundfile fails, try converting with pydub (for webm, mp4, etc.)
                 try:

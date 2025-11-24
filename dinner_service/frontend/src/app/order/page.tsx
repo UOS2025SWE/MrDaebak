@@ -28,24 +28,48 @@ type EventDiscountBreakdownEntry = {
   amount: number
 }
 
-const calculateCustomizationCostPerSet = (
+const buildBaseTotals = (baseIngredients: { [key: string]: number }, quantity: number): Record<string, number> => {
+  const safeQuantity = Math.max(1, quantity)
+  const totals: Record<string, number> = {}
+  Object.entries(baseIngredients || {}).forEach(([ingredient, perSet]) => {
+    const perSetValue = Number(perSet) || 0
+    totals[ingredient] = perSetValue * safeQuantity
+  })
+  return totals
+}
+
+const calculateCustomizationCost = (
   baseIngredients: { [key: string]: number },
-  currentIngredients: { [key: string]: number },
-  ingredientPrices: { [key: string]: number }
+  currentTotals: { [key: string]: number },
+  ingredientPrices: { [key: string]: number },
+  quantity: number
 ): number => {
+  if (!quantity || quantity <= 0) return 0
   let additionalCost = 0
+  const safeTotals = currentTotals || {}
+  const allIngredients = new Set<string>([
+    ...Object.keys(baseIngredients || {}),
+    ...Object.keys(safeTotals)
+  ])
 
-  for (const [ingredient, qty] of Object.entries(currentIngredients)) {
-    const baseQty = baseIngredients[ingredient] || 0
-    const diff = qty - baseQty
-
+  allIngredients.forEach(ingredient => {
+    const perSetBase = baseIngredients[ingredient] || 0
+    const baseTotal = perSetBase * quantity
+    const currentTotal = Number(safeTotals[ingredient])
+    const normalizedCurrent = Number.isFinite(currentTotal) ? currentTotal : baseTotal
+    const diff = normalizedCurrent - baseTotal
     if (diff > 0) {
       const unitPrice = ingredientPrices[ingredient] || 0
       additionalCost += unitPrice * diff
     }
-  }
+  })
 
   return additionalCost
+}
+
+const formatPerSetQuantity = (value: number): string => {
+  if (!Number.isFinite(value)) return '0'
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }
 
 // 결제 완료 모달 컴포넌트
@@ -69,7 +93,7 @@ function PaymentModal({ isOpen, orderData, finalPrice }: PaymentModalProps) {
           <div className="text-6xl mb-4">✅</div>
           <h2 className="text-2xl font-bold text-stone-900 mb-2">결제가 완료되었습니다!</h2>
           <p className="text-stone-600 mb-4">
-            {orderData.menuName} ({orderData.styleName})<br/>
+            {orderData.menuName} ({orderData.styleName})<br />
             {finalPrice.toLocaleString()}원
           </p>
           <div className="flex space-x-3">
@@ -143,11 +167,11 @@ function OrderPageContent() {
   useEffect(() => {
     const fetchDiscountInfo = async () => {
       if (!isAuthenticated || !user?.id) return
-      
+
       try {
         const response = await fetch(`/api/discount/${user.id}`)
         const result = await response.json()
-        
+
         if (result.success) {
           setDiscountInfo(result.data)
         }
@@ -244,7 +268,9 @@ function OrderPageContent() {
               styleName: currentStyle.name,
               stylePrice: currentStyle.price,
               cookingTime: currentStyle.cooking_time,
-              ingredients: shouldResetIngredients ? { ...(currentStyle.base_ingredients || {}) } : prev.ingredients
+              ingredients: shouldResetIngredients
+                ? buildBaseTotals(currentStyle.base_ingredients || {}, prev.quantity)
+                : prev.ingredients
             }
           })
         }
@@ -273,13 +299,11 @@ function OrderPageContent() {
     fetchIngredientPricing()
   }, [])
 
-  const customizationCostPerSet = useMemo(() => {
+  const customizationCost = useMemo(() => {
     if (!orderData) return 0
     const baseForStyle = baseIngredients[orderData.styleCode] || {}
-    return calculateCustomizationCostPerSet(baseForStyle, orderData.ingredients, ingredientPrices)
+    return calculateCustomizationCost(baseForStyle, orderData.ingredients, ingredientPrices, orderData.quantity)
   }, [orderData, baseIngredients, ingredientPrices])
-
-  const customizationCost = orderData ? customizationCostPerSet * orderData.quantity : 0
   const basePriceWithoutCustomization = orderData ? orderData.stylePrice * orderData.quantity : 0
   const originalPrice = basePriceWithoutCustomization + customizationCost
 
@@ -366,45 +390,63 @@ function OrderPageContent() {
         styleName: newStyle.name,
         stylePrice: newStyle.price,
         cookingTime: newStyle.cooking_time,
-        ingredients: { ...baseForStyle }
+        ingredients: buildBaseTotals(baseForStyle, prev.quantity)
       }
     })
   }
 
   // 재료 수량 변경 핸들러
   const handleIngredientChange = (ingredient: string, change: number) => {
-    if (!orderData) return
+    if (!orderData || change === 0) return
 
     const baseForStyle = baseIngredients[orderData.styleCode] || {}
-    const baseQty = baseForStyle[ingredient] ?? 0
-    const currentQty = orderData.ingredients[ingredient] ?? baseQty
-    let nextQty = currentQty + change
-
-    if (change < 0) {
-      nextQty = Math.max(baseQty, nextQty)
+    const orderQuantity = Math.max(1, orderData.quantity)
+    const basePerSet = baseForStyle[ingredient] ?? 0
+    const baseTotal = basePerSet * orderQuantity
+    const currentTotal = orderData.ingredients[ingredient] ?? baseTotal
+    let nextTotal = currentTotal + change
+    if (nextTotal < baseTotal) {
+      nextTotal = baseTotal
     }
-
-    if (change > 0 && nextQty < baseQty) {
-      nextQty = baseQty
-    }
-
-    const safeQuantity = Math.max(baseQty, nextQty)
 
     setOrderData({
       ...orderData,
       ingredients: {
         ...orderData.ingredients,
-        [ingredient]: safeQuantity
+        [ingredient]: nextTotal
       }
     })
   }
 
   // 주문 수량 변경 핸들러
   const handleQuantityChange = (change: number) => {
-    const newQuantity = Math.max(1, orderData.quantity + change)
+    const prevQuantity = Math.max(1, orderData.quantity)
+    const newQuantity = Math.max(1, prevQuantity + change)
+    if (newQuantity === prevQuantity) return
+
+    const baseForStyle = baseIngredients[orderData.styleCode] || {}
+    const nextIngredients: Record<string, number> = {}
+    const ingredientKeys = new Set<string>([
+      ...Object.keys(baseForStyle),
+      ...Object.keys(orderData.ingredients)
+    ])
+
+    ingredientKeys.forEach(ingredient => {
+      const basePerSet = baseForStyle[ingredient] ?? 0
+      const basePrevTotal = basePerSet * prevQuantity
+      const baseNewTotal = basePerSet * newQuantity
+      const currentTotal = orderData.ingredients[ingredient] ?? basePrevTotal
+      const extra = Math.max(0, currentTotal - basePrevTotal)
+      const extraPerSet = prevQuantity > 0 ? extra / prevQuantity : 0
+      const scaledExtra = extraPerSet * newQuantity
+      const newTotal = Math.max(baseNewTotal, Math.round(baseNewTotal + scaledExtra))
+      nextIngredients[ingredient] = newTotal
+    })
+
     setOrderData({
       ...orderData,
-      quantity: newQuantity
+      quantity: newQuantity,
+      ingredients: nextIngredients
     })
   }
 
@@ -416,7 +458,7 @@ function OrderPageContent() {
     const customizationsParam = encodeURIComponent(customizationsJson)
 
     // checkout 페이지로 이동 (URL 파라미터로 주문 정보 전달)
-    router.push(`/checkout?menu=${orderData.menuCode}&style=${styleEng}&quantity=${orderData.quantity}&customizations=${customizationsParam}`)
+    router.push(`/checkout?menu=${orderData.menuCode}&style=${styleEng}&quantity=${orderData.quantity}&customizations=${customizationsParam}&customizationsMode=total`)
   }
 
   return (
@@ -564,20 +606,19 @@ function OrderPageContent() {
                     const priceAddition = style.price - orderData.basePrice
                     const isSelected = orderData.styleCode === style.code
                     return (
-                    <button
-                      key={style.code}
-                      onClick={() => handleStyleChange(style)}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        isSelected
+                      <button
+                        key={style.code}
+                        onClick={() => handleStyleChange(style)}
+                        className={`p-4 rounded-xl border-2 transition-all ${isSelected
                           ? 'border-amber-500 bg-amber-50 text-amber-800'
                           : 'border-stone-200 bg-white text-stone-700 hover:border-amber-300'
-                      }`}
-                    >
-                      <div className="font-bold text-lg">{style.name}</div>
-                      <div className="text-sm mt-1">
-                        {priceAddition > 0 ? `+${priceAddition.toLocaleString()}원` : priceAddition === 0 ? '기본 가격' : `${priceAddition.toLocaleString()}원`}
-                      </div>
-                    </button>
+                          }`}
+                      >
+                        <div className="font-bold text-lg">{style.name}</div>
+                        <div className="text-sm mt-1">
+                          {priceAddition > 0 ? `+${priceAddition.toLocaleString()}원` : priceAddition === 0 ? '기본 가격' : `${priceAddition.toLocaleString()}원`}
+                        </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -590,42 +631,49 @@ function OrderPageContent() {
                   <div>
                     <h4 className="text-lg font-semibold text-stone-800 mb-3">요리 재료</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {ingredientGroups.food.map(([ingredient, quantity]) => {
-                        const baseQty = baseForCurrentStyle[ingredient] ?? 0
-                        const canDecrease = quantity > baseQty
-                        const displayedQty = quantity * orderData.quantity
-                        const displayedBase = baseQty * orderData.quantity
+                      {ingredientGroups.food.map(([ingredient, totalQty]) => {
+                        const baseQtyPerSet = baseForCurrentStyle[ingredient] ?? 0
+                        const orderQuantity = Math.max(1, orderData.quantity)
+                        const baseTotal = baseQtyPerSet * orderQuantity
+                        const canDecrease = totalQty > baseTotal
+                        const perSetQty = orderQuantity > 0 ? totalQty / orderQuantity : totalQty
                         return (
-                        <div key={ingredient} className="flex items-center justify-between p-4 bg-stone-50 border border-stone-200 rounded-xl">
-                          <div>
-                            <span className="font-semibold text-stone-800">
-                              {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
-                            </span>
-                            <p className="text-xs text-stone-500 mt-1">최소 {displayedBase}개 유지</p>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <button
-                              onClick={() => handleIngredientChange(ingredient, -1)}
-                              disabled={!canDecrease}
-                              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${
-                                canDecrease
+                          <div key={ingredient} className="flex items-center justify-between p-4 bg-stone-50 border border-stone-200 rounded-xl">
+                            <div>
+                              <span className="font-semibold text-stone-800">
+                                {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
+                              </span>
+                              <p className="text-xs text-stone-500 mt-1">
+                                세트당 최소 {baseQtyPerSet}개 (총 최소 {baseTotal}개)
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={() => handleIngredientChange(ingredient, -1)}
+                                disabled={!canDecrease}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${canDecrease
                                   ? 'bg-stone-300 hover:bg-stone-400 text-stone-700'
                                   : 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                              }`}
-                            >
-                              -
-                            </button>
-                            <span className="font-bold text-stone-900 min-w-[2rem] text-center">
-                              {displayedQty}
-                            </span>
-                            <button
-                              onClick={() => handleIngredientChange(ingredient, 1)}
-                              className="w-8 h-8 rounded-full bg-amber-600 hover:bg-amber-700 flex items-center justify-center text-white font-bold transition-colors"
-                            >
-                              +
-                            </button>
+                                  }`}
+                              >
+                                -
+                              </button>
+                              <div className="text-center">
+                                <span className="font-bold text-stone-900 min-w-[2rem] block">
+                                  {totalQty}
+                                </span>
+                                <span className="text-[11px] text-stone-500">
+                                  세트당 {formatPerSetQuantity(perSetQty)}개
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleIngredientChange(ingredient, 1)}
+                                className="w-8 h-8 rounded-full bg-amber-600 hover:bg-amber-700 flex items-center justify-center text-white font-bold transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
-                        </div>
                         )
                       })}
                       {ingredientGroups.food.length === 0 && (
@@ -640,42 +688,49 @@ function OrderPageContent() {
                     <div>
                       <h4 className="text-lg font-semibold text-pink-800 mb-3">테이블웨어 · 데코 옵션</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {ingredientGroups.tableware.map(([ingredient, quantity]) => {
-                          const baseQty = baseForCurrentStyle[ingredient] ?? 0
-                          const canDecrease = quantity > baseQty
-                          const displayedQty = quantity * orderData.quantity
-                          const displayedBase = baseQty * orderData.quantity
+                        {ingredientGroups.tableware.map(([ingredient, totalQty]) => {
+                          const baseQtyPerSet = baseForCurrentStyle[ingredient] ?? 0
+                          const orderQuantity = Math.max(1, orderData.quantity)
+                          const baseTotal = baseQtyPerSet * orderQuantity
+                          const canDecrease = totalQty > baseTotal
+                          const perSetQty = orderQuantity > 0 ? totalQty / orderQuantity : totalQty
                           return (
-                          <div key={ingredient} className="flex items-center justify-between p-4 bg-pink-50 border border-pink-200 rounded-xl">
-                            <div>
-                              <span className="font-semibold text-pink-900">
-                                {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
-                              </span>
-                              <p className="text-xs text-pink-600 mt-1">최소 {displayedBase}개 유지</p>
-                            </div>
-                            <div className="flex items-center space-x-3">
-                              <button
-                                onClick={() => handleIngredientChange(ingredient, -1)}
-                                disabled={!canDecrease}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${
-                                  canDecrease
+                            <div key={ingredient} className="flex items-center justify-between p-4 bg-pink-50 border border-pink-200 rounded-xl">
+                              <div>
+                                <span className="font-semibold text-pink-900">
+                                  {INGREDIENT_DISPLAY_NAMES[ingredient] || ingredient}
+                                </span>
+                                <p className="text-xs text-pink-600 mt-1">
+                                  세트당 최소 {baseQtyPerSet}개 (총 최소 {baseTotal}개)
+                                </p>
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                <button
+                                  onClick={() => handleIngredientChange(ingredient, -1)}
+                                  disabled={!canDecrease}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${canDecrease
                                     ? 'bg-pink-200 hover:bg-pink-300 text-pink-800'
                                     : 'bg-pink-100 text-pink-300 cursor-not-allowed'
-                                }`}
-                              >
-                                -
-                              </button>
-                              <span className="font-bold text-pink-900 min-w-[2rem] text-center">
-                                {displayedQty}
-                              </span>
-                              <button
-                                onClick={() => handleIngredientChange(ingredient, 1)}
-                                className="w-8 h-8 rounded-full bg-pink-500 hover:bg-pink-600 flex items-center justify-center text-white font-bold transition-colors"
-                              >
-                                +
-                              </button>
+                                    }`}
+                                >
+                                  -
+                                </button>
+                                <div className="text-center">
+                                  <span className="font-bold text-pink-900 min-w-[2rem] block">
+                                    {totalQty}
+                                  </span>
+                                  <span className="text-[11px] text-pink-600">
+                                    세트당 {formatPerSetQuantity(perSetQty)}개
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => handleIngredientChange(ingredient, 1)}
+                                  className="w-8 h-8 rounded-full bg-pink-500 hover:bg-pink-600 flex items-center justify-center text-white font-bold transition-colors"
+                                >
+                                  +
+                                </button>
+                              </div>
                             </div>
-                          </div>
                           )
                         })}
                       </div>
@@ -738,7 +793,7 @@ function OrderPageContent() {
       <Footer />
 
       {/* 결제 완료 모달 */}
-      <PaymentModal 
+      <PaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         orderData={orderData}

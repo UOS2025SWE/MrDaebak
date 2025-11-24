@@ -85,6 +85,8 @@ def authenticate_user(db: Session, email: str, password: str) -> dict[str, Any]:
     """사용자 인증 처리"""
     try:
         normalized_email = (email or "").strip().lower()
+        logger.info(f"로그인 시도: email={normalized_email}")
+        
         # STAFF인 경우 staff_details의 position 정보도 함께 조회
         user_query = text("""
             SELECT u.user_id, u.email, u.password_hash, u.user_type, u.name, sd.position
@@ -96,6 +98,7 @@ def authenticate_user(db: Session, email: str, password: str) -> dict[str, Any]:
         result = db.execute(user_query, {"email": normalized_email}).fetchone()
 
         if not result:
+            logger.warning(f"로그인 실패: 사용자를 찾을 수 없음 - email={normalized_email}")
             return {
                 "success": False,
                 "error": "사용자를 찾을 수 없습니다",
@@ -128,12 +131,14 @@ def authenticate_user(db: Session, email: str, password: str) -> dict[str, Any]:
         }
 
         if not LoginService.verify_password(password, result[2]):
+            logger.warning(f"로그인 실패: 비밀번호 불일치 - email={normalized_email}")
             return {
                 "success": False,
                 "error": "비밀번호가 일치하지 않습니다",
                 "user": None
             }
 
+        logger.info(f"로그인 성공: email={normalized_email}, user_type={user_type}")
         return {
             "success": True,
             "user": user_data,

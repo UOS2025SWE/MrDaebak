@@ -74,10 +74,14 @@ async def login(
 ) -> dict[str, Any]:
     """사용자 로그인 - JWT 토큰 발급"""
     try:
+        logger = logging.getLogger(__name__)
+        logger.info(f"로그인 요청 수신: email={login_request.email}")
+        
         # 사용자 인증
         auth_result = authenticate_user(db, login_request.email, login_request.password)
         
         if not auth_result["success"]:
+            logger.warning(f"로그인 실패: {auth_result.get('error', 'Unknown error')} - email={login_request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=auth_result["error"],

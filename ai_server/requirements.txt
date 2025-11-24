@@ -14,5 +14,6 @@ protobuf
 sentencepiece
 peft
 redis
+bitsandbytes
 
 

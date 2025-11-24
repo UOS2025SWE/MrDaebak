@@ -22,7 +22,7 @@ class SideDishService:
     CUSTOM_CAKE_NAME = "커스터마이징 케이크"
     CUSTOM_CAKE_DESCRIPTION = "맞춤 메시지와 이미지를 지원하는 케이크 옵션"
     DEFAULT_CAKE_STYLE = "simple"
-    
+
     # Removed hardcoded dictionaries as they are now in the DB (custom_cake_recipes table)
     # CUSTOM_CAKE_FLAVORS, CUSTOM_CAKE_SIZES, DEFAULT_CUSTOM_CAKE_RECIPES removed.
 
@@ -31,9 +31,10 @@ class SideDishService:
         # Since we don't have a separate flavors table, we can extract distinct flavors from recipes
         # Or simply return a standard list if we want to enforce specific options, but ideally this should be DB driven.
         # For now, let's query distinct flavors from custom_cake_recipes
-        query = text("SELECT DISTINCT flavor FROM custom_cake_recipes ORDER BY flavor")
+        query = text(
+            "SELECT DISTINCT flavor FROM custom_cake_recipes ORDER BY flavor")
         rows = db.execute(query).fetchall()
-        
+
         # Mapping for display names (could also be in DB, but simple map here is safer than hardcoding entire recipes)
         # Ideally flavor metadata table would be better, but extracting from recipes is a good start for grounding.
         flavor_names = {
@@ -42,20 +43,21 @@ class SideDishService:
             "red_velvet": "레드벨벳",
             "green_tea": "녹차"
         }
-        
+
         return [{"code": row[0], "name": flavor_names.get(row[0], row[0])} for row in rows]
 
     def get_valid_sizes(self, db: Session) -> list[dict[str, str]]:
         """DB에서 유효한 케이크 사이즈 목록 조회"""
-        query = text("SELECT DISTINCT size FROM custom_cake_recipes ORDER BY size")
+        query = text(
+            "SELECT DISTINCT size FROM custom_cake_recipes ORDER BY size")
         rows = db.execute(query).fetchall()
-        
+
         size_names = {
             "size_1": "1호 (2~3인)",
             "size_2": "2호 (3~4인)",
             "size_3": "3호 (4~6인)"
         }
-        
+
         return [{"code": row[0], "name": size_names.get(row[0], row[0])} for row in rows]
 
     def ensure_custom_cake_side_dish(self, db: Session) -> None:
@@ -72,94 +74,104 @@ class SideDishService:
                 WHERE code = :code
                 """
             )
-            existing = db.execute(check_query, {"code": self.CUSTOM_CAKE_CODE}).fetchone()
-            if existing:
-                return
+            existing = db.execute(
+                check_query, {"code": self.CUSTOM_CAKE_CODE}).fetchone()
+            side_dish_id = existing[0] if existing else None
+            created_new = False
 
-            # Determine base price (default to 42000 if not found)
-            base_price_decimal = Decimal("42000.00")
-
-            insert_side_dish = text(
-                """
-                INSERT INTO side_dishes (code, name, description, base_price, is_available)
-                VALUES (:code, :name, :description, :base_price, TRUE)
-                ON CONFLICT (code) DO NOTHING
-                RETURNING side_dish_id::text
-                """
-            )
-            inserted = db.execute(
-                insert_side_dish,
-                {
-                    "code": self.CUSTOM_CAKE_CODE,
-                    "name": self.CUSTOM_CAKE_NAME,
-                    "description": self.CUSTOM_CAKE_DESCRIPTION,
-                    "base_price": base_price_decimal,
-                },
-            ).fetchone()
-
-            if inserted:
-                side_dish_id = inserted[0]
-            else:
-                existing = db.execute(check_query, {"code": self.CUSTOM_CAKE_CODE}).fetchone()
-                if not existing:
-                    db.rollback()
-                    logger.error("Failed to insert or locate custom cake side dish record")
-                    return
-                side_dish_id = existing[0]
-
-            # Get base ingredients for default configuration (vanilla size_1 is a reasonable default base)
-            # Or we can use the 'simple' style ingredients if we want to mimic the old behavior,
-            # but since 'cake' is no longer a menu, we should derive defaults from custom_cake_recipes or similar.
-            # Let's use vanilla size_1 as the "default side dish configuration"
-            
-            recipe_query = text(
-                """
-                SELECT ingredient_code, quantity
-                FROM custom_cake_recipes
-                WHERE flavor = 'vanilla' AND size = 'size_1'
-                """
-            )
-            ingredient_rows = db.execute(recipe_query).fetchall()
-
-            base_ingredients = {row[0]: float(row[1]) for row in ingredient_rows}
-
-            insert_ingredient = text(
-                """
-                INSERT INTO side_dish_ingredients (side_dish_id, ingredient_id, quantity)
-                VALUES (CAST(:side_dish_id AS uuid), CAST(:ingredient_id AS uuid), :quantity)
-                ON CONFLICT (side_dish_id, ingredient_id)
-                DO UPDATE SET quantity = EXCLUDED.quantity
-                """
-            )
-            ingredient_lookup = text(
-                """
-                SELECT ingredient_id::text
-                FROM ingredients
-                WHERE name = :name
-                """
-            )
-
-            for ingredient_code, quantity in base_ingredients.items():
-                ingredient_row = db.execute(
-                    ingredient_lookup, {"name": ingredient_code}
-                ).fetchone()
-                if not ingredient_row:
-                    logger.warning(
-                        "Custom cake setup skipped missing ingredient: %s", ingredient_code
-                    )
-                    continue
-
-                db.execute(
-                    insert_ingredient,
+            if not side_dish_id:
+                base_price_decimal = Decimal("42000.00")
+                insert_side_dish = text(
+                    """
+                    INSERT INTO side_dishes (code, name, description, base_price, is_available)
+                    VALUES (:code, :name, :description, :base_price, TRUE)
+                    ON CONFLICT (code) DO NOTHING
+                    RETURNING side_dish_id::text
+                    """
+                )
+                inserted = db.execute(
+                    insert_side_dish,
                     {
-                        "side_dish_id": side_dish_id,
-                        "ingredient_id": ingredient_row[0],
-                        "quantity": Decimal(str(quantity)),
+                        "code": self.CUSTOM_CAKE_CODE,
+                        "name": self.CUSTOM_CAKE_NAME,
+                        "description": self.CUSTOM_CAKE_DESCRIPTION,
+                        "base_price": base_price_decimal,
                     },
+                ).fetchone()
+
+                if inserted:
+                    side_dish_id = inserted[0]
+                    created_new = True
+                else:
+                    existing = db.execute(
+                        check_query, {"code": self.CUSTOM_CAKE_CODE}).fetchone()
+                    if not existing:
+                        db.rollback()
+                        logger.error(
+                            "Failed to insert or locate custom cake side dish record")
+                        return
+                    side_dish_id = existing[0]
+
+            variant_price = self._calculate_custom_cake_variant_price(
+                db, "vanilla", "size_1")
+            update_price_query = text(
+                """
+                UPDATE side_dishes
+                SET base_price = :base_price
+                WHERE side_dish_id = CAST(:side_dish_id AS uuid)
+                """
+            )
+            db.execute(update_price_query, {
+                       "base_price": variant_price, "side_dish_id": side_dish_id})
+
+            if created_new:
+                recipe_query = text(
+                    """
+                    SELECT ingredient_code, quantity
+                    FROM custom_cake_recipes
+                    WHERE flavor = 'vanilla' AND size = 'size_1'
+                    """
+                )
+                ingredient_rows = db.execute(recipe_query).fetchall()
+
+                insert_ingredient = text(
+                    """
+                    INSERT INTO side_dish_ingredients (side_dish_id, ingredient_id, quantity)
+                    VALUES (CAST(:side_dish_id AS uuid), CAST(:ingredient_id AS uuid), :quantity)
+                    ON CONFLICT (side_dish_id, ingredient_id)
+                    DO UPDATE SET quantity = EXCLUDED.quantity
+                    """
+                )
+                ingredient_lookup = text(
+                    """
+                    SELECT ingredient_id::text
+                    FROM ingredients
+                    WHERE name = :name
+                    """
                 )
 
+                for ingredient_code, quantity in ingredient_rows:
+                    ingredient_row = db.execute(
+                        ingredient_lookup, {"name": ingredient_code}
+                    ).fetchone()
+                    if not ingredient_row:
+                        logger.warning(
+                            "Custom cake setup skipped missing ingredient: %s", ingredient_code
+                        )
+                        continue
+
+                    db.execute(
+                        insert_ingredient,
+                        {
+                            "side_dish_id": side_dish_id,
+                            "ingredient_id": ingredient_row[0],
+                            "quantity": Decimal(str(quantity)),
+                        },
+                    )
+
             db.commit()
-            logger.info("Custom cake side dish ensured with code '%s'", self.CUSTOM_CAKE_CODE)
+            logger.info("Custom cake side dish ensured with code '%s'",
+                        self.CUSTOM_CAKE_CODE)
 
         except Exception as exc:
             db.rollback()
@@ -200,7 +212,8 @@ class SideDishService:
                 """
             )
 
-            rows = db.execute(query, {"include_inactive": include_inactive}).fetchall()
+            rows = db.execute(
+                query, {"include_inactive": include_inactive}).fetchall()
 
             data: list[dict[str, Any]] = []
             for row in rows:
@@ -254,7 +267,8 @@ class SideDishService:
             if not ingredient_items:
                 return {"success": False, "error": "사이드 디시에 최소 한 개의 재료가 필요합니다"}
 
-            base_price_decimal = Decimal(str(base_price)).quantize(Decimal("0.01"))
+            base_price_decimal = Decimal(
+                str(base_price)).quantize(Decimal("0.01"))
 
             insert_side_dish = text(
                 """
@@ -287,7 +301,8 @@ class SideDishService:
                     db.rollback()
                     return {"success": False, "error": "재료 코드가 누락되었습니다"}
 
-                quantity_decimal = Decimal(str(quantity)).quantize(Decimal("0.01"))
+                quantity_decimal = Decimal(
+                    str(quantity)).quantize(Decimal("0.01"))
                 if quantity_decimal <= 0:
                     db.rollback()
                     return {"success": False, "error": f"재료 수량이 0 이하입니다: {ingredient_code}"}
@@ -299,7 +314,8 @@ class SideDishService:
                     WHERE name = :name
                     """
                 )
-                ingredient_row = db.execute(ingredient_lookup, {"name": ingredient_code}).fetchone()
+                ingredient_row = db.execute(
+                    ingredient_lookup, {"name": ingredient_code}).fetchone()
                 if not ingredient_row:
                     db.rollback()
                     return {"success": False, "error": f"재료를 찾을 수 없습니다: {ingredient_code}"}
@@ -443,7 +459,8 @@ class SideDishService:
                 return {"success": False, "error": "재료 코드를 확인해주세요"}
 
             try:
-                quantity_decimal = Decimal(str(quantity)).quantize(Decimal("0.01"))
+                quantity_decimal = Decimal(
+                    str(quantity)).quantize(Decimal("0.01"))
             except Exception:
                 return {"success": False, "error": "수량 형식이 올바르지 않습니다"}
 
@@ -457,7 +474,8 @@ class SideDishService:
                 WHERE side_dish_id = CAST(:side_dish_id AS uuid)
                 """
             )
-            exists = db.execute(side_dish_check, {"side_dish_id": normalized_id}).fetchone()
+            exists = db.execute(
+                side_dish_check, {"side_dish_id": normalized_id}).fetchone()
             if not exists:
                 return {"success": False, "error": "사이드 메뉴를 찾을 수 없습니다"}
 
@@ -468,7 +486,8 @@ class SideDishService:
                 WHERE name = :name
                 """
             )
-            ingredient_row = db.execute(ingredient_lookup, {"name": normalized_ingredient_code}).fetchone()
+            ingredient_row = db.execute(
+                ingredient_lookup, {"name": normalized_ingredient_code}).fetchone()
             if not ingredient_row:
                 return {"success": False, "error": "존재하지 않는 재료입니다"}
 
@@ -560,7 +579,8 @@ class SideDishService:
                 WHERE side_dish_id = CAST(:side_dish_id AS uuid)
                 """
             )
-            row = db.execute(check_query, {"side_dish_id": normalized_id}).fetchone()
+            row = db.execute(
+                check_query, {"side_dish_id": normalized_id}).fetchone()
             if not row:
                 return {"success": False, "error": "사이드 디시를 찾을 수 없습니다"}
 
@@ -611,17 +631,23 @@ class SideDishService:
     def get_custom_cake_recipes(self, db: Session) -> dict[str, Any]:
         self._ensure_custom_cake_recipe_schema(db)
         # Default recipe seeding is handled by init.sql now
-        
+
         query = text(
             """
-            SELECT flavor, size, ingredient_code, quantity
-            FROM custom_cake_recipes
-            ORDER BY flavor, size, ingredient_code
+            SELECT
+                ccr.flavor,
+                ccr.size,
+                ccr.ingredient_code,
+                ccr.quantity,
+                COALESCE(ip.unit_price, 0) AS unit_price
+            FROM custom_cake_recipes ccr
+            LEFT JOIN ingredient_pricing ip ON ip.ingredient_code = ccr.ingredient_code
+            ORDER BY ccr.flavor, ccr.size, ccr.ingredient_code
             """
         )
         rows = db.execute(query).fetchall()
-        recipe_map: dict[str, dict[str, list[dict[str, Any]]]] = {}
-        for flavor, size, ingredient_code, quantity in rows:
+        recipe_map: dict[str, dict[str, dict[str, Any]]] = {}
+        for flavor, size, ingredient_code, quantity, unit_price in rows:
             flavor_key = (flavor or "").strip()
             size_key = (size or "").strip()
             if not flavor_key or not size_key:
@@ -629,11 +655,27 @@ class SideDishService:
             if flavor_key not in recipe_map:
                 recipe_map[flavor_key] = {}
             if size_key not in recipe_map[flavor_key]:
-                recipe_map[flavor_key][size_key] = []
-            recipe_map[flavor_key][size_key].append({
+                recipe_map[flavor_key][size_key] = {
+                    "ingredients": [],
+                    "price": Decimal("0.00")
+                }
+
+            variant_entry = recipe_map[flavor_key][size_key]
+            ingredient_quantity = Decimal(str(quantity or 0))
+            ingredient_unit_price = Decimal(str(unit_price or 0))
+            variant_entry["ingredients"].append({
                 "ingredient_code": ingredient_code,
                 "quantity": float(quantity)
             })
+            variant_entry["price"] += ingredient_quantity * \
+                ingredient_unit_price
+
+        for flavor_dict in recipe_map.values():
+            for variant_entry in flavor_dict.values():
+                price_decimal = variant_entry.get("price", Decimal("0.00"))
+                variant_entry["price"] = float(
+                    price_decimal.quantize(Decimal("0.01")))
+
         return {
             "success": True,
             "data": recipe_map
@@ -666,7 +708,8 @@ class SideDishService:
                 WHERE name = :name
                 """
             )
-            ingredient_row = db.execute(ingredient_lookup, {"name": normalized_ingredient}).fetchone()
+            ingredient_row = db.execute(
+                ingredient_lookup, {"name": normalized_ingredient}).fetchone()
             if not ingredient_row:
                 return {"success": False, "error": "존재하지 않는 재료입니다"}
 
@@ -761,7 +804,7 @@ class SideDishService:
             """
         )
         rows = db.execute(query, {"flavor": flavor, "size": size}).fetchall()
-        
+
         # Fallback is removed as recipes are DB-grounded
         return [
             {
@@ -792,6 +835,37 @@ class SideDishService:
         for statement in ddl_statements:
             db.execute(text(statement))
         db.commit()
+
+    def _calculate_custom_cake_variant_price(
+        self,
+        db: Session,
+        flavor: str,
+        size: str
+    ) -> Decimal:
+        view_query = text(
+            """
+            SELECT COALESCE(total_price, 0)
+            FROM custom_cake_variant_prices
+            WHERE flavor = :flavor AND size = :size
+            """
+        )
+        row = db.execute(
+            view_query, {"flavor": flavor, "size": size}).fetchone()
+        if row and row[0] is not None:
+            return Decimal(str(row[0])).quantize(Decimal("0.01"))
+
+        query = text(
+            """
+            SELECT COALESCE(SUM(ccr.quantity * COALESCE(ip.unit_price, 0)), 0)
+            FROM custom_cake_recipes ccr
+            LEFT JOIN ingredient_pricing ip ON ip.ingredient_code = ccr.ingredient_code
+            WHERE flavor = :flavor AND size = :size
+            """
+        )
+        row = db.execute(query, {"flavor": flavor, "size": size}).fetchone()
+        if not row:
+            return Decimal("0.00")
+        return Decimal(str(row[0] or 0)).quantize(Decimal("0.01"))
 
 
 side_dish_service = SideDishService()

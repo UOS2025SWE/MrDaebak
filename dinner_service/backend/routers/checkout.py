@@ -29,7 +29,8 @@ class DeliveryInfo(BaseModel):
     recipient_name: Optional[str] = Field(None, description="수령인 이름")
     recipient_phone: Optional[str] = Field(None, description="수령인 전화번호")
     delivery_notes: Optional[str] = Field(None, description="배송 요청사항")
-    scheduled_date: Optional[date] = Field(None, description="예약 배송일 (YYYY-MM-DD)")
+    scheduled_date: Optional[date] = Field(
+        None, description="예약 배송일 (YYYY-MM-DD)")
     scheduled_time_slot: Optional[str] = Field(
         None,
         description="예약 시간대 (HH:MM, 24시간 형식)"
@@ -62,9 +63,12 @@ class CheckoutRequest(BaseModel):
     save_as_default_address: bool = Field(False, description="기본 배송지로 저장 여부")
 
     # 커스터마이징 정보 (선택)
-    customizations: Optional[dict[str, int]] = Field(None, description="재료 커스터마이징 정보 {재료명: 수량}")
-    side_dishes: Optional[list[dict[str, Any]]] = Field(None, description="추가 사이드 디시 [{code, quantity}]")
-    cake_customization: Optional[dict[str, Any]] = Field(None, description="케이크 커스터마이징 정보")
+    customizations: Optional[dict[str, int]] = Field(
+        None, description="재료 커스터마이징 정보 {재료명: 수량}")
+    side_dishes: Optional[list[dict[str, Any]]] = Field(
+        None, description="추가 사이드 디시 [{code, quantity}]")
+    cake_customization: Optional[dict[str, Any]] = Field(
+        None, description="케이크 커스터마이징 정보")
 
 
 class CheckoutResponse(BaseModel):
@@ -103,10 +107,27 @@ async def process_checkout(
             try:
                 time_slot = request.delivery.scheduled_time_slot or "18:00"
                 scheduled_time = time.fromisoformat(time_slot)
-                scheduled_dt = datetime.combine(request.delivery.scheduled_date, scheduled_time)
+                scheduled_dt = datetime.combine(
+                    request.delivery.scheduled_date, scheduled_time)
+
+                # 현재 날짜/시간 기준으로 검증 (과거 날짜는 허용하지 않음)
+                current_time = datetime.now()
+                if scheduled_dt < current_time:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"과거 날짜는 선택할 수 없습니다. 현재 날짜/시간: {current_time.strftime('%Y-%m-%d %H:%M')}, 선택한 날짜/시간: {scheduled_dt.strftime('%Y-%m-%d %H:%M')}"
+                    )
+
                 scheduled_for_iso = scheduled_dt.isoformat()
+            except HTTPException:
+                raise
             except ValueError:
-                logger.warning(f"잘못된 배송 일정 입력: date={request.delivery.scheduled_date}, time={request.delivery.scheduled_time_slot}")
+                logger.warning(
+                    f"잘못된 배송 일정 입력: date={request.delivery.scheduled_date}, time={request.delivery.scheduled_time_slot}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="잘못된 배송 일정 형식입니다. 날짜는 YYYY-MM-DD, 시간은 HH:MM 형식이어야 합니다."
+                )
 
         # 1. 주문 생성
         order_result = OrderService.create_order(
@@ -133,7 +154,8 @@ async def process_checkout(
             )
 
         order_id = order_result["order"]["id"]  # order_id → id
-        total_price = order_result["order"]["pricing"]["final_price"]  # total_price → pricing.final_price
+        # total_price → pricing.final_price
+        total_price = order_result["order"]["pricing"]["final_price"]
 
         # 2. Mock 결제 처리
         payment_result = PaymentService.process_mock_payment(
@@ -192,11 +214,14 @@ async def process_checkout(
                     WHERE order_id = CAST(:order_id AS uuid)
                     LIMIT 1
                 """)
-                order_item_result = db.execute(order_item_query, {"order_id": order_id}).fetchone()
+                order_item_result = db.execute(
+                    order_item_query, {"order_id": order_id}).fetchone()
 
                 if order_item_result:
                     order_item_id = str(order_item_result[0])
-                    base_ingredients = OrderService.get_base_ingredients(db, request.menu_code, request.style)
+                    base_ingredients = OrderService.get_base_ingredients(
+                        db, request.menu_code, request.style)
+                    quantity_multiplier = max(1, request.quantity)
 
                     # 각 커스터마이징 항목 저장
                     for item_name, quantity in request.customizations.items():
@@ -206,13 +231,13 @@ async def process_checkout(
                             continue
 
                         base_qty = base_ingredients.get(item_name, 0)
-                        diff = qty_int - base_qty
+                        base_total = base_qty * quantity_multiplier
+                        diff_total = qty_int - base_total
 
-                        if diff == 0:
+                        if diff_total == 0:
                             continue
 
-                        change_type_value = 'INCREASE' if diff > 0 else 'DECREASE'
-                        total_diff = diff * max(1, request.quantity)
+                        change_type_value = 'INCREASE' if diff_total > 0 else 'DECREASE'
 
                         customization_query = text("""
                             INSERT INTO order_item_customizations
@@ -223,11 +248,12 @@ async def process_checkout(
                             "order_item_id": order_item_id,
                             "item_name": item_name,
                             "change_type": change_type_value,
-                            "quantity_change": total_diff
+                            "quantity_change": diff_total
                         })
 
                     db.commit()
-                    logger.info(f"커스터마이징 저장 완료: order_id={order_id}, items={len(request.customizations)}")
+                    logger.info(
+                        f"커스터마이징 저장 완료: order_id={order_id}, items={len(request.customizations)}")
             except Exception as e:
                 logger.error(f"커스터마이징 저장 실패: {e}")
                 # 실패해도 주문/결제는 성공으로 처리

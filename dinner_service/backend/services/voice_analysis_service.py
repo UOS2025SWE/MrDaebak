@@ -38,8 +38,10 @@ class ConversationSession:
 
     def __init__(self, session_id: str):
         self.session_id = session_id
-        self.messages: List[Dict[str, str]] = []  # [{role, content, timestamp}]
-        self.context: Dict[str, Any] = {}   # {situation, people, budget, constraints}
+        # [{role, content, timestamp}]
+        self.messages: List[Dict[str, str]] = []
+        # {situation, people, budget, constraints}
+        self.context: Dict[str, Any] = {}
         self.order_state: Dict[str, Any] = {
             "stage": OrderStage.INITIAL.value,
             "menu_code": None,
@@ -106,7 +108,7 @@ class ConversationSession:
             parts.append("커스터마이징 있음")
         if state.get("scheduled_for"):
             parts.append(f"배송: {state['scheduled_for']}")
-        
+
         return ", ".join(parts) if parts else "주문 진행 중"
 
     def update_context(self, key: str, value: Any):
@@ -124,19 +126,20 @@ class VoiceAnalysisService:
         # 외부 파일에서 설정 로드
         self.menu_data = self._load_menu_data()
         self.prompts = self._load_all_prompts()
-        
+
         # 모든 가능한 재료 코드 수집 (유효성 검증용) - DB 세션이 없어 여기서는 빈 세트 초기화
         self.all_ingredient_codes = set()
-    
+
     def _ensure_ingredient_codes_loaded(self, db: Session) -> None:
         """DB에서 유효한 재료 코드 목록 로드"""
         if self.all_ingredient_codes:
             return
-            
+
         try:
             ingredients = MenuService.get_all_ingredients(db)
             self.all_ingredient_codes = {item["code"] for item in ingredients}
-            logger.info(f"Loaded {len(self.all_ingredient_codes)} ingredient codes from DB")
+            logger.info(
+                f"Loaded {len(self.all_ingredient_codes)} ingredient codes from DB")
         except Exception as e:
             logger.error(f"Failed to load ingredient codes from DB: {e}")
             # Fallback to minimal known set if DB fails (prevent total breakage)
@@ -168,10 +171,10 @@ class VoiceAnalysisService:
         prompts = {}
         states = [
             "menu_conversation", "menu_recommendation", "style_recommendation",
-            "quantity_selection", "ingredient_customization", "scheduling", "checkout_ready"
+            "quantity_selection", "ingredient_customization", "scheduling"
         ]
         config_dir = Path(__file__).parent.parent / "config" / "prompts"
-        
+
         for state in states:
             try:
                 file_path = config_dir / f"{state}.txt"
@@ -188,7 +191,7 @@ class VoiceAnalysisService:
         else:
             conversation_sessions[session_id].last_accessed = datetime.now()
         return conversation_sessions[session_id]
-    
+
     def cleanup_expired_sessions(self) -> int:
         expiry_time = datetime.now() - timedelta(hours=SESSION_EXPIRY_HOURS)
         expired_sessions = [
@@ -197,7 +200,7 @@ class VoiceAnalysisService:
         ]
         for sid in expired_sessions:
             del conversation_sessions[sid]
-        
+
         if expired_sessions:
             logger.info(f"만료된 세션 {len(expired_sessions)}개 정리 완료")
         return len(expired_sessions)
@@ -224,30 +227,42 @@ class VoiceAnalysisService:
 
         # 2. 기본 플레이스홀더 준비
         conversation_context = session.get_context_summary() if session else ""
-        context_summary = json.dumps(session.context, ensure_ascii=False) if session else "{}"
+        context_summary = json.dumps(
+            session.context, ensure_ascii=False) if session else "{}"
         menu_data_str = self._get_condensed_menu_data(state, session)
         c_name = customer_name or "고객"
 
         system_prompt = prompt_template
-        system_prompt = system_prompt.replace('{conversation_context}', conversation_context)
+        system_prompt = system_prompt.replace(
+            '{conversation_context}', conversation_context)
         system_prompt = system_prompt.replace('{transcript}', transcript)
         system_prompt = system_prompt.replace('{menu_data}', menu_data_str)
-        system_prompt = system_prompt.replace('{context_summary}', context_summary)
+        system_prompt = system_prompt.replace(
+            '{context_summary}', context_summary)
         system_prompt = system_prompt.replace('{customer_name}', c_name)
 
         # 3. 추가/상태별 플레이스홀더 적용
         if extra_placeholders:
             for k, v in extra_placeholders.items():
                 system_prompt = system_prompt.replace(k, str(v))
-        
+
         # 누락된 플레이스홀더 정리 (안전장치)
-        if '{selected_menu_name}' in system_prompt: system_prompt = system_prompt.replace('{selected_menu_name}', "")
-        if '{selected_style_name}' in system_prompt: system_prompt = system_prompt.replace('{selected_style_name}', "")
-        if '{quantity}' in system_prompt: system_prompt = system_prompt.replace('{quantity}', "1")
-        if '{default_ingredients_by_quantity}' in system_prompt: system_prompt = system_prompt.replace('{default_ingredients_by_quantity}', "{}")
-        if '{current_ingredients}' in system_prompt: system_prompt = system_prompt.replace('{current_ingredients}', "{}")
-        if '{order_summary}' in system_prompt: system_prompt = system_prompt.replace('{order_summary}', "")
-        if '{final_order_summary}' in system_prompt: system_prompt = system_prompt.replace('{final_order_summary}', "")
+        if '{selected_menu_name}' in system_prompt:
+            system_prompt = system_prompt.replace('{selected_menu_name}', "")
+        if '{selected_style_name}' in system_prompt:
+            system_prompt = system_prompt.replace('{selected_style_name}', "")
+        if '{quantity}' in system_prompt:
+            system_prompt = system_prompt.replace('{quantity}', "1")
+        if '{default_ingredients_by_quantity}' in system_prompt:
+            system_prompt = system_prompt.replace(
+                '{default_ingredients_by_quantity}', "{}")
+        if '{current_ingredients}' in system_prompt:
+            system_prompt = system_prompt.replace(
+                '{current_ingredients}', "{}")
+        if '{order_summary}' in system_prompt:
+            system_prompt = system_prompt.replace('{order_summary}', "")
+        if '{final_order_summary}' in system_prompt:
+            system_prompt = system_prompt.replace('{final_order_summary}', "")
 
         # 4. 메시지 구성
         messages = [{"role": "system", "content": system_prompt}]
@@ -258,13 +273,15 @@ class VoiceAnalysisService:
                     role = msg.get("role", "user")
                     # role은 'user' or 'assistant'만 허용
                     if role in ["user", "assistant"]:
-                         messages.append({"role": role, "content": msg.get("content", "")})
-        
+                        messages.append(
+                            {"role": role, "content": msg.get("content", "")})
+
         # 현재 사용자 메시지
         messages.append({"role": "user", "content": transcript})
 
         # 5. LLM 호출
-        logger.info(f"Calling LLM for state: {state}, transcript: {transcript[:30]}...")
+        logger.info(
+            f"Calling LLM for state: {state}, transcript: {transcript[:30]}...")
         try:
             response_text = await self.ai_client.chat_completion(messages=messages, temperature=0.7)
         except Exception as e:
@@ -280,7 +297,7 @@ class VoiceAnalysisService:
         # Markdown code block 제거
         if text_clean.startswith("```json"):
             text_clean = text_clean[7:]
-        if text_clean.startswith("```"): # 언어 지정 없는 경우
+        if text_clean.startswith("```"):  # 언어 지정 없는 경우
             lines = text_clean.split('\n')
             if len(lines) > 1:
                 text_clean = "\n".join(lines[1:])
@@ -288,7 +305,7 @@ class VoiceAnalysisService:
                 text_clean = text_clean[3:]
         if text_clean.endswith("```"):
             text_clean = text_clean[:-3]
-        
+
         text_clean = text_clean.strip()
 
         try:
@@ -301,9 +318,10 @@ class VoiceAnalysisService:
                     return json.loads(match.group())
                 except json.JSONDecodeError:
                     pass
-            
+
             # 실패 시 Plain text fallback
-            logger.warning(f"JSON parsing failed. Raw text: {text_clean[:100]}...")
+            logger.warning(
+                f"JSON parsing failed. Raw text: {text_clean[:100]}...")
             return {
                 "response": text_clean,
                 "decision": 0,
@@ -322,14 +340,16 @@ class VoiceAnalysisService:
                     "recommended_people": menu.get("recommended_people", {}),
                     "strengths": menu.get("strengths", []),
                     "styles_detail": {
-                        s: {"price": i.get("price", 0), "cooking_time": i.get("cooking_time", 0)}
+                        s: {"price": i.get("price", 0), "cooking_time": i.get(
+                            "cooking_time", 0)}
                         for s, i in menu.get("styles_detail", {}).items()
                     }
                 }
             return json.dumps(condensed, ensure_ascii=False, indent=2)
-        
+
         elif state == "STYLE_RECOMMENDATION":
-            menu_code = session.order_state.get("menu_code") if session else None
+            menu_code = session.order_state.get(
+                "menu_code") if session else None
             if menu_code and menu_code in self.menu_data:
                 menu = self.menu_data[menu_code]
                 return json.dumps({
@@ -340,7 +360,7 @@ class VoiceAnalysisService:
                     }
                 }, ensure_ascii=False, indent=2)
             return "{}"
-        
+
         return json.dumps({"note": "메뉴 정보는 이미 선택되었습니다."}, ensure_ascii=False)
 
     # -------------------------------------------------------------------------
@@ -348,23 +368,24 @@ class VoiceAnalysisService:
     # -------------------------------------------------------------------------
     async def _handle_menu_conversation(self, transcript: str, session: ConversationSession, customer_name: str, db: Optional[Session] = None) -> Dict[str, Any]:
         result = await self._call_llm("MENU_CONVERSATION", transcript, session, customer_name)
-        
+
         response = result.get("response", "")
         decision = int(result.get("decision", 0))
         analysis = result.get("analysis", {})
-        
+
         # 메뉴 이름 필터링 (이 단계에서 추천 방지)
-        menu_names = ["발렌타인", "프렌치", "잉글리시", "샴페인", "valentine", "french", "english", "champagne"]
+        menu_names = ["발렌타인", "프렌치", "잉글리시", "샴페인",
+                      "valentine", "french", "english", "champagne"]
         if any(m in response for m in menu_names):
             if decision == 1:
                 response = "알겠습니다. 맞춤형 메뉴를 추천해드리겠습니다."
             else:
                 response = "어떤 상황이신지 알려주시면 더 맞춤형으로 추천해드릴 수 있습니다."
-        
+
         # Decision 검증: analysis가 충분하지 않으면 진행 불가
         situation = str(analysis.get("situation", "")).strip()
         has_valid_info = bool(situation and situation not in ["", "일반", "없음"])
-        
+
         if decision == 1 and not has_valid_info:
             decision = 0
             response = "어떤 상황이신지 알려주시면 더 맞춤형으로 추천해드릴 수 있습니다."
@@ -381,22 +402,18 @@ class VoiceAnalysisService:
             # 정보 저장
             for k, v in analysis.items():
                 session.update_context(k, v)
-            
+
+            # 상태만 변경하고 응답 반환 (다음 요청에서 자동으로 메뉴 추천 실행)
             next_state = "MENU_RECOMMENDATION"
             final_response["state"] = next_state
-            
-            # 즉시 메뉴 추천 호출
-            rec_result = await self._handle_menu_recommendation(
-                "메뉴를 추천해주세요.", session, customer_name, db, is_auto_trigger=True
-            )
-            return rec_result
+            final_response["auto_trigger"] = True  # 다음 요청에서 자동 실행 신호
 
         return final_response
 
     async def _handle_menu_recommendation(
-        self, 
-        transcript: str, 
-        session: ConversationSession, 
+        self,
+        transcript: str,
+        session: ConversationSession,
         customer_name: str,
         db: Optional[Session] = None,
         is_auto_trigger: bool = False
@@ -404,101 +421,163 @@ class VoiceAnalysisService:
         current_transcript = transcript
         if is_auto_trigger:
             current_transcript = "메뉴를 추천해주세요. 반드시 JSON 형식으로 응답해주세요."
-            
+
         result = await self._call_llm("MENU_RECOMMENDATION", current_transcript, session, customer_name)
-        
+
         response = result.get("response", "")
         decision = int(result.get("decision", 0))
         recommended_menu = result.get("recommended_menu")
-        
+
+        # 메뉴 코드 매핑 (숫자 -> 실제 코드)
+        menu_code_map = {1: "french", 2: "english",
+                         3: "valentine", 4: "champagne"}
+
+        # recommended_menu를 배열로 정규화하고 코드 변환
+        if recommended_menu:
+            if isinstance(recommended_menu, list):
+                recommended_menu_list = recommended_menu
+            else:
+                recommended_menu_list = [recommended_menu]
+
+            # 숫자 코드를 실제 메뉴 코드로 변환
+            normalized_list = []
+            for menu in recommended_menu_list:
+                if isinstance(menu, dict):
+                    code = menu.get("code", "")
+                    # 숫자 문자열이나 숫자인 경우 변환
+                    try:
+                        code_num = int(code) if isinstance(code, str) else code
+                        if code_num in menu_code_map:
+                            menu = menu.copy()  # 원본 수정 방지
+                            menu["code"] = menu_code_map[code_num]
+                            # name도 실제 메뉴 이름으로 업데이트
+                            actual_code = menu_code_map[code_num]
+                            menu["name"] = self.menu_data.get(
+                                actual_code, {}).get("name", menu.get("name", ""))
+                    except (ValueError, TypeError):
+                        # 이미 실제 코드인 경우 그대로 사용
+                        pass
+                    normalized_list.append(menu)
+                else:
+                    normalized_list.append(menu)
+            recommended_menu_list = normalized_list
+        else:
+            recommended_menu_list = []
+
+        # 디버깅: recommended_menu 로깅
+        logger.info(
+            f"[MENU_RECOMMENDATION] LLM returned recommended_menu: {recommended_menu}")
+        logger.info(
+            f"[MENU_RECOMMENDATION] Normalized recommended_menu_list: {recommended_menu_list}")
+
         final_response = {
             "response": response,
             "decision": decision,
             "state": "MENU_RECOMMENDATION",
-            "recommended_menu": recommended_menu
+            "recommended_menu": recommended_menu_list  # 항상 배열로 반환
         }
-        
+
+        logger.info(
+            f"[MENU_RECOMMENDATION] Final response recommended_menu: {final_response.get('recommended_menu')}")
+
         # 메뉴 선택 파싱 (DB 기반 매핑이 이상적이나, 프롬프트가 1,2,3,4를 반환하므로 여기서 매핑 유지)
         # 향후 메뉴가 늘어나면 이 부분도 DB 조회로 변경 필요
-        menu_code_map = {1: "french", 2: "english", 3: "valentine", 4: "champagne"}
+        menu_code_map = {1: "french", 2: "english",
+                         3: "valentine", 4: "champagne"}
         sel = result.get("menu_selection", 0)
-        
+
         # Fallback parsing
         if not sel:
             t_lower = transcript.lower()
-            if "프렌치" in transcript or "french" in t_lower: sel = 1
-            elif "잉글리시" in transcript or "english" in t_lower: sel = 2
-            elif "발렌타인" in transcript or "valentine" in t_lower: sel = 3
-            elif "샴페인" in transcript or "champagne" in t_lower: sel = 4
-            
+            if "프렌치" in transcript or "french" in t_lower:
+                sel = 1
+            elif "잉글리시" in transcript or "english" in t_lower:
+                sel = 2
+            elif "발렌타인" in transcript or "valentine" in t_lower:
+                sel = 3
+            elif "샴페인" in transcript or "champagne" in t_lower:
+                sel = 4
+
             if sel:
                 decision = 1
-                logger.info(f"[MENU_RECOMMENDATION] Fallback menu selection: {sel}")
+                logger.info(
+                    f"[MENU_RECOMMENDATION] Fallback menu selection: {sel}")
 
         if recommended_menu and not sel:
             decision = 0
-        
+
         final_response["decision"] = decision
-        
+
         if decision == 1 and sel in menu_code_map:
             code = menu_code_map[sel]
             name = self.menu_data.get(code, {}).get("name", code)
             session.update_order_state(menu_code=code, menu_name=name)
-            
+
+            # 상태만 변경하고 응답 반환 (다음 요청에서 자동으로 스타일 추천 실행)
             final_response["state"] = "STYLE_RECOMMENDATION"
-            
-            # 자동 스타일 추천 트리거
-            style_res = await self._handle_style_recommendation(
-                "스타일을 추천해주세요.", session, customer_name, db, is_auto_trigger=True
-            )
-            return style_res
+            final_response["auto_trigger"] = True  # 다음 요청에서 자동 실행 신호
 
         return final_response
 
     async def _handle_style_recommendation(
-        self, 
-        transcript: str, 
-        session: ConversationSession, 
+        self,
+        transcript: str,
+        session: ConversationSession,
         customer_name: str,
         db: Optional[Session] = None,
         is_auto_trigger: bool = False
     ) -> Dict[str, Any]:
-        
+
         current_transcript = transcript
         if is_auto_trigger:
             current_transcript = "스타일을 추천해주세요. 반드시 JSON 형식으로 응답해주세요."
-            
+
         placeholders = {
             '{selected_menu_name}': str(session.order_state.get("menu_name", "")),
             '{selected_menu_code}': str(session.order_state.get("menu_code", ""))
         }
-        
+
         result = await self._call_llm("STYLE_RECOMMENDATION", current_transcript, session, customer_name, placeholders)
-        
+
         response = result.get("response", "")
         decision = int(result.get("decision", 0))
         recommended_style = result.get("recommended_style")
-        
+
+        # 디버깅: recommended_style 로깅
+        logger.info(
+            f"[STYLE_RECOMMENDATION] LLM returned recommended_style: {recommended_style}")
+
+        # recommended_style이 0이면 None으로 처리 (추천 없음)
+        if recommended_style == 0:
+            recommended_style = None
+
         final_response = {
             "response": response,
             "decision": decision,
             "state": "STYLE_RECOMMENDATION",
             "recommended_style": recommended_style
         }
-        
+
+        logger.info(
+            f"[STYLE_RECOMMENDATION] Final response recommended_style: {final_response.get('recommended_style')}")
+
         style_map = {1: "simple", 2: "grand", 3: "deluxe"}
         sel = result.get("style_selection", 0)
-        
+
         # Fallback parsing
         if not sel:
             t_lower = transcript.lower()
-            if "심플" in transcript or "simple" in t_lower: sel = 1
-            elif "그랜드" in transcript or "grand" in t_lower: sel = 2
-            elif "디럭스" in transcript or "deluxe" in t_lower: sel = 3
-            
+            if "심플" in transcript or "simple" in t_lower:
+                sel = 1
+            elif "그랜드" in transcript or "grand" in t_lower:
+                sel = 2
+            elif "디럭스" in transcript or "deluxe" in t_lower:
+                sel = 3
+
             if sel:
                 decision = 1
-                logger.info(f"[STYLE_RECOMMENDATION] Fallback style selection: {sel}")
+                logger.info(
+                    f"[STYLE_RECOMMENDATION] Fallback style selection: {sel}")
 
         if sel == 1 and session.order_state.get("menu_code") == "champagne":
             final_response["response"] = "죄송합니다. 샴페인 축제 디너는 심플 스타일을 선택하실 수 없습니다."
@@ -507,11 +586,12 @@ class VoiceAnalysisService:
 
         if decision == 1 and sel in style_map:
             style_name = style_map[sel]
-            session.update_order_state(style_code=style_name, style_name=style_name)
-            
+            session.update_order_state(
+                style_code=style_name, style_name=style_name)
+
             final_response["state"] = "QUANTITY_SELECTION"
             final_response["style_selection"] = sel
-        
+
         return final_response
 
     async def _handle_quantity_selection(self, transcript: str, session: ConversationSession, customer_name: str, db: Optional[Session] = None) -> Dict[str, Any]:
@@ -519,34 +599,36 @@ class VoiceAnalysisService:
             '{selected_menu_name}': str(session.order_state.get("menu_name", "")),
             '{selected_style_name}': str(session.order_state.get("style_name", ""))
         }
-        
+
         result = await self._call_llm("QUANTITY_SELECTION", transcript, session, customer_name, placeholders)
-        
+
         response = result.get("response", "")
         decision = int(result.get("decision", 0))
         qty = result.get("quantity", 1)
-        
+
         try:
             qty = int(qty)
         except ValueError:
             qty = 1
-            
+
         # Fallback parsing for quantity
         fallback_qty = None
         num_match = re.search(r'(\d+)\s*(세트|개|인분|명)?', transcript)
         if num_match:
             fallback_qty = int(num_match.group(1))
         else:
-            korean_numbers = {"한": 1, "하나": 1, "두": 2, "둘": 2, "세": 3, "셋": 3, "네": 4, "넷": 4}
+            korean_numbers = {"한": 1, "하나": 1, "두": 2,
+                              "둘": 2, "세": 3, "셋": 3, "네": 4, "넷": 4}
             for w, v in korean_numbers.items():
                 if w in transcript:
                     fallback_qty = v
                     break
-        
+
         if fallback_qty and (qty <= 1 and fallback_qty > 1):
             qty = fallback_qty
-            logger.info(f"[QUANTITY_SELECTION] Override LLM quantity with fallback: {qty}")
-            
+            logger.info(
+                f"[QUANTITY_SELECTION] Override LLM quantity with fallback: {qty}")
+
         final_response = {
             "response": response,
             "decision": decision,
@@ -555,7 +637,8 @@ class VoiceAnalysisService:
         }
 
         if decision == 1:
-            if qty < 1: qty = 1
+            if qty < 1:
+                qty = 1
             session.update_order_state(quantity=qty)
             final_response["quantity"] = qty
             final_response["state"] = "INGREDIENT_CUSTOMIZATION"
@@ -564,62 +647,74 @@ class VoiceAnalysisService:
             # ensuring the frontend has data to display immediately
             menu_code = session.order_state.get("menu_code")
             style_code = session.order_state.get("style_code")
-            
-            logger.info(f"[QUANTITY_SELECTION] Pre-calculating ingredients for Menu: {menu_code}, Style: {style_code}, Qty: {qty}")
-            
+
+            logger.info(
+                f"[QUANTITY_SELECTION] Pre-calculating ingredients for Menu: {menu_code}, Style: {style_code}, Qty: {qty}")
+
             base_ingredients = {}
             if db and menu_code:
-                 try:
-                    menu_base_data = MenuService.get_base_ingredient_data(db, menu_code)
-                    base_ingredients = menu_base_data.get(menu_code, {}).get(style_code, {})
-                    logger.info(f"[QUANTITY_SELECTION] Fetched {len(base_ingredients)} base ingredients from DB")
-                 except Exception as e:
-                    logger.error(f"[QUANTITY_SELECTION] Failed to fetch base ingredients: {e}")
-            
+                try:
+                    menu_base_data = MenuService.get_base_ingredient_data(
+                        db, menu_code)
+                    base_ingredients = menu_base_data.get(
+                        menu_code, {}).get(style_code, {})
+                    logger.info(
+                        f"[QUANTITY_SELECTION] Fetched {len(base_ingredients)} base ingredients from DB")
+                except Exception as e:
+                    logger.error(
+                        f"[QUANTITY_SELECTION] Failed to fetch base ingredients: {e}")
+
             default_ingredients = {}
             for k, v in base_ingredients.items():
                 default_ingredients[k] = int(v) * qty
-            
+
             # Save to session
-            session.update_order_state(default_ingredients_by_quantity=default_ingredients)
-            
+            session.update_order_state(
+                default_ingredients_by_quantity=default_ingredients)
+
             # Add to response for frontend
             final_response["default_ingredients_by_quantity"] = default_ingredients
-            final_response["current_ingredients"] = default_ingredients # Start same as default
-        
+            # Start same as default
+            final_response["current_ingredients"] = default_ingredients
+
         return final_response
 
     async def _handle_ingredient_customization(
-        self, 
-        transcript: str, 
-        session: ConversationSession, 
+        self,
+        transcript: str,
+        session: ConversationSession,
         customer_name: str,
         ui_additions: Optional[Dict[str, Any]],
         db: Optional[Session] = None
     ) -> Dict[str, Any]:
-        
+
         # 1. 재료 데이터 준비 (Source of Truth) - DB 기반으로 변경
         menu_code = session.order_state.get("menu_code", "")
         style_code = session.order_state.get("style_code", "")
         quantity = int(session.order_state.get("quantity", 1))
-        
+
         # DB에서 기본 재료 조회
         base_ingredients = {}
         if db:
             try:
-                menu_base_data = MenuService.get_base_ingredient_data(db, menu_code)
+                menu_base_data = MenuService.get_base_ingredient_data(
+                    db, menu_code)
                 # structure: {menu_code: {style_code: {ingredient_code: qty}}}
-                base_ingredients = menu_base_data.get(menu_code, {}).get(style_code, {})
+                base_ingredients = menu_base_data.get(
+                    menu_code, {}).get(style_code, {})
             except Exception as e:
-                logger.error(f"[INGREDIENT_CUSTOMIZATION] Failed to fetch base ingredients from DB: {e}")
-        
+                logger.error(
+                    f"[INGREDIENT_CUSTOMIZATION] Failed to fetch base ingredients from DB: {e}")
+
         if not base_ingredients:
-            logger.warning(f"[INGREDIENT_CUSTOMIZATION] No base ingredients found for {menu_code}/{style_code}")
-        
+            logger.warning(
+                f"[INGREDIENT_CUSTOMIZATION] No base ingredients found for {menu_code}/{style_code}")
+
         # 기본 구성(고정) 계산/로드
-        stored_default = session.order_state.get("default_ingredients_by_quantity")
+        stored_default = session.order_state.get(
+            "default_ingredients_by_quantity")
         default_ingredients: Dict[str, int] = {}
-        
+
         if stored_default:
             for k, v in stored_default.items():
                 default_ingredients[k] = int(v)
@@ -627,15 +722,32 @@ class VoiceAnalysisService:
             # 초기 진입 시 계산
             for k, v in base_ingredients.items():
                 default_ingredients[k] = int(v) * quantity
-            session.update_order_state(default_ingredients_by_quantity=default_ingredients)
-            
+            session.update_order_state(
+                default_ingredients_by_quantity=default_ingredients)
+
         # 현재 상태(변경사항 적용) 계산
-        current_ingredients = self._calculate_current_ingredients(session, default_ingredients)
+        current_ingredients = self._calculate_current_ingredients(
+            session, default_ingredients)
 
         # 2. UI 직접 요청 처리 (LLM 호출 생략)
         if ui_additions:
-            logger.info(f"[INGREDIENT_CUSTOMIZATION] UI additions received: {ui_additions}")
-            self._apply_ingredient_changes(session, ui_additions, default_ingredients)
+            logger.info(
+                f"[INGREDIENT_CUSTOMIZATION] UI additions received: {ui_additions}, current_overrides before: {session.order_state.get('customization_overrides', {})}")
+            # UI additions는 사용자가 UI에서 직접 조정한 최종 상태를 나타내므로,
+            # 기존 변경사항을 초기화하고 UI에서 계산한 차이를 그대로 적용
+            # UI additions는 이미 currentIngredients - defaultIngredients로 계산된 delta이므로
+            # 이를 그대로 override로 설정
+            new_overrides = {}
+            for k, v in ui_additions.items():
+                try:
+                    delta = int(v)
+                    if delta != 0:
+                        new_overrides[k] = delta
+                except ValueError:
+                    continue
+            session.update_order_state(customization_overrides=new_overrides)
+            logger.info(
+                f"[INGREDIENT_CUSTOMIZATION] UI additions applied, new_overrides: {new_overrides}")
 
             return {
                 "response": "재료 구성을 적용했습니다. 이제 배송 일정을 정해볼게요.",
@@ -645,7 +757,7 @@ class VoiceAnalysisService:
                 "default_ingredients_by_quantity": default_ingredients,
                 "current_ingredients": self._calculate_current_ingredients(session, default_ingredients)
             }
-            
+
         # 3. LLM 호출
         placeholders = {
             '{selected_menu_name}': str(session.order_state.get("menu_name", "")),
@@ -654,20 +766,24 @@ class VoiceAnalysisService:
             '{default_ingredients_by_quantity}': json.dumps(default_ingredients, ensure_ascii=False, indent=2),
             '{current_ingredients}': json.dumps(current_ingredients, ensure_ascii=False, indent=2)
         }
-        
+
         result = await self._call_llm("INGREDIENT_CUSTOMIZATION", transcript, session, customer_name, placeholders)
-        
+
         response = result.get("response", "")
         decision = int(result.get("decision", 0))
         additions = result.get("ingredient_additions", {})
-        
-        # LLM이 계산한 변경사항 적용
-        if additions:
-            self._apply_ingredient_changes(session, additions, default_ingredients)
-        
+
+        # LLM이 계산한 변경사항 적용 (decision이 1이 아닐 때만 적용)
+        if additions and decision != 1:
+            logger.info(
+                f"[INGREDIENT_CUSTOMIZATION] LLM returned additions: {additions}, quantity: {quantity}, default_ingredients: {default_ingredients}")
+            self._apply_ingredient_changes(
+                session, additions, default_ingredients)
+
         # 재계산된 현재 재료
-        final_current = self._calculate_current_ingredients(session, default_ingredients)
-        
+        final_current = self._calculate_current_ingredients(
+            session, default_ingredients)
+
         final_response = {
             "response": response,
             "decision": decision,
@@ -675,19 +791,20 @@ class VoiceAnalysisService:
             "default_ingredients_by_quantity": default_ingredients,
             "current_ingredients": final_current
         }
-        
+
         if decision == 1:
             final_response["state"] = "SCHEDULING"
-        
+
         return final_response
 
     def _apply_ingredient_changes(self, session: ConversationSession, additions: Dict[str, Any], default_ingredients: Dict[str, int]):
         """재료 변경 사항을 세션 overrides에 적용"""
-        current_overrides = session.order_state.get("customization_overrides", {})
-        
+        current_overrides = session.order_state.get(
+            "customization_overrides", {})
+
         # 유효성 검사: 모든 알려진 재료 코드 허용
         valid_keys = self.all_ingredient_codes
-        
+
         # 매핑 테이블 (자주 발생하는 오인식 코드 보정)
         key_mapping = {
             "steak": "premium_steak",
@@ -695,42 +812,44 @@ class VoiceAnalysisService:
             "wine_bottle": "wine",
             "champagne": "champagne_bottle"
         }
-        
+
         for k, v in additions.items():
             mapped_key = key_mapping.get(k, k)
             # DB grounded valid keys check
             if valid_keys and mapped_key not in valid_keys:
                 # 로그는 남기지만 처리는 스킵
-                logger.warning(f"[INGREDIENT_CUSTOMIZATION] Unknown ingredient code: {k} (mapped: {mapped_key})")
+                logger.warning(
+                    f"[INGREDIENT_CUSTOMIZATION] Unknown ingredient code: {k} (mapped: {mapped_key})")
                 continue
-                
+
             try:
                 delta = int(v)
-                if delta == 0: continue
-                
+                if delta == 0:
+                    continue
+
                 prev_override = int(current_overrides.get(mapped_key, 0))
                 new_override = prev_override + delta
-                
+
                 # 베이스 수량
                 base_qty = default_ingredients.get(mapped_key, 0)
                 total_qty = base_qty + new_override
-                
+
                 # 0 미만으로 내려가지 않도록 보정
                 if total_qty < 0:
                     # 베이스가 2인데 3을 빼려고 하면(delta=-3), total=-1.
                     # new_override를 -2로 설정하여 total=0이 되도록 함.
                     new_override = -base_qty
-                
+
                 # 오버라이드가 0이면 삭제 (베이스 그대로)
                 if new_override == 0:
                     if mapped_key in current_overrides:
                         del current_overrides[mapped_key]
                 else:
                     current_overrides[mapped_key] = new_override
-                    
+
             except ValueError:
                 continue
-        
+
         session.update_order_state(customization_overrides=current_overrides)
 
     def _calculate_current_ingredients(self, session: ConversationSession, default_ingredients: Dict[str, int]) -> Dict[str, int]:
@@ -749,45 +868,190 @@ class VoiceAnalysisService:
                 pass
         return current
 
+    def _extract_date_from_transcript(self, transcript: str, current_datetime: str) -> str | None:
+        """transcript에서 날짜/시간 추출 (fallback용)"""
+        try:
+            current_dt = datetime.strptime(current_datetime, '%Y-%m-%d %H:%M')
+
+            # "내일", "모레" 같은 상대적 표현 처리
+            if "내일" in transcript or "다음날" in transcript:
+                target_date = current_dt + timedelta(days=1)
+            elif "모레" in transcript:
+                target_date = current_dt + timedelta(days=2)
+            elif "다음 주" in transcript or "다음주" in transcript:
+                target_date = current_dt + timedelta(days=7)
+            else:
+                # 날짜 패턴 찾기 (MM/DD/YYYY, YYYY-MM-DD, MM월 DD일 등)
+                date_patterns = [
+                    r'(\d{1,2})/(\d{1,2})/(\d{4})',  # MM/DD/YYYY
+                    r'(\d{4})-(\d{1,2})-(\d{1,2})',  # YYYY-MM-DD
+                    r'(\d{1,2})월\s*(\d{1,2})일',  # MM월 DD일
+                ]
+
+                target_date = None
+                for pattern in date_patterns:
+                    match = re.search(pattern, transcript)
+                    if match:
+                        if '월' in pattern:
+                            # MM월 DD일 형식
+                            month, day = int(match.group(1)), int(
+                                match.group(2))
+                            year = current_dt.year
+                            if month < current_dt.month or (month == current_dt.month and day < current_dt.day):
+                                year += 1
+                            target_date = datetime(
+                                year, month, day, current_dt.hour, current_dt.minute)
+                        elif '/' in pattern:
+                            # MM/DD/YYYY 형식
+                            month, day, year = int(match.group(1)), int(
+                                match.group(2)), int(match.group(3))
+                            target_date = datetime(
+                                year, month, day, current_dt.hour, current_dt.minute)
+                        elif '-' in pattern:
+                            # YYYY-MM-DD 형식
+                            year, month, day = int(match.group(1)), int(
+                                match.group(2)), int(match.group(3))
+                            target_date = datetime(
+                                year, month, day, current_dt.hour, current_dt.minute)
+                        break
+
+                if not target_date:
+                    return None
+
+            # 시간 추출 (19시, 7시, 19:00 등)
+            time_match = re.search(r'(\d{1,2})[시:](\d{0,2})', transcript)
+            if time_match:
+                hour = int(time_match.group(1))
+                minute = int(time_match.group(2)) if time_match.group(2) else 0
+                if "저녁" in transcript or "밤" in transcript:
+                    if hour < 12:
+                        hour += 12
+                target_date = target_date.replace(hour=hour, minute=minute)
+            else:
+                # 시간이 없으면 기본값 19:00
+                target_date = target_date.replace(hour=19, minute=0)
+
+            # 과거 날짜 체크
+            if target_date < current_dt:
+                return None
+
+            return target_date.strftime('%Y-%m-%d %H:%M')
+        except Exception as e:
+            logger.warning(f"날짜 추출 실패: {e}")
+            return None
+
     async def _handle_scheduling(self, transcript: str, session: ConversationSession, customer_name: str, db: Optional[Session] = None) -> Dict[str, Any]:
         current_scheduled = session.order_state.get("scheduled_for", "")
+        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M')
         placeholders = {
             '{order_summary}': session.get_order_state_summary(),
             '{final_order_summary}': session.get_order_state_summary(),
-            '{scheduled_for}': current_scheduled if current_scheduled else "미정"
+            '{scheduled_for}': current_scheduled if current_scheduled else "미정",
+            '{current_datetime}': current_datetime
         }
-        
+
         result = await self._call_llm("SCHEDULING", transcript, session, customer_name, placeholders)
-        
+
         response = result.get("response", "")
         decision = int(result.get("decision", 0))
         scheduled_for = result.get("scheduled_for")
-        
+        fallback_used = False
+
+        # JSON 파싱 실패 시 fallback: transcript에서 날짜 추출 시도
+        if result.get("parsing_failed"):
+            if scheduled_for:
+                fallback_used = True
+            else:
+                parsed_schedule = self._extract_date_from_transcript(
+                    transcript, current_datetime)
+                if parsed_schedule:
+                    scheduled_for = parsed_schedule
+                    fallback_used = True
+
+        if fallback_used and scheduled_for:
+            decision = 1
+            confirmed_msg = f"{scheduled_for} 일정으로 예약해드릴게요. 변경이 필요하면 말씀해주세요."
+            response = f"{confirmed_msg}\n\n{response}" if response else confirmed_msg
+
         final_response = {
             "response": response,
             "decision": decision,
             "state": "SCHEDULING"
         }
-        
+
         if scheduled_for:
-            session.update_order_state(scheduled_for=scheduled_for)
-            final_response["scheduled_for"] = scheduled_for
+            # 날짜 검증: 현재 날짜/시간 기준으로 과거 날짜는 허용하지 않음
+            try:
+                scheduled_dt = datetime.fromisoformat(scheduled_for.replace(
+                    'Z', '+00:00') if 'Z' in scheduled_for else scheduled_for)
+                current_time = datetime.now()
+
+                if scheduled_dt < current_time:
+                    # 과거 날짜인 경우, 사용자에게 알리고 현재 날짜 이후로 조정
+                    final_response["response"] = f"과거 날짜는 선택할 수 없습니다. 현재 날짜/시간({current_time.strftime('%Y-%m-%d %H:%M')}) 이후의 날짜를 선택해주세요. {response}"
+                    final_response["scheduled_for"] = None
+                    session.update_order_state(scheduled_for=None)
+                    return final_response
+
+                session.update_order_state(scheduled_for=scheduled_for)
+                final_response["scheduled_for"] = scheduled_for
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"잘못된 배송 일정 형식: {scheduled_for}, error: {e}")
+                final_response["response"] = f"배송 일정 형식이 올바르지 않습니다. 다시 말씀해주세요. {response}"
+                final_response["scheduled_for"] = None
         elif decision == 1 and current_scheduled:
             # LLM이 decision=1인데 scheduled_for를 반환 안 했을 경우 (기존 값 유지)
             final_response["scheduled_for"] = current_scheduled
             scheduled_for = current_scheduled
-        
+
         if decision == 1 and scheduled_for:
+            # 상태만 변경하고 응답 반환 (다음 요청에서 자동으로 CHECKOUT_READY 핸들러 호출)
             final_response["state"] = "CHECKOUT_READY"
-            
+            final_response["auto_trigger"] = True  # 다음 요청에서 자동 실행 신호
+
         return final_response
 
     async def _handle_checkout_ready(self, transcript: str, session: ConversationSession, customer_name: str, db: Optional[Session] = None) -> Dict[str, Any]:
-        result = await self._call_llm("CHECKOUT_READY", transcript, session, customer_name)
+        # 주문 완료 메시지 생성 (LLM 호출 없이 직접 생성)
+        menu_code = session.order_state.get("menu_code", "")
+        style_code = session.order_state.get("style_code", "")
+        quantity = session.order_state.get("quantity", 1)
+        scheduled_for = session.order_state.get("scheduled_for", "")
+
+        # 메뉴/스타일 코드를 한글 이름으로 변환
+        menu_name_map = {
+            'french': '프렌치 디너',
+            'english': '잉글리시 디너',
+            'valentine': '발렌타인 디너',
+            'champagne': '샴페인 축제 디너'
+        }
+        style_name_map = {
+            'simple': '심플',
+            'grand': '그랜드',
+            'deluxe': '디럭스'
+        }
+
+        menu_name = menu_name_map.get(
+            menu_code, menu_code) if menu_code else '미정'
+        style_name = style_name_map.get(
+            style_code, style_code) if style_code else '미정'
+        delivery_date_str = scheduled_for if scheduled_for else '미정'
+
+        # 주문 완료 메시지 생성
+        order_summary = f"주문이 완료되었습니다!\n\n메뉴: {menu_name}\n스타일: {style_name}\n수량: {quantity}개\n배송일: {delivery_date_str}"
+
+        # 대화 기록 정리: 주문 완료 메시지만 남김
+        session.messages = [{
+            "role": "assistant",
+            "content": order_summary,
+            "timestamp": datetime.now().isoformat()
+        }]
+
         return {
-            "response": result.get("response", "결제 준비가 완료되었습니다."),
+            "response": order_summary,
             "decision": 1,
-            "state": "CHECKOUT_READY"
+            "state": "CHECKOUT_READY",
+            "clear_messages": True  # 프론트엔드에 대화 기록 정리 신호
         }
 
     # -------------------------------------------------------------------------
@@ -807,7 +1071,7 @@ class VoiceAnalysisService:
         import random
         if random.randint(1, 100) == 1:
             self.cleanup_expired_sessions()
-        
+
         session = None
         if session_id:
             session = self.get_or_create_session(session_id)
@@ -821,13 +1085,16 @@ class VoiceAnalysisService:
         customer_name = None
         if user_id and db:
             try:
-                row = db.execute(text("SELECT name FROM users WHERE user_id = :uid"), {"uid": user_id}).fetchone()
-                if row: customer_name = row[0]
+                row = db.execute(text("SELECT name FROM users WHERE user_id = :uid"), {
+                                 "uid": user_id}).fetchone()
+                if row:
+                    customer_name = row[0]
             except Exception:
                 pass
 
-        current_state = session.order_state.get("current_state", "MENU_CONVERSATION") if session else "MENU_CONVERSATION"
-        
+        current_state = session.order_state.get(
+            "current_state", "MENU_CONVERSATION") if session else "MENU_CONVERSATION"
+
         try:
             handler_map = {
                 "MENU_CONVERSATION": self._handle_menu_conversation,
@@ -838,7 +1105,7 @@ class VoiceAnalysisService:
                 "SCHEDULING": self._handle_scheduling,
                 "CHECKOUT_READY": self._handle_checkout_ready
             }
-            
+
             handler = handler_map.get(current_state)
             if not handler:
                 logger.error(f"Unknown state: {current_state}")
@@ -849,23 +1116,85 @@ class VoiceAnalysisService:
                 final_response = await handler(transcript, session, customer_name, ingredient_additions, db)
             else:
                 final_response = await handler(transcript, session, customer_name, db)
-            
+
             next_state = final_response.get("state", current_state)
-            
+
             if session and next_state != current_state:
                 session.order_state["previous_state"] = current_state
                 session.update_order_state(current_state=next_state)
-                logger.info(f"[STATE_TRANSITION] {current_state} -> {next_state}")
-            
+                logger.info(
+                    f"[STATE_TRANSITION] {current_state} -> {next_state}")
+
+            # 자동 전환: 상태가 변경되고 auto_trigger가 True이면 다음 단계를 자동으로 호출
+            if final_response.get("auto_trigger") and next_state != current_state:
+                next_handler = handler_map.get(next_state)
+                if next_handler:
+                    logger.info(
+                        f"[AUTO_TRIGGER] Automatically calling {next_state} handler")
+                    # 자동 호출이므로 빈 transcript로 다음 핸들러 호출
+                    auto_transcript = ""
+                    if next_state == "MENU_RECOMMENDATION":
+                        auto_result = await self._handle_menu_recommendation(
+                            auto_transcript, session, customer_name, db, is_auto_trigger=True
+                        )
+                    elif next_state == "STYLE_RECOMMENDATION":
+                        auto_result = await self._handle_style_recommendation(
+                            auto_transcript, session, customer_name, db, is_auto_trigger=True
+                        )
+                    elif next_state == "CHECKOUT_READY":
+                        auto_result = await self._handle_checkout_ready(
+                            auto_transcript, session, customer_name, db
+                        )
+                    elif next_state == "INGREDIENT_CUSTOMIZATION":
+                        auto_result = await next_handler(auto_transcript, session, customer_name, ingredient_additions, db)
+                    else:
+                        auto_result = await next_handler(auto_transcript, session, customer_name, db)
+
+                    # 자동 호출 결과로 최종 응답 교체
+                    final_response = auto_result
+                    # 자동 호출된 핸들러의 상태도 확인
+                    auto_next_state = auto_result.get("state", next_state)
+                    if auto_next_state != next_state and session:
+                        session.order_state["previous_state"] = next_state
+                        session.update_order_state(
+                            current_state=auto_next_state)
+                        logger.info(
+                            f"[STATE_TRANSITION] {next_state} -> {auto_next_state}")
+                        # 연쇄 자동 전환도 처리 (예: MENU_RECOMMENDATION -> STYLE_RECOMMENDATION)
+                        if auto_result.get("auto_trigger") and auto_next_state != next_state:
+                            chain_handler = handler_map.get(auto_next_state)
+                            if chain_handler:
+                                logger.info(
+                                    f"[AUTO_TRIGGER] Chain calling {auto_next_state} handler")
+                                if auto_next_state == "STYLE_RECOMMENDATION":
+                                    chain_result = await self._handle_style_recommendation(
+                                        "", session, customer_name, db, is_auto_trigger=True
+                                    )
+                                elif auto_next_state == "INGREDIENT_CUSTOMIZATION":
+                                    chain_result = await chain_handler("", session, customer_name, ingredient_additions, db)
+                                else:
+                                    chain_result = await chain_handler("", session, customer_name, db)
+                                final_response = chain_result
+                                chain_next_state = chain_result.get(
+                                    "state", auto_next_state)
+                                if chain_next_state != auto_next_state and session:
+                                    session.order_state["previous_state"] = auto_next_state
+                                    session.update_order_state(
+                                        current_state=chain_next_state)
+                                    logger.info(
+                                        f"[STATE_TRANSITION] {auto_next_state} -> {chain_next_state}")
+                    next_state = auto_result.get("state", next_state)
+
             response_msg = final_response.get("response", "")
-            if session and response_msg:
+            # clear_messages가 True인 경우 (CHECKOUT_READY 전환 시) 메시지는 이미 정리되었으므로 추가하지 않음
+            if session and response_msg and not final_response.get("clear_messages", False):
                 session.add_message("assistant", response_msg)
-            
+
             final_response["intent"] = "order"
             final_response["confidence"] = 1.0
             if session:
                 final_response["order_state"] = session.order_state
-            
+
             return final_response
 
         except Exception as e:
@@ -873,7 +1202,7 @@ class VoiceAnalysisService:
             logger.error(traceback.format_exc())
             return {
                 "intent": "error",
-                "response": "시스템 오류가 발생했습니다.", 
+                "response": "시스템 오류가 발생했습니다.",
                 "state": current_state,
                 "error": str(e)
             }
@@ -891,11 +1220,12 @@ class VoiceAnalysisService:
                 ORDER BY o.created_at DESC LIMIT 5
             """)
             rows = db.execute(query, {"user_id": user_id}).fetchall()
-            if not rows: return {"has_history": False}
+            if not rows:
+                return {"has_history": False}
 
             orders = []
             menu_counts = {}
-            
+
             for r in rows:
                 orders.append({
                     "order_number": r[1],
@@ -904,9 +1234,11 @@ class VoiceAnalysisService:
                     "menu_code": r[4],
                     "style": r[5]
                 })
-                if r[4]: menu_counts[r[4]] = menu_counts.get(r[4], 0) + 1
-            
-            most_freq = max(menu_counts, key=menu_counts.get) if menu_counts else None
+                if r[4]:
+                    menu_counts[r[4]] = menu_counts.get(r[4], 0) + 1
+
+            most_freq = max(
+                menu_counts, key=menu_counts.get) if menu_counts else None
             latest = orders[0]
 
             return {
@@ -927,6 +1259,7 @@ class VoiceAnalysisService:
 
 # 전역 인스턴스
 voice_analysis_service = None
+
 
 def get_voice_analysis_service():
     global voice_analysis_service

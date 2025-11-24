@@ -636,8 +636,22 @@ class OrderService:
             if scheduled_for:
                 try:
                     scheduled_for_dt = datetime.fromisoformat(scheduled_for)
+                    
+                    # 현재 날짜/시간 기준으로 검증 (과거 날짜는 허용하지 않음)
+                    if scheduled_for_dt < current_time:
+                        logger.warning(f"과거 날짜로 주문 시도: scheduled_for={scheduled_for}, current_time={current_time.isoformat()}")
+                        return {
+                            "success": False,
+                            "error": f"과거 날짜는 선택할 수 없습니다. 현재 날짜/시간: {current_time.strftime('%Y-%m-%d %H:%M')}, 선택한 날짜/시간: {scheduled_for_dt.strftime('%Y-%m-%d %H:%M')}",
+                            "order": None
+                        }
                 except ValueError:
                     logger.warning(f"잘못된 예약 배송 시간: {scheduled_for}")
+                    return {
+                        "success": False,
+                        "error": "잘못된 배송 일정 형식입니다. 날짜는 YYYY-MM-DD, 시간은 HH:MM 형식이어야 합니다.",
+                        "order": None
+                    }
 
             # operation_config.json에서 실제 조리시간 가져오기
             config_file = Path(__file__).parent.parent / "data" / "operation_config.json"
@@ -666,6 +680,19 @@ class OrderService:
             if scheduled_for_dt and scheduled_for_dt > current_time:
                 estimated_delivery_time = scheduled_for_dt
 
+            # customer_id 검증 (users 테이블에 존재하는지 확인)
+            validated_customer_id = None
+            if customer_id:
+                user_check_query = text("""
+                    SELECT user_id FROM users WHERE user_id = CAST(:customer_id AS uuid)
+                """)
+                user_check_result = db.execute(user_check_query, {"customer_id": customer_id}).fetchone()
+                if user_check_result:
+                    validated_customer_id = customer_id
+                else:
+                    logger.warning(f"customer_id가 users 테이블에 존재하지 않음: {customer_id}, 비회원으로 처리")
+                    validated_customer_id = None
+
             # 7. orders 테이블에 주문 생성 (order_type, notes 필드 없음)
             insert_order_query = text("""
                 INSERT INTO orders
@@ -679,7 +706,7 @@ class OrderService:
 
             order_result = db.execute(insert_order_query, {
                 "order_number": order_number,
-                "customer_id": customer_id if customer_id else None,
+                "customer_id": validated_customer_id,
                 "store_id": store_id,
                 "order_status": "RECEIVED",  # ENUM 값
                 "payment_status": "PENDING",  # ENUM 값
@@ -738,7 +765,7 @@ class OrderService:
                 OrderService._store_cake_customization(
                     db,
                     order_item_id=order_item_id,
-                    customer_id=customer_id,
+                    customer_id=validated_customer_id,
                     customization=cake_customization
                 )
 
@@ -825,25 +852,26 @@ class OrderService:
 
         base_ingredients = OrderService.get_base_ingredients(db, dinner_code, style)
         ingredient_prices = OrderService._get_ingredient_unit_prices(db)
+        safe_quantity = max(1, quantity)
+        quantity_decimal = Decimal(str(safe_quantity))
 
         additional_cost = Decimal("0")
 
         for ingredient, qty in customizations.items():
             try:
-                qty_int = int(qty)
-            except (TypeError, ValueError):
+                qty_decimal = Decimal(str(qty))
+            except (InvalidOperation, ValueError, TypeError):
                 continue
 
             base_qty = base_ingredients.get(ingredient, 0)
-            diff = qty_int - base_qty
+            base_total = Decimal(str(base_qty)) * quantity_decimal
+            diff = qty_decimal - base_total
 
             if diff > 0:
-                unit_price = ingredient_prices.get(ingredient)
-                if unit_price is None:
-                    unit_price = Decimal("0")
+                unit_price = ingredient_prices.get(ingredient, Decimal("0"))
                 additional_cost += unit_price * diff
 
-        return additional_cost * quantity
+        return additional_cost
 
     @staticmethod
     def _prepare_side_dishes(
@@ -963,6 +991,10 @@ class OrderService:
     ) -> dict[str, Any]:
         """재고 확인 및 차감"""
         try:
+            safe_quantity = max(1, quantity)
+            quantity_decimal = Decimal(str(safe_quantity))
+            custom_map = customizations or {}
+            handled_custom_keys: set[str] = set()
             # 기본 재료 조회
             base_ingredients = OrderService.get_base_ingredients(db, dinner_code, style)
             
@@ -970,22 +1002,31 @@ class OrderService:
             needed_ingredients: dict[str, Decimal] = {}
             
             for ingredient_code, base_qty in base_ingredients.items():
-                needed_qty = Decimal(str(base_qty)) * quantity
+                needed_qty = Decimal(str(base_qty)) * quantity_decimal
                 
-                # 커스터마이징 반영
-                if customizations and ingredient_code in customizations:
-                    qty_change = customizations[ingredient_code]
+                if ingredient_code in custom_map:
+                    handled_custom_keys.add(ingredient_code)
                     try:
-                        qty_change_decimal = Decimal(str(qty_change)) * quantity
-                    except (InvalidOperation, ValueError):
-                        qty_change_decimal = Decimal("0")
-
-                    needed_qty += qty_change_decimal
-                    if needed_qty < 0:
-                        needed_qty = Decimal("0")
+                        desired_total = Decimal(str(custom_map[ingredient_code]))
+                    except (InvalidOperation, ValueError, TypeError):
+                        desired_total = needed_qty
+                    if desired_total < 0:
+                        desired_total = Decimal("0")
+                    needed_qty = desired_total
                 
                 if needed_qty > 0:
                     needed_ingredients[ingredient_code] = needed_qty
+
+            for ingredient_code, value in custom_map.items():
+                if ingredient_code in handled_custom_keys:
+                    continue
+                try:
+                    desired_total = Decimal(str(value))
+                except (InvalidOperation, ValueError, TypeError):
+                    continue
+                if desired_total <= 0:
+                    continue
+                needed_ingredients[ingredient_code] = desired_total
 
             if extra_ingredients:
                 for ingredient_code, additional_qty in extra_ingredients.items():

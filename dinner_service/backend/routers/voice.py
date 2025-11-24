@@ -18,6 +18,7 @@ from ..services.login_service import get_optional_user
 
 router = APIRouter(tags=["voice"])
 
+
 class VoiceInputRequest(BaseModel):
     """음성 입력 요청 모델"""
     transcript: str = Field(..., description="음성 인식된 텍스트")
@@ -28,25 +29,42 @@ class VoiceInputRequest(BaseModel):
         description="INGREDIENT_CUSTOMIZATION 단계에서 UI에서 계산한 재료 추가/감소량 (양수=추가, 음수=감소)"
     )
 
+
 class VoiceAnalysisResponse(BaseModel):
     """음성 분석 응답 모델"""
-    intent: str = Field(..., description="의도 (recommendation, order, question, greeting, other)")
+    intent: str = Field(...,
+                        description="의도 (recommendation, order, question, greeting, other)")
     confidence: float = Field(..., ge=0.0, le=1.0, description="신뢰도")
     response: str = Field(..., description="AI 응답 메시지")
-    analysis: dict[str, Any] = Field(default_factory=dict, description="상황 분석 정보")
-    recommended_menu: dict[str, Any] | None = Field(None, description="추천 메뉴 정보")
-    alternatives: list[dict[str, Any]] = Field(default_factory=list, description="대안 메뉴들")
-    additional_questions: list[str] = Field(default_factory=list, description="추가 질문")
-    order_state: dict[str, Any] | None = Field(None, description="현재 주문 상태 (단계별 진행 상황)")
+    analysis: dict[str, Any] = Field(
+        default_factory=dict, description="상황 분석 정보")
+    recommended_menu: list[dict[str, Any]] | None = Field(
+        None, description="추천 메뉴 정보 (배열)")
+    recommended_style: int | None = Field(
+        None, description="추천 스타일 코드 (1=simple, 2=grand, 3=deluxe)")
+    alternatives: list[dict[str, Any]] = Field(
+        default_factory=list, description="대안 메뉴들")
+    additional_questions: list[str] = Field(
+        default_factory=list, description="추가 질문")
+    order_state: dict[str, Any] | None = Field(
+        None, description="현재 주문 상태 (단계별 진행 상황)")
     state: str = Field("MENU_CONVERSATION", description="현재 챗봇 주문 상태")
-    state_decision: int = Field(0, description="메뉴 대화 단계에서 다음 상태로 진행할 수 있는지 여부 (1=진행 가능)")
-    menu_selection: int = Field(0, description="선택된 메뉴 코드 (1=french, 2=english, 3=valentine, 4=champagne)")
-    style_selection: int = Field(0, description="선택된 스타일 코드 (1=simple, 2=grand, 3=deluxe)")
+    state_decision: int = Field(
+        0, description="메뉴 대화 단계에서 다음 상태로 진행할 수 있는지 여부 (1=진행 가능)")
+    menu_selection: int = Field(
+        0, description="선택된 메뉴 코드 (1=french, 2=english, 3=valentine, 4=champagne)")
+    style_selection: int = Field(
+        0, description="선택된 스타일 코드 (1=simple, 2=grand, 3=deluxe)")
     quantity: int | None = Field(1, description="선택된 수량")
-    customization_overrides: dict[str, Any] = Field(default_factory=dict, description="재료 커스터마이징 기록")
-    default_ingredients_by_quantity: dict[str, int] | None = Field(None, description="수량이 적용된 기본 재료 구성")
-    current_ingredients: dict[str, int] | None = Field(None, description="현재 적용된 재료 구성 (커스터마이징 포함)")
-    scheduled_for: str | None = Field(None, description="예약된 배송 일시 (YYYY-MM-DD HH:MM)")
+    customization_overrides: dict[str, Any] = Field(
+        default_factory=dict, description="재료 커스터마이징 기록")
+    default_ingredients_by_quantity: dict[str, int] | None = Field(
+        None, description="수량이 적용된 기본 재료 구성")
+    current_ingredients: dict[str, int] | None = Field(
+        None, description="현재 적용된 재료 구성 (커스터마이징 포함)")
+    scheduled_for: str | None = Field(
+        None, description="예약된 배송 일시 (YYYY-MM-DD HH:MM)")
+
 
 @router.post("/analyze", response_model=VoiceAnalysisResponse)
 async def analyze_voice_input(
@@ -110,7 +128,8 @@ async def speech_to_text(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"STT 처리 중 오류: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"STT 처리 중 오류: {exc}") from exc
 
 
 @router.post("/chat/init")
@@ -123,7 +142,7 @@ async def init_chat_session(
     JWT 토큰이 있으면 사용자 이름을 가져와서 환영 메시지에 포함
     """
     session_id = str(uuid.uuid4())
-    
+
     # 고객 이름 조회 (JWT 토큰에서 사용자 정보 추출)
     customer_name = "고객"
     if current_user:
@@ -134,20 +153,21 @@ async def init_chat_session(
             elif db and ("user_id" in current_user or "id" in current_user):
                 user_id = current_user.get("user_id") or current_user.get("id")
                 from sqlalchemy import text
-                user_query = text("SELECT name FROM users WHERE user_id = :user_id")
+                user_query = text(
+                    "SELECT name FROM users WHERE user_id = :user_id")
                 user_result = db.execute(user_query, {"user_id": user_id})
                 user_row = user_result.fetchone()
-                if user_row: 
+                if user_row:
                     customer_name = user_row[0]
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.debug(f"사용자 이름 조회 실패: {e}")
-    
+
     welcome_message = f"""안녕하세요, {customer_name} 고객님! 미스터 대박 디너 서비스 AI 상담사입니다. 🍽️
     
 어떤 디너를 찾으시나요? 음성으로 편하게 말씀해 주세요!"""
-    
+
     return {
         "success": True,
         "session_id": session_id,

@@ -405,6 +405,15 @@ INSERT INTO custom_cake_recipes (flavor, size, ingredient_code, quantity) VALUES
     ('green_tea', 'size_3', 'cake_board', 1.0)
 ON CONFLICT (flavor, size, ingredient_code) DO NOTHING;
 
+CREATE OR REPLACE VIEW custom_cake_variant_prices AS
+SELECT
+    flavor,
+    size,
+    ROUND(SUM(ccr.quantity * COALESCE(ip.unit_price, 0))::numeric, 2) AS total_price
+FROM custom_cake_recipes ccr
+LEFT JOIN ingredient_pricing ip ON ip.ingredient_code = ccr.ingredient_code
+GROUP BY flavor, size;
+
 CREATE TABLE IF NOT EXISTS menu_base_ingredients (
     menu_code TEXT NOT NULL,
     style TEXT NOT NULL,

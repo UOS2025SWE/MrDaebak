@@ -59,11 +59,13 @@
   "response": "추천/응답을 한국어로",
   "decision": 0 또는 1, // 메뉴가 선택되었으면 1, 그렇지 않으면 0
   "menu_selection": 0, // 0=None, 1=French, 2=English, 3=Valentine, 4=Champagne
-  "recommended_menu": {
+  "recommended_menu": [
+    {
     "code": "메뉴_코드",
     "name": "메뉴 이름",
     "reason": "이것을 추천하는 이유"
   }
+  ] // 추천 메뉴 배열 (1개 이상, 복수 가능)
 }
 
 **절대 규칙**: 사용자 입력에 메뉴 이름(프렌치, 잉글리시, 발렌타인, 샴페인)이 포함되어 있으면 **반드시** 해당 메뉴의 menu_selection 코드를 설정하고 decision=1로 설정하세요.
