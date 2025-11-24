@@ -1,7 +1,13 @@
 import torch
 import io
 import re
-from diffusers import StableDiffusion3Pipeline, BitsAndBytesConfig, SD3Transformer2DModel
+from typing import Tuple
+from PIL import Image
+from diffusers import (
+    StableDiffusion3Pipeline,
+    BitsAndBytesConfig,
+    SD3Transformer2DModel,
+)
 from ..config import settings
 
 
@@ -97,14 +103,11 @@ class ImageService:
                                 local_files_only=False,  # Allow re-download if cache is corrupted
                             )
 
-                        # Enable CPU offloading if configured (helps reduce VRAM usage)
-                        # This should be called for both quantized and non-quantized models when enabled
+                        # Enable CPU offloading / device placement once to apply to both pipelines
                         if settings.IMAGE_ENABLE_CPU_OFFLOAD and "cuda" in self.device:
                             print("Enabling CPU offloading to reduce VRAM usage...")
                             self.pipe.enable_model_cpu_offload()
                         else:
-                            # Move to device if not using CPU offloading
-                            # (for both quantized and non-quantized models)
                             if "cuda" in self.device:
                                 self.pipe = self.pipe.to(self.device)
 
@@ -149,56 +152,22 @@ class ImageService:
             traceback.print_exc()
             raise
 
-    async def _translate_to_english(self, korean_prompt: str) -> str:
-        """한국어 프롬프트를 영어로 번역 (LLM 사용)"""
-        try:
-            from .llm import get_llm_service
-
-            # 한국어가 포함되어 있는지 확인
-            korean_pattern = re.compile(r'[가-힣]+')
-            if not korean_pattern.search(korean_prompt):
-                # 한국어가 없으면 그대로 반환
-                return korean_prompt.strip()
-
-            llm_service = get_llm_service()
-
-            # 번역 프롬프트 생성
-            translation_prompt = f"""Translate the following Korean text to English. Only output the English translation, nothing else.
-
-Korean text: {korean_prompt}
-
-English translation:"""
-
-            # LLM을 사용하여 번역
-            english_prompt = await llm_service.generate(
-                prompt=translation_prompt,
-                max_tokens=200,
-                temperature=0.3  # 낮은 temperature로 일관된 번역
-            )
-
-            # 결과 정리 (앞뒤 공백 제거, 따옴표 제거 등)
-            english_prompt = english_prompt.strip()
-            # 따옴표로 감싸져 있으면 제거
-            if english_prompt.startswith('"') and english_prompt.endswith('"'):
-                english_prompt = english_prompt[1:-1]
-            elif english_prompt.startswith("'") and english_prompt.endswith("'"):
-                english_prompt = english_prompt[1:-1]
-
-            print(f"Translated prompt: {korean_prompt} -> {english_prompt}")
-            return english_prompt.strip()
-
-        except Exception as e:
-            print(f"Translation failed, using original prompt: {e}")
-            # 번역 실패 시 원본 프롬프트 반환
-            return korean_prompt.strip()
+    def _prepare_dimensions(self, width: int, height: int) -> Tuple[int, int]:
+        width = max(256, min(width, 1536))
+        height = max(256, min(height, 1536))
+        # force multiples of 8 as required by VAE
+        width -= width % 8
+        height -= height % 8
+        return width, height
 
     async def generate(self, prompt: str, width: int = 1024, height: int = 1024, negative_prompt: str = "") -> bytes:
         """
         이미지 생성 (한국어 프롬프트는 자동으로 영어로 번역)
         Stable Diffusion 3.5 Medium 파라미터 사용
         """
-        # 한국어 프롬프트를 영어로 번역
-        english_prompt = await self._translate_to_english(prompt)
+        width, height = self._prepare_dimensions(width, height)
+        # 프롬프트는 이미 상위 레이어에서 번역/정규화되었다고 가정
+        english_prompt = prompt.strip()
 
         # Stable Diffusion 3.5 Medium 권장 파라미터 사용
         # num_inference_steps=40, guidance_scale=4.5 (공식 문서 권장값)
@@ -226,6 +195,17 @@ English translation:"""
         image.save(img_byte_arr, format='PNG')
         return img_byte_arr.getvalue()
 
+    async def shutdown(self) -> None:
+        """
+        이미지 파이프라인을 언로드하고 GPU 메모리를 해제합니다.
+        """
+        try:
+            if hasattr(self, "pipe"):
+                self.pipe = None
+        finally:
+            if "cuda" in self.device and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
 
 image_service = None
 
@@ -235,3 +215,16 @@ def get_image_service():
     if image_service is None:
         image_service = ImageService()
     return image_service
+
+
+async def unload_image_service() -> None:
+    """
+    글로벌 이미지 서비스를 언로드하고 GPU 캐시를 비웁니다.
+    """
+    global image_service
+    if image_service is not None:
+        try:
+            await image_service.shutdown()
+        except Exception:
+            pass
+        image_service = None

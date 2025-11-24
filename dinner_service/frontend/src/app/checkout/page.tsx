@@ -106,23 +106,11 @@ const CUSTOM_CAKE_SIZES = [
   { code: 'size_3', label: '3호 (4~6인)' }
 ] as const
 
-const GEMINI_ASPECT_RATIOS = [
-  { value: '1:1', label: '정사각형 (1:1)' },
-  { value: '4:5', label: '포스터 (4:5)' },
-  { value: '3:4', label: '세로 (3:4)' },
-  { value: '4:3', label: '가로 (4:3)' },
-  { value: '16:9', label: '와이드 (16:9)' },
-  { value: '9:16', label: '세로 와이드 (9:16)' },
-  { value: '3:2', label: '사진 (3:2)' },
-  { value: '2:3', label: '사진 (2:3)' },
-  { value: '5:4', label: '갤러리 (5:4)' },
-  { value: '21:9', label: '시네마 (21:9)' }
-] as const
+const DEFAULT_CAKE_ASPECT_RATIO = '1:1'
 
 const CAKE_AI_MODES = [
   { value: 'upload', label: '이미지 업로드' },
-  { value: 'prompt', label: '프롬프트로 생성' },
-  { value: 'edit', label: '이미지 + 프롬프트 수정' }
+  { value: 'prompt', label: '프롬프트로 생성' }
 ] as const
 
 type CakeAiMode = (typeof CAKE_AI_MODES)[number]['value']
@@ -421,10 +409,7 @@ function CheckoutPageContent() {
   const [isUploadingCakeImage, setIsUploadingCakeImage] = useState(false)
   const [cakeAiMode, setCakeAiMode] = useState<CakeAiMode>('upload')
   const [cakePrompt, setCakePrompt] = useState('')
-  const [cakeAspectRatio, setCakeAspectRatio] = useState<string>(GEMINI_ASPECT_RATIOS[0].value)
   const [isGeneratingCakeImage, setIsGeneratingCakeImage] = useState(false)
-  const [cakeEditBaseFile, setCakeEditBaseFile] = useState<File | null>(null)
-  const [cakeEditBasePreview, setCakeEditBasePreview] = useState<string | null>(null)
   const [cakeAiStatus, setCakeAiStatus] = useState<CakeAiStatus | null>(null)
   const revokeIfObjectUrl = useCallback((url: string | null) => {
     if (url && url.startsWith('blob:')) {
@@ -1224,9 +1209,6 @@ function CheckoutPageContent() {
         }))
         revokeIfObjectUrl(cakeImagePreview)
         setCakeImagePreview(URL.createObjectURL(file))
-        revokeIfObjectUrl(cakeEditBasePreview)
-        setCakeEditBaseFile(null)
-        setCakeEditBasePreview(null)
         setCakeAiStatus({ type: 'success', message: '참고 이미지를 업로드했어요.' })
       } else {
         const message = data.detail || data.error || '이미지 업로드에 실패했습니다.'
@@ -1240,17 +1222,6 @@ function CheckoutPageContent() {
       alert(message)
     } finally {
       setIsUploadingCakeImage(false)
-    }
-  }
-
-  const handleCakeEditBaseFileChange = (file: File | null) => {
-    revokeIfObjectUrl(cakeEditBasePreview)
-    if (file) {
-      setCakeEditBaseFile(file)
-      setCakeEditBasePreview(URL.createObjectURL(file))
-    } else {
-      setCakeEditBaseFile(null)
-      setCakeEditBasePreview(null)
     }
   }
 
@@ -1276,7 +1247,7 @@ function CheckoutPageContent() {
         },
         body: JSON.stringify({
           prompt: trimmed,
-          aspect_ratio: cakeAspectRatio
+          aspect_ratio: DEFAULT_CAKE_ASPECT_RATIO
         })
       })
       const data = await response.json()
@@ -1287,8 +1258,7 @@ function CheckoutPageContent() {
         }))
         revokeIfObjectUrl(cakeImagePreview)
         setCakeImagePreview(data.image_path || '')
-        handleCakeEditBaseFileChange(null)
-        setCakeAiStatus({ type: 'success', message: 'Gemini가 케이크 이미지를 생성했어요.' })
+        setCakeAiStatus({ type: 'success', message: 'AI가 케이크 이미지를 생성했어요.' })
       } else {
         const message = data.detail || data.error || 'AI 이미지 생성에 실패했습니다.'
         setCakeAiStatus({ type: 'error', message })
@@ -1297,66 +1267,6 @@ function CheckoutPageContent() {
     } catch (error) {
       console.error('케이크 이미지 생성 실패:', error)
       const message = 'AI 이미지 생성 중 오류가 발생했습니다.'
-      setCakeAiStatus({ type: 'error', message })
-      alert(message)
-    } finally {
-      setIsGeneratingCakeImage(false)
-    }
-  }
-
-  const handleCakePromptEdit = async () => {
-    const trimmed = cakePrompt.trim()
-    if (!trimmed) {
-      const message = '수정할 내용을 프롬프트로 입력해주세요.'
-      setCakeAiStatus({ type: 'error', message })
-      alert(message)
-      return
-    }
-
-    if (!cakeEditBaseFile && !cakeCustomizationState.imagePath) {
-      const message = '먼저 수정할 케이크 이미지를 업로드하거나 생성해주세요.'
-      setCakeAiStatus({ type: 'error', message })
-      alert(message)
-      return
-    }
-
-    setCakePrompt(trimmed)
-    setCakeAiStatus(null)
-    setIsGeneratingCakeImage(true)
-    setCakeAiMode('edit')
-
-    const formData = new FormData()
-    formData.append('prompt', trimmed)
-    formData.append('aspect_ratio', cakeAspectRatio)
-    if (cakeEditBaseFile) {
-      formData.append('file', cakeEditBaseFile)
-    } else if (cakeCustomizationState.imagePath) {
-      formData.append('existing_image_path', cakeCustomizationState.imagePath)
-    }
-
-    try {
-      const response = await fetch('/api/cake/customizations/edit-ai-image', {
-        method: 'POST',
-        body: formData
-      })
-      const data = await response.json()
-      if (response.ok && data.success) {
-        setCakeCustomizationState((prev) => ({
-          ...prev,
-          imagePath: data.image_path || ''
-        }))
-        revokeIfObjectUrl(cakeImagePreview)
-        setCakeImagePreview(data.image_path || '')
-        handleCakeEditBaseFileChange(null)
-        setCakeAiStatus({ type: 'success', message: 'Gemini가 이미지를 반영해 케이크를 수정했어요.' })
-      } else {
-        const message = data.detail || data.error || 'AI 이미지 수정에 실패했습니다.'
-        setCakeAiStatus({ type: 'error', message })
-        alert(message)
-      }
-    } catch (error) {
-      console.error('케이크 이미지 수정 실패:', error)
-      const message = 'AI 이미지 수정 중 오류가 발생했습니다.'
       setCakeAiStatus({ type: 'error', message })
       alert(message)
     } finally {
@@ -1373,9 +1283,6 @@ function CheckoutPageContent() {
     if (!includeCustomCake) {
       revokeIfObjectUrl(cakeImagePreview)
       setCakeImagePreview(null)
-      revokeIfObjectUrl(cakeEditBasePreview)
-      setCakeEditBaseFile(null)
-      setCakeEditBasePreview(null)
       setCakeCustomizationState({
         message: '',
         flavor: CUSTOM_CAKE_FLAVORS[0].code,
@@ -1384,17 +1291,10 @@ function CheckoutPageContent() {
       })
       setCakeAiStatus(null)
       setCakePrompt('')
-      setCakeAspectRatio(GEMINI_ASPECT_RATIOS[0].value)
       setCakeAiMode('upload')
       setIsGeneratingCakeImage(false)
     }
-  }, [includeCustomCake, cakeImagePreview, cakeEditBasePreview, revokeIfObjectUrl])
-
-  useEffect(() => {
-    return () => {
-      revokeIfObjectUrl(cakeEditBasePreview)
-    }
-  }, [cakeEditBasePreview, revokeIfObjectUrl])
+  }, [includeCustomCake, cakeImagePreview, revokeIfObjectUrl])
 
   if (!menuCode || !style) {
     return null
@@ -2077,22 +1977,10 @@ function CheckoutPageContent() {
                               <div className="pt-4 border-t border-pink-100 space-y-3">
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                   <div>
-                                    <h4 className="text-sm font-semibold text-pink-800">Gemini 케이크 디자인 도구</h4>
+                                    <h4 className="text-sm font-semibold text-pink-800">AI 케이크 디자인 도구</h4>
                                     <p className="text-xs text-pink-600">
-                                      Google Gemini 2.5 Flash Image 모델을 사용해 텍스트나 이미지를 기반으로 케이크 디자인을 제안합니다.
+                                      Stable Diffusion 3.5 Medium 기반 엔진으로 텍스트 설명이나 기존 이미지를 바탕으로 케이크 디자인을 제안합니다.
                                     </p>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <label className="text-xs font-medium text-gray-600">출력 비율</label>
-                                    <select
-                                      value={cakeAspectRatio}
-                                      onChange={(e) => setCakeAspectRatio(e.target.value)}
-                                      className="px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                    >
-                                      {GEMINI_ASPECT_RATIOS.map((ratio) => (
-                                        <option key={ratio.value} value={ratio.value}>{ratio.label}</option>
-                                      ))}
-                                    </select>
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -2165,54 +2053,6 @@ function CheckoutPageContent() {
                                         프롬프트는 케이크 중심으로 자동 보정되어 안전하게 생성돼요.
                                       </p>
                                     </div>
-                                  </div>
-                                )}
-                                {cakeAiMode === 'edit' && (
-                                  <div className="space-y-3">
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700">수정할 이미지 선택</label>
-                                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                                        <input
-                                          type="file"
-                                          accept="image/*"
-                                          onChange={(e) => handleCakeEditBaseFileChange(e.target.files?.[0] || null)}
-                                          className="w-full text-sm"
-                                        />
-                                        {!cakeEditBaseFile && cakeCustomizationState.imagePath && (
-                                          <span className="text-xs text-gray-500">
-                                            현재 선택된 이미지를 기반으로 수정합니다.
-                                          </span>
-                                        )}
-                                      </div>
-                                      {cakeEditBasePreview && (
-                                        <div className="mt-2">
-                                          <img src={cakeEditBasePreview} alt="AI 수정용 원본" className="w-32 h-32 object-cover rounded-lg border" />
-                                        </div>
-                                      )}
-                                      {!cakeEditBaseFile && !cakeCustomizationState.imagePath && (
-                                        <p className="text-xs text-red-500 mt-2">
-                                          먼저 이미지 생성 또는 업로드 후 수정할 수 있습니다.
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label className="block text-sm font-medium text-gray-700">프롬프트</label>
-                                      <textarea
-                                        value={cakePrompt}
-                                        onChange={(e) => setCakePrompt(e.target.value)}
-                                        rows={3}
-                                        placeholder="예: 윗면에 축하 메시지를 추가하고 분홍색 리본으로 장식해 주세요."
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                      />
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={handleCakePromptEdit}
-                                      disabled={isGeneratingCakeImage}
-                                      className="px-4 py-2 rounded-lg text-sm font-semibold bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                                    >
-                                      {isGeneratingCakeImage ? '수정 중...' : 'AI로 수정'}
-                                    </button>
                                   </div>
                                 )}
                                 {cakePreviewSrc && (

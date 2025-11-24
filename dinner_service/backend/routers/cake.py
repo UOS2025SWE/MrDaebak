@@ -22,6 +22,7 @@ ALLOWED_ASPECT_RATIOS: tuple[str, ...] = (
     "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"
 )
 
+
 def guess_extension(mime_type: str | None) -> str:
     if not mime_type:
         return ".png"
@@ -29,6 +30,7 @@ def guess_extension(mime_type: str | None) -> str:
     if not guessed:
         return ".png"
     return guessed
+
 
 class UploadImageResponse(BaseModel):
     success: bool
@@ -38,7 +40,6 @@ class UploadImageResponse(BaseModel):
 
 class GenerateCakeImageRequest(BaseModel):
     prompt: str
-    aspect_ratio: str = "1:1"
 
     @field_validator("prompt")
     @classmethod
@@ -48,13 +49,7 @@ class GenerateCakeImageRequest(BaseModel):
             raise ValueError("프롬프트를 입력해주세요.")
         return cleaned
 
-    @field_validator("aspect_ratio")
-    @classmethod
-    def validate_aspect_ratio(cls, value: str) -> str:
-        normalized = value.strip()
-        if normalized not in ALLOWED_ASPECT_RATIOS:
-            raise ValueError(f"지원하지 않는 비율입니다: {normalized}")
-        return normalized
+    # aspect_ratio는 더 이상 클라이언트에서 변경 불가 (고정 1:1)
 
 
 def _store_image_bytes(image_bytes: bytes, mime_type: str | None = None) -> UploadImageResponse:
@@ -68,7 +63,8 @@ def _store_image_bytes(image_bytes: bytes, mime_type: str | None = None) -> Uplo
     try:
         destination.write_bytes(image_bytes)
     except Exception as exc:  # pragma: no cover - 파일 시스템 오류
-        raise HTTPException(status_code=500, detail=f"이미지 저장에 실패했습니다: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"이미지 저장에 실패했습니다: {exc}") from exc
 
     return UploadImageResponse(
         success=True,
@@ -86,7 +82,8 @@ def _load_existing_image(existing_path: str) -> tuple[bytes, str]:
     try:
         data = file_path.read_bytes()
     except Exception as exc:  # pragma: no cover - 파일 시스템 오류
-        raise HTTPException(status_code=500, detail=f"기존 이미지를 읽을 수 없습니다: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"기존 이미지를 읽을 수 없습니다: {exc}") from exc
 
     mime_type = mimetypes.guess_type(file_path.name)[0] or "image/png"
     return data, mime_type
@@ -101,7 +98,8 @@ async def upload_cake_image(file: UploadFile = File(...)) -> UploadImageResponse
     try:
         contents = await file.read()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"이미지를 읽을 수 없습니다: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"이미지를 읽을 수 없습니다: {exc}") from exc
 
     return _store_image_bytes(contents, file.content_type)
 
@@ -113,25 +111,15 @@ async def generate_cake_image(request: GenerateCakeImageRequest) -> UploadImageR
     try:
         image_bytes, mime_type = await service.generate_image(
             prompt=request.prompt,
-            aspect_ratio=request.aspect_ratio,
+            aspect_ratio="1:1",
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - 외부 API 오류
-        raise HTTPException(status_code=500, detail=f"AI 이미지 생성에 실패했습니다: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"AI 이미지 생성에 실패했습니다: {exc}") from exc
 
     return _store_image_bytes(image_bytes, mime_type)
-
-
-@router.post("/customizations/edit-ai-image", response_model=UploadImageResponse)
-async def edit_cake_image(
-    prompt: str = Form(...),
-    aspect_ratio: str = Form("1:1"),
-    file: UploadFile | None = File(None),
-    existing_image_path: str | None = Form(None),
-) -> UploadImageResponse:
-    """기존 이미지를 AI로 수정 (현재 미지원)"""
-    raise HTTPException(status_code=501, detail="이미지 편집 기능은 현재 지원되지 않습니다.")
 
 
 @router.get("/customizations/image/{filename}")
