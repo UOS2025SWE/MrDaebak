@@ -8,6 +8,16 @@ from ..config import settings
 
 class LLMService:
     def __init__(self):
+        # CPU 모드 체크
+        use_cpu = settings.LLM_USE_CPU or settings.LLM_GPU_ID < 0
+        
+        if use_cpu:
+            raise RuntimeError(
+                "vLLM은 CPU를 지원하지 않습니다. LLM은 GPU가 필요합니다.\n"
+                "CPU에서 LLM을 실행하려면 다른 라이브러리(transformers 등)를 사용해야 합니다.\n"
+                "LLM_USE_CPU=false 또는 LLM_GPU_ID를 0 이상으로 설정하세요."
+            )
+        
         # Need to handle GPU assignment carefully for vLLM
         # vLLM assumes it controls the devices.
         # We can pass `device` to AsyncEngineArgs in recent versions, or via env vars.
@@ -23,20 +33,20 @@ class LLMService:
         # Since we are in one process, this is tricky.
         # HOWEVER, since this is a "plan implementation", I will configure it standardly.
         
-        print(f"Loading LLM Model {settings.LLM_MODEL}...")
+        print(f"Loading LLM Model {settings.LLM_MODEL} on GPU {settings.LLM_GPU_ID}...")
         
         engine_args = AsyncEngineArgs(
             model=settings.LLM_MODEL,
-            gpu_memory_utilization=0.7, # Lower usage to share GPU if needed, or leave room
+            gpu_memory_utilization=0.4, # Lower usage to share GPU if needed, or leave room
             max_model_len=settings.LLM_MAX_MODEL_LEN,
             tensor_parallel_size=1,
-            trust_remote_code=True, # EXAONE might need this
+            trust_remote_code=True, # Qwen might need this
             enforce_eager=True # Sometimes helps with compatibility
         )
         
         self.engine = AsyncLLMEngine.from_engine_args(engine_args)
 
-    async def generate(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> str:
+    async def generate(self, prompt: str, max_tokens: int = 2048, temperature: float = 0.8) -> str:
         sampling_params = SamplingParams(temperature=temperature, max_tokens=max_tokens)
         request_id = str(uuid.uuid4())
         
@@ -50,15 +60,37 @@ class LLMService:
         return final_output
     
     async def chat_completion(self, messages: List[Dict[str, str]], max_tokens: int = 512) -> str:
-        # EXAONE Chat template construction
-        # If the model has a tokenizer with chat_template, we should use it.
-        # Accessing tokenizer from engine is async.
+        """
+        Chat completion using proper chat template.
         
+        Qwen 모델의 chat_template을 사용하여 메시지를 올바른 형식으로 변환합니다.
+        사용자 예제와 동일하게 apply_chat_template을 사용하지만, vLLM은 내부적으로
+        토큰화를 처리하므로 tokenize=False로 설정합니다.
+        
+        참고: transformers 라이브러리 예제:
+        input_ids = tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+        )
+        
+        vLLM에서는:
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        """
         tokenizer = await self.engine.get_tokenizer()
+        
+        # 모델의 chat_template이 있으면 사용 (Qwen은 chat_template을 지원)
         if hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template:
-            prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            # vLLM은 내부적으로 토큰화를 처리하므로 tokenize=False
+            # add_generation_prompt=True로 설정하여 모델이 응답을 생성할 수 있도록 함
+            prompt = tokenizer.apply_chat_template(
+                messages, 
+                tokenize=False,  # vLLM이 내부적으로 토큰화하므로 False
+                add_generation_prompt=True  # 응답 생성을 위한 프롬프트 추가
+            )
         else:
-            # Fallback manual formatting
+            # Fallback: chat_template이 없는 경우 수동 포맷팅
+            # (Qwen은 chat_template을 지원하므로 일반적으로 이 경로는 사용되지 않음)
             prompt = ""
             for msg in messages:
                 role = msg.get("role", "")
@@ -70,7 +102,8 @@ class LLMService:
                 elif role == "assistant":
                     prompt += f"[Assistant]\n{content}\n\n"
             prompt += "[Assistant]\n"
-            
+        
+        # vLLM의 generate는 문자열을 받아서 내부적으로 토큰화함
         return await self.generate(prompt, max_tokens=max_tokens)
 
 llm_service = None

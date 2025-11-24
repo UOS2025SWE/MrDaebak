@@ -75,8 +75,8 @@ async def process_task(task: dict):
                  raise ValueError("Image Generation service is disabled on this worker.")
 
             service = get_image_service()
-            # generate(prompt, width, height) -> bytes
-            image_bytes = service.generate(
+            # generate(prompt, width, height) -> bytes (async, translates Korean to English)
+            image_bytes = await service.generate(
                 prompt=payload["prompt"],
                 width=payload.get("width", 1024),
                 height=payload.get("height", 1024)
@@ -153,24 +153,38 @@ async def run_worker():
     r = redis.from_url(redis_url)
     task_queue = "ai_task_queue"
     
-    # Initialize models
+    # Initialize models (each service independently to avoid one failure blocking others)
     logger.info("Initializing AI models...")
-    try:
-        if ENABLED_SERVICES["stt"]:
+    
+    if ENABLED_SERVICES["stt"]:
+        try:
             logger.info("Loading STT model...")
             get_stt_service()
-        if ENABLED_SERVICES["image"]:
+            logger.info("STT model loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize STT model: {e}")
+            ENABLED_SERVICES["stt"] = False  # Disable failed service
+    
+    if ENABLED_SERVICES["image"]:
+        try:
             logger.info("Loading Image model...")
             get_image_service()
-        if ENABLED_SERVICES["llm"]:
+            logger.info("Image model loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Image model: {e}")
+            ENABLED_SERVICES["image"] = False  # Disable failed service
+    
+    if ENABLED_SERVICES["llm"]:
+        try:
             logger.info("Loading LLM model...")
             get_llm_service()
-        logger.info("AI models initialization complete.")
-    except Exception as e:
-        logger.error(f"Failed to initialize models: {e}")
-        # We continue, maybe models load lazily or will be fixed
-        # But if a requested service failed, we should probably exit or mark it disabled?
-        # For now, keep running.
+            logger.info("LLM model loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM model: {e}")
+            ENABLED_SERVICES["llm"] = False  # Disable failed service
+    
+    logger.info("AI models initialization complete.")
+    logger.info(f"Final Enabled Services: {json.dumps(ENABLED_SERVICES)}")
     
     logger.info(f"Worker listening on {task_queue}...")
     

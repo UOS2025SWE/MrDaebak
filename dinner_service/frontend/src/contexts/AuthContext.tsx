@@ -50,6 +50,7 @@ interface AuthContextType {
   isCustomer: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
+  refreshUserInfo: () => Promise<void>;
   loading: boolean;
 }
 
@@ -253,6 +254,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isCustomer,
     login,
     logout,
+    refreshUserInfo,
     loading
   };
 

@@ -10,22 +10,6 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { INGREDIENT_DISPLAY_NAMES, MENU_INGREDIENTS } from '@/utils/ingredients';
 import OrderStatusBadge from '@/components/orders/OrderStatusBadge';
 
-
-type IntakeItemTemplate = {
-  code: string
-  label: string
-  unit: string
-  defaultQuantity: number
-}
-
-type IntakeItemState = {
-  code: string
-  label: string
-  unit: string
-  quantity: number
-  unitPrice: number
-}
-
 type PendingIntakeItem = {
   intake_item_id: string
   ingredient_code: string
@@ -45,25 +29,6 @@ type PendingIntakeBatch = {
   total_actual_cost: number
   intake_items: PendingIntakeItem[]
 }
-
-const intakeTemplate: IntakeItemTemplate[] = [
-  { code: 'premium_steak', label: '고기 (프리미엄 스테이크)', unit: '개', defaultQuantity: 20 },
-  { code: 'vegetables', label: '채소 믹스', unit: '팩', defaultQuantity: 25 },
-  { code: 'wine', label: '와인', unit: '병', defaultQuantity: 8 },
-  { code: 'champagne_bottle', label: '샴페인', unit: '병', defaultQuantity: 4 },
-  { code: 'coffee', label: '커피 포트', unit: '포트', defaultQuantity: 6 },
-  { code: 'baguette', label: '바게트빵', unit: '개', defaultQuantity: 18 },
-  { code: 'scrambled_eggs', label: '계란 (스크램블용)', unit: '개', defaultQuantity: 30 }
-]
-
-const createDefaultIntakeState = (pricing: Record<string, number> = {}): IntakeItemState[] =>
-  intakeTemplate.map(item => ({
-    code: item.code,
-    label: item.label,
-    unit: item.unit,
-    quantity: item.defaultQuantity,
-    unitPrice: pricing[item.code] ?? 0
-  }))
 
 interface Order {
   id: string;
@@ -322,7 +287,7 @@ function StaffDashboardContent() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // const [error, setError] = useState(''); // error state removed
 
   const [pendingIntakes, setPendingIntakes] = useState<PendingIntakeBatch[]>([]);
   const [pendingIntakeLoading, setPendingIntakeLoading] = useState(false);
@@ -366,7 +331,7 @@ function StaffDashboardContent() {
       }
     } catch (err) {
       console.error('주문 조회 오류:', err);
-      setError('주문 목록을 불러올 수 없습니다');
+      // setError('주문 목록을 불러올 수 없습니다');
     } finally {
       setLoading(false);
     }
@@ -491,7 +456,7 @@ function StaffDashboardContent() {
     }
 
     const adjustments = batch.intake_items
-      .map((item) => {
+      .map((item: PendingIntakeItem) => {
         const key = `${batchId}::${item.intake_item_id}`;
         const edited = pendingIntakeEdits[key];
         if (edited === undefined || edited === item.actual_quantity) {
@@ -687,7 +652,7 @@ function StaffDashboardContent() {
   };
 
   // WebSocket 연결 및 실시간 업데이트
-  const { status: wsStatus } = useWebSocket({
+  useWebSocket({
     token,
     showToasts: true, // Toast 알림 자동 표시
     reconnect: true,
@@ -716,10 +681,10 @@ function StaffDashboardContent() {
     o.status === 'DELIVERING'
   );
 
-  // 완료된 주문
-  const completedOrders = orders.filter(o =>
-    o.status === 'COMPLETED'
-  );
+  // 완료된 주문 (unused variable removed)
+  // const completedOrders = orders.filter(o =>
+  //   o.status === 'COMPLETED'
+  // );
 
   if (user?.user_type === 'MANAGER') {
     return null;
@@ -873,7 +838,7 @@ function StaffDashboardContent() {
                           </div>
 
                           <div className="space-y-2">
-                            {batch.intake_items.map((item) => {
+                            {batch.intake_items.map((item: PendingIntakeItem) => {
                               const key = `${batch.batch_id}::${item.intake_item_id}`;
                               const editedQuantity = pendingIntakeEdits[key] ?? item.actual_quantity;
                               const displayName = INGREDIENT_DISPLAY_NAMES[item.ingredient_code] || item.ingredient_code;

@@ -37,6 +37,23 @@ async def get_menu_list(
         }
 
 
+@router.get("/metadata")
+async def get_menu_metadata(
+    db: Annotated[Session, Depends(get_db)]
+) -> dict[str, Any]:
+    """메뉴, 재료, 스타일 메타데이터 조회 (프론트엔드 초기화용)"""
+    ingredients = MenuService.get_all_ingredients(db)
+    styles = MenuService.get_serving_styles(db)
+    
+    return {
+        "success": True,
+        "data": {
+            "ingredients": ingredients,
+            "styles": styles
+        }
+    }
+
+
 @router.get("/{menu_code}")
 async def get_menu_detail(
     menu_code: str,

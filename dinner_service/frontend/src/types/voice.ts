@@ -26,4 +26,5 @@ export interface ChatMessage {
   timestamp: string
   menuInfo?: MenuOption
   alternatives?: MenuOption[]  // 대안 메뉴 옵션들
+  recommendedStyle?: number | null  // 추천 스타일 (1=Simple, 2=Grand, 3=Deluxe)
 }

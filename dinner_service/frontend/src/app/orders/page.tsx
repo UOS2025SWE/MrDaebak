@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import OrderStatusBadge from '@/components/orders/OrderStatusBadge'
-import { Card, CardHeader } from '@/components/layout/Card'
+import { Card } from '@/components/layout/Card'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import Header from '../../components/Header'
@@ -87,7 +87,7 @@ export default function OrdersPage() {
 
   // WebSocket 연결 및 실시간 업데이트
   const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-  const { status: wsStatus, lastMessage } = useWebSocket({
+  useWebSocket({
     token,
     showToasts: true,
     reconnect: true,

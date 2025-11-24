@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
@@ -242,7 +241,7 @@ const INQUIRY_STATUS_LABELS: Record<InquiryStatus, string> = {
 
 function AdminDashboardContent() {
   const { user, token } = useAuth()
-  const router = useRouter()
+  // router removed as unused
   const [activeTab, setActiveTab] = useState<TabType>('accounting')
   const [loading, setLoading] = useState(true)
 
@@ -648,7 +647,7 @@ function AdminDashboardContent() {
     } finally {
       setMenuLoading(false)
     }
-  }, [token, fetchAllIngredients, fetchIngredientPricing, fetchSideDishes])
+  }, [token])
 
   const buildMenuIngredientKey = (menuCode: string, styleCode: string, ingredientCode: string) => `${menuCode}::${styleCode}::${ingredientCode}`
   const buildMenuStyleKey = (menuCode: string, styleCode: string) => `${menuCode}::${styleCode}`
@@ -1297,10 +1296,7 @@ function AdminDashboardContent() {
     }
   }
 
-  const getIngredientDisplayName = useCallback((code: string) => {
-    const item = ingredientsFlat.find((ingredient) => ingredient.name === code)
-    return item?.korean_name || code
-  }, [ingredientsFlat])
+  // getIngredientDisplayName removed as unused
 
   useEffect(() => {
     setQuickRestockForms((prev: Record<CategoryKey, { ingredient_code: string; quantity: number }>) => {
@@ -1331,25 +1327,6 @@ function AdminDashboardContent() {
     }
   }, [activeTab, refreshMenuData])
 
-  // WebSocket 메시지 핸들러
-  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
-    // 주문 관련 이벤트 발생 시 데이터 새로고침
-    if (message.type === 'ORDER_CREATED' || message.type === 'ORDER_STATUS_CHANGED' || message.type === 'ORDER_UPDATED') {
-      if (activeTab === 'staff') {
-        fetchStaffData()
-      } else if (activeTab === 'accounting') {
-        fetchAccountingStats()
-      }
-    }
-  }, [activeTab])
-
-  // WebSocket 연결
-  const { status: wsStatus } = useWebSocket({
-    token,
-    onMessage: handleWebSocketMessage,
-    showToasts: false,
-    reconnect: true
-  })
 
   const fetchAccountingStats = useCallback(async () => {
     if (!token) return
@@ -1395,6 +1372,26 @@ function AdminDashboardContent() {
       console.error('직원 데이터 조회 실패:', error)
     }
   }, [token])
+
+  // WebSocket 메시지 핸들러
+  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
+    // 주문 관련 이벤트 발생 시 데이터 새로고침
+    if (message.type === 'ORDER_CREATED' || message.type === 'ORDER_STATUS_CHANGED' || message.type === 'ORDER_UPDATED') {
+      if (activeTab === 'staff') {
+        fetchStaffData()
+      } else if (activeTab === 'accounting') {
+        fetchAccountingStats()
+      }
+    }
+  }, [activeTab, fetchStaffData, fetchAccountingStats])
+
+  // WebSocket 연결
+  useWebSocket({
+    token,
+    onMessage: handleWebSocketMessage,
+    showToasts: false,
+    reconnect: true
+  })
 
   const fetchPendingStaff = useCallback(async () => {
     if (!token) return
@@ -1806,7 +1803,7 @@ function AdminDashboardContent() {
     }
   }, [buildCustomCakeRecipeKey, customCakeRecipeDraft, fetchCustomCakeRecipes, selectedCakeFlavor, selectedCakeSize, token])
 
-  const handleDeleteSideDish = useCallback(async (sideDishId: string, code: string) => {
+  const handleDeleteSideDish = useCallback(async (sideDishId: string) => {
     if (!confirm('해당 사이드 디시를 삭제하시겠습니까?')) return
     setSideDishDeleteLoading((prev) => ({ ...prev, [sideDishId]: true }))
     try {
@@ -2040,8 +2037,7 @@ function AdminDashboardContent() {
     fetchSideDishes,
     fetchCustomCakeRecipes,
     refreshMenuData,
-    fetchInquiries,
-    fetchManagerEvents
+    fetchInquiries
   ])
 
   useEffect(() => {
@@ -2486,32 +2482,7 @@ function AdminDashboardContent() {
     }
   }
 
-  const handleToggleEventPublish = async (eventId: string, nextValue: boolean) => {
-    if (!token) return
-
-    setEventActionLoading(prev => ({ ...prev, [eventId]: true }))
-    try {
-      const response = await fetch(`/api/events/${eventId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ is_published: nextValue })
-      })
-
-      const data = await response.json()
-      if (!response.ok || !data.success) {
-        throw new Error(data.detail || data.error || '이벤트 공개 상태를 변경하지 못했습니다.')
-      }
-      await fetchManagerEvents()
-    } catch (error: any) {
-      console.error('이벤트 공개 상태 변경 실패:', error)
-      alert(error?.message || '이벤트 공개 상태 변경 중 오류가 발생했습니다.')
-    } finally {
-      setEventActionLoading(prev => ({ ...prev, [eventId]: false }))
-    }
-  }
+  // handleToggleEventPublish removed as unused
 
   const handleUploadEventImage = async (eventId: string, file: File) => {
     if (!token) return
@@ -3315,7 +3286,7 @@ function AdminDashboardContent() {
                                   </span>
                                   {dish.code !== 'custom_cake' && (
                                     <button
-                                      onClick={() => handleDeleteSideDish(dish.side_dish_id, dish.code)}
+                                      onClick={() => handleDeleteSideDish(dish.side_dish_id)}
                                       disabled={sideDishDeleteLoading[dish.side_dish_id] ?? false}
                                       className="block w-full mt-2 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >

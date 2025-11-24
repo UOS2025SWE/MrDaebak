@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Header from '@/components/Header'
 import Footer from '@/components/Footer'
-import { useAuth } from '@/contexts/AuthContext'
 
 type EventItem = {
   id: string
@@ -44,7 +43,6 @@ const fallbackEvents: EventItem[] = [
 ]
 
 export default function EventsPage() {
-  const { isManager } = useAuth()
   const [events, setEvents] = useState<EventItem[]>(fallbackEvents)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

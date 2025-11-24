@@ -15,173 +15,11 @@ from sqlalchemy.orm import Session
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
-MENU_BASE_INGREDIENTS: dict[str, dict[str, dict[str, int]]] = {
-    "valentine": {
-        "simple": {
-            "heart_plate": 1,
-            "cupid_decoration": 1,
-            "paper_napkin": 1,
-            "plastic_tray": 1,
-            "plastic_wine_glass": 1,
-            "wine": 1,
-            "premium_steak": 1
-        },
-        "grand": {
-            "heart_plate": 1,
-            "cupid_decoration": 2,
-            "cotton_napkin": 1,
-            "wooden_tray": 1,
-            "plastic_wine_glass": 1,
-            "wine": 1,
-            "premium_steak": 1
-        },
-        "deluxe": {
-            "heart_plate": 1,
-            "cupid_decoration": 3,
-            "linen_napkin": 2,
-            "wooden_tray": 1,
-            "vase_with_flowers": 1,
-            "glass_wine_glass": 1,
-            "wine": 1,
-            "premium_steak": 1
-        }
-    },
-    "french": {
-        "simple": {
-            "plastic_plate": 1,
-            "plastic_cup": 1,
-            "paper_napkin": 1,
-            "plastic_tray": 1,
-            "plastic_wine_glass": 1,
-            "coffee": 1,
-            "wine": 1,
-            "fresh_salad": 1,
-            "premium_steak": 1
-        },
-        "grand": {
-            "ceramic_plate": 1,
-            "ceramic_cup": 1,
-            "cotton_napkin": 1,
-            "wooden_tray": 1,
-            "plastic_wine_glass": 1,
-            "coffee": 1,
-            "wine": 1,
-            "fresh_salad": 1,
-            "premium_steak": 1
-        },
-        "deluxe": {
-            "ceramic_plate": 1,
-            "ceramic_cup": 1,
-            "linen_napkin": 1,
-            "wooden_tray": 1,
-            "vase_with_flowers": 1,
-            "glass_wine_glass": 1,
-            "coffee": 1,
-            "wine": 1,
-            "fresh_salad": 1,
-            "premium_steak": 1
-        }
-    },
-    "english": {
-        "simple": {
-            "plastic_plate": 1,
-            "plastic_cup": 1,
-            "paper_napkin": 1,
-            "plastic_tray": 1,
-            "scrambled_eggs": 1,
-            "bacon": 2,
-            "bread": 1,
-            "premium_steak": 1
-        },
-        "grand": {
-            "ceramic_plate": 1,
-            "ceramic_cup": 1,
-            "cotton_napkin": 1,
-            "wooden_tray": 1,
-            "scrambled_eggs": 2,
-            "bacon": 3,
-            "bread": 1,
-            "premium_steak": 1
-        },
-        "deluxe": {
-            "ceramic_plate": 1,
-            "ceramic_cup": 1,
-            "linen_napkin": 1,
-            "wooden_tray": 1,
-            "vase_with_flowers": 1,
-            "scrambled_eggs": 2,
-            "bacon": 4,
-            "bread": 2,
-            "premium_steak": 1
-        }
-    },
-    "champagne": {
-        "grand": {
-            "ceramic_plate": 2,
-            "ceramic_cup": 2,
-            "cotton_napkin": 2,
-            "wooden_tray": 1,
-            "plastic_wine_glass": 2,
-            "champagne_bottle": 1,
-            "baguette": 4,
-            "coffee_pot": 1,
-            "wine": 1,
-            "premium_steak": 2
-        },
-        "deluxe": {
-            "ceramic_plate": 2,
-            "ceramic_cup": 2,
-            "linen_napkin": 2,
-            "wooden_tray": 1,
-            "vase_with_flowers": 1,
-            "glass_wine_glass": 2,
-            "champagne_bottle": 1,
-            "baguette": 4,
-            "coffee_pot": 1,
-            "wine": 1,
-            "premium_steak": 2
-        }
-    },
-    "cake": {
-        "simple": {
-            "cake_base": 1,
-            "buttercream_frosting": 1,
-            "fresh_berries": 1,
-            "cake_board": 1,
-            "plastic_plate": 1,
-            "plastic_tray": 1,
-            "paper_napkin": 1
-        },
-        "grand": {
-            "cake_base": 1,
-            "buttercream_frosting": 1,
-            "fondant": 1,
-            "fresh_berries": 1,
-            "cake_board": 1,
-            "ceramic_plate": 1,
-            "ceramic_cup": 1,
-            "cotton_napkin": 1,
-            "wooden_tray": 1
-        },
-        "deluxe": {
-            "cake_base": 1,
-            "buttercream_frosting": 1,
-            "fondant": 1,
-            "edible_gold_leaf": 1,
-            "chocolate_ganache": 1,
-            "edible_flowers": 1,
-            "cake_board": 1,
-            "ceramic_plate": 1,
-            "ceramic_cup": 1,
-            "linen_napkin": 1,
-            "wooden_tray": 1,
-            "vase_with_flowers": 1
-        }
-    }
-}
-
 class MenuService:
-    """메뉴 관련 비즈니스 로직 처리 (data/*.json 기반)"""
+    """메뉴 관련 비즈니스 로직 처리 (DB 기반)"""
+
+    # 메인 디너 메뉴 코드 목록 (사이드 디시 제외)
+    MAIN_DINNER_MENU_CODES = ["valentine", "french", "english", "champagne"]
 
     _menu_data = None
     _operation_config = None
@@ -297,8 +135,13 @@ class MenuService:
     def get_menu_data(db: Session) -> dict[str, Any]:
         """메뉴 데이터 조회 - menu_items + serving_styles 테이블 사용"""
         try:
-            # 데이터베이스에서 메뉴 항목 + 서빙 스타일 정보 조회
-            query = text("""
+            # 데이터베이스에서 메인 디너 메뉴 항목만 조회 (사이드 디시 제외)
+            # 메인 디너 메뉴 코드 목록을 사용하여 명시적으로 필터링
+            # SQL 인젝션 방지를 위해 파라미터 바인딩 사용
+            placeholders = ', '.join([f':code_{i}' for i in range(len(MenuService.MAIN_DINNER_MENU_CODES))])
+            params = {f'code_{i}': code for i, code in enumerate(MenuService.MAIN_DINNER_MENU_CODES)}
+            
+            query = text(f"""
                 SELECT
                     mi.menu_item_id,
                     mi.code,
@@ -308,6 +151,7 @@ class MenuService:
                     mi.is_available
                 FROM menu_items mi
                 WHERE mi.is_available = true
+                  AND mi.code IN ({placeholders})
                 ORDER BY
                     CASE mi.code
                         WHEN 'valentine' THEN 1
@@ -318,7 +162,7 @@ class MenuService:
                     END
             """)
 
-            results = db.execute(query).fetchall()
+            results = db.execute(query, params).fetchall()
             menu_list = []
 
             # JSON 파일에서 한글 메뉴 정보 로드
@@ -389,7 +233,8 @@ class MenuService:
                     ss.serving_style_id,
                     ss.name,
                     ss.description,
-                    ss.price_modifier
+                    ss.price_modifier,
+                    ss.display_name
                 FROM serving_styles ss
                 INNER JOIN menu_serving_style_availability mssa
                     ON ss.serving_style_id = mssa.serving_style_id
@@ -408,7 +253,7 @@ class MenuService:
             availability_map = style_availability or {}
 
             for result in results:
-                serving_style_id, name, description, price_modifier = result
+                serving_style_id, name, description, price_modifier, display_name = result
 
                 # 최종 가격 계산 (base_price + price_modifier)
                 modifier_amount = Decimal("0")
@@ -421,10 +266,11 @@ class MenuService:
                 # name을 소문자로 변환하여 code로 사용 (Simple -> simple)
                 style_code = name.lower() if name else "simple"
 
-                # 한글 이름으로 변환
-                korean_name = MenuService._get_style_korean_name(name)
+                # 한글 이름으로 변환 (DB의 display_name 우선 사용)
+                korean_name = display_name if display_name else MenuService._get_style_korean_name(name)
+                
                 # 한글 상세 설명 추가
-                korean_description = MenuService._get_style_description(style_code)
+                korean_description = description or MenuService._get_style_description(style_code)
 
                 # 스타일별 조리시간 조회
                 cooking_time = MenuService.get_cooking_time(menu_code, style_code)
@@ -435,7 +281,7 @@ class MenuService:
                     "name": korean_name,  # 한글 이름 사용
                     "price": final_price,
                     "cooking_time": cooking_time,  # 스타일별 조리시간 사용
-                    "description": korean_description or description or "",  # 한글 설명 우선 사용
+                    "description": korean_description,  # 한글 설명 우선 사용
                     "base_ingredients": base_ingredient_map.get(style_code, {}) if base_ingredient_map else {},
                     "available": availability_map.get(style_code, True)
                 })
@@ -499,8 +345,7 @@ class MenuService:
 
         rows = db.execute(query, {"menu_code": menu_code}).fetchall()
 
-        if not rows:
-            return MENU_BASE_INGREDIENTS.get(menu_code, {})
+        # Note: Removed fallback to MENU_BASE_INGREDIENTS as per refactoring plan
 
         style_map: dict[str, dict[str, int]] = {}
         for style, ingredient_code, base_quantity in rows:
@@ -533,14 +378,6 @@ class MenuService:
             if style_key not in result[code]:
                 result[code][style_key] = {}
             result[code][style_key][ingredient_code] = int(base_quantity)
-
-        if not result and menu_code:
-            fallback = MENU_BASE_INGREDIENTS.get(menu_code, {})
-            if fallback:
-                result[menu_code] = fallback
-
-        if not result and menu_code is None:
-            result = MENU_BASE_INGREDIENTS.copy()
 
         return result
 
@@ -640,7 +477,7 @@ class MenuService:
 
     @staticmethod
     def _get_style_korean_name(style: str) -> str:
-        """스타일 영문명을 한글로 변환"""
+        """스타일 영문명을 한글로 변환 (폴백용)"""
         style_names = {
             "simple": "심플",
             "grand": "그랜드",
@@ -650,7 +487,7 @@ class MenuService:
 
     @staticmethod
     def _get_style_english_name(korean_style: str) -> str:
-        """스타일 한글명을 영문으로 변환"""
+        """스타일 한글명을 영문으로 변환 (폴백용)"""
         korean_to_english = {
             "심플": "simple",
             "그랜드": "grand",
@@ -660,7 +497,7 @@ class MenuService:
 
     @staticmethod
     def _get_style_description(style: str) -> str:
-        """스타일별 상세 설명"""
+        """스타일별 상세 설명 (폴백용)"""
         descriptions = {
             "simple": "플라스틱 접시와 플라스틱 컵, 종이 냅킨이 플라스틱 쟁반에 제공",
             "grand": "도자기 접시와 도자기 컵, 흰색 면 냅킨이 나무 쟁반에 제공",
@@ -699,6 +536,10 @@ class MenuService:
             }
 
             for idx, (code, config) in enumerate(menu_data.items(), 1):
+                # 메인 디너 메뉴만 포함 (사이드 디시 제외)
+                if code not in MenuService.MAIN_DINNER_MENU_CODES:
+                    continue
+                    
                 base_price = base_prices.get(code, 50000)
                 styles = MenuService._build_styles_info(
                     code,
@@ -731,3 +572,17 @@ class MenuService:
                 "error": "메뉴 데이터를 불러올 수 없습니다.",
                 "data": []
             }
+    
+    @staticmethod
+    def get_all_ingredients(db: Session) -> list[dict[str, Any]]:
+        """모든 재료 정보 조회 (화면 표시용)"""
+        query = text("SELECT name, display_name, category FROM ingredients ORDER BY category, name")
+        rows = db.execute(query).fetchall()
+        return [{"code": row[0], "display_name": row[1] or row[0], "category": row[2]} for row in rows]
+
+    @staticmethod
+    def get_serving_styles(db: Session) -> list[dict[str, Any]]:
+        """모든 서빙 스타일 정보 조회 (화면 표시용)"""
+        query = text("SELECT name, display_name, description FROM serving_styles ORDER BY name")
+        rows = db.execute(query).fetchall()
+        return [{"code": row[0], "display_name": row[1] or row[0], "description": row[2]} for row in rows]

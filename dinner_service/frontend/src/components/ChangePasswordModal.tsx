@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface ChangePasswordModalProps {
@@ -30,6 +30,25 @@ export default function ChangePasswordModal({ isOpen, onClose, onSuccess }: Chan
     }
   }, [isOpen])
 
+  // 모달 초기화
+  const resetForm = useCallback(() => {
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setShowCurrentPassword(false)
+    setShowNewPassword(false)
+    setShowConfirmPassword(false)
+    setError(null)
+    setSuccess(false)
+  }, [])
+
+  const handleClose = useCallback(() => {
+    if (!loading) {
+      resetForm()
+      onClose()
+    }
+  }, [loading, resetForm, onClose])
+
   // Escape 키로 모달 닫기
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -40,26 +59,7 @@ export default function ChangePasswordModal({ isOpen, onClose, onSuccess }: Chan
 
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen, loading])
-
-  // 모달 초기화
-  const resetForm = () => {
-    setCurrentPassword('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setShowCurrentPassword(false)
-    setShowNewPassword(false)
-    setShowConfirmPassword(false)
-    setError(null)
-    setSuccess(false)
-  }
-
-  const handleClose = () => {
-    if (!loading) {
-      resetForm()
-      onClose()
-    }
-  }
+  }, [isOpen, loading, handleClose])
 
   // 폼 검증
   const validateForm = (): string | null => {

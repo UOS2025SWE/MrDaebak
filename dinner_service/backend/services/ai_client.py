@@ -63,14 +63,14 @@ class AIClient:
         max_tokens: int = 512,
         temperature: float = 0.7
     ) -> str:
-        payload = {
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature
-        }
+            payload = {
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature
+            }
         
-        result = await self._send_request("chat_completion", payload)
-        return result.get("content", "")
+            result = await self._send_request("chat_completion", payload)
+            return result.get("content", "")
 
     async def generate_image(
         self, 
@@ -78,15 +78,15 @@ class AIClient:
         width: int = 1024, 
         height: int = 1024
     ) -> tuple[bytes, str]:
-        payload = {
-            "prompt": prompt,
+            payload = {
+                "prompt": prompt,
             "width": width,
             "height": height
-        }
+            }
         
-        result = await self._send_request("generate_image", payload, timeout=120)
-        image_b64 = result.get("image_data")
-        return base64.b64decode(image_b64), "image/png"
+            result = await self._send_request("generate_image", payload, timeout=120)
+            image_b64 = result.get("image_data")
+            return base64.b64decode(image_b64), "image/png"
 
 ai_client = None
 

@@ -135,7 +135,7 @@ export default function ProfilePage() {
     } finally {
       setLoading(false)
     }
-  }, [authLoading, isAuthenticated, user?.id, isStaffAccount, isAdminAccount, router])
+  }, [user?.id, isStaffAccount, isAdminAccount, router])
 
   // 프로필 및 최근 주문 데이터 로드 (하이브리드 방식)
   useEffect(() => {
@@ -211,15 +211,8 @@ export default function ProfilePage() {
   }
 
   // 통합 사용자 데이터 (profile 우선, user fallback)
-  const getUserData = () => {
-    return {
-      id: profile?.id || user?.id,
-      email: profile?.email || user?.email,
-      name: profile?.name || user?.name,
-      role: profile?.is_admin ? 'admin' : user?.role || 'customer',
-      is_admin: profile?.is_admin || user?.is_admin || false
-    }
-  }
+  // const getUserData = () => { ... } // Unused function
+
 
   // AuthContext 로딩 중이거나 최근 주문 로딩 중일 때
   if (authLoading || loading) {

@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS ingredient_intake_batches (
 CREATE TABLE IF NOT EXISTS ingredients (
     ingredient_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL UNIQUE,
+    display_name TEXT,
+    category VARCHAR(50),
     unit TEXT NOT NULL DEFAULT 'piece',
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -116,15 +118,19 @@ CREATE INDEX IF NOT EXISTS idx_side_dishes_available ON side_dishes(is_available
 CREATE TABLE IF NOT EXISTS serving_styles (
     serving_style_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL UNIQUE,
+    display_name TEXT,
     description TEXT,
     price_modifier NUMERIC(10, 2) DEFAULT 0
 );
 
-INSERT INTO serving_styles (name, description, price_modifier) VALUES
-    ('simple', '플라스틱 접시·플라스틱 컵·종이 냅킨이 플라스틱 쟁반에 제공되며, 와인 포함 시 플라스틱 와인잔을 사용합니다.', 0),
-    ('grand', '도자기 접시·도자기 컵·흰색 면 냅킨이 나무 쟁반에 제공되며, 와인 포함 시 플라스틱 와인잔을 사용합니다.', 5000),
-    ('deluxe', '꽃병 장식과 함께 도자기 접시·도자기 컵·린넨 냅킨이 나무 쟁반에 제공되며, 와인 포함 시 유리 와인잔을 사용합니다.', 10000)
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO serving_styles (name, display_name, description, price_modifier) VALUES
+    ('simple', '심플', '플라스틱 접시·플라스틱 컵·종이 냅킨이 플라스틱 쟁반에 제공되며, 와인 포함 시 플라스틱 와인잔을 사용합니다.', 0),
+    ('grand', '그랜드', '도자기 접시·도자기 컵·흰색 면 냅킨이 나무 쟁반에 제공되며, 와인 포함 시 플라스틱 와인잔을 사용합니다.', 10000),
+    ('deluxe', '디럭스', '꽃병 장식과 함께 도자기 접시·도자기 컵·린넨 냅킨이 나무 쟁반에 제공되며, 와인 포함 시 유리 와인잔을 사용합니다.', 20000)
+ON CONFLICT (name) DO UPDATE SET
+    display_name = EXCLUDED.display_name,
+    description = EXCLUDED.description,
+    price_modifier = EXCLUDED.price_modifier;
 
 CREATE TABLE IF NOT EXISTS menu_items (
     menu_item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -137,11 +143,10 @@ CREATE TABLE IF NOT EXISTS menu_items (
 );
 
 INSERT INTO menu_items (code, name, description, base_price) VALUES
-    ('valentine', '발렌타인 디너', '로맨틱한 발렌타인 디너 세트', 30000),
-    ('french', '프렌치 디너', '정통 프렌치 코스 구성', 40000),
-    ('english', '잉글리시 디너', '클래식 영국식 디너 코스', 45000),
-    ('champagne', '샴페인 축제 디너', '샴페인과 함께 하는 축제 디너', 50000),
-    ('cake', '커스터마이징 케이크', '이미지 업로드와 맞춤 장식을 지원하는 고정 메뉴 케이크', 42000)
+    ('valentine', '발렌타인 디너', '로맨틱한 발렌타인 디너 세트', 40000),
+    ('french', '프렌치 디너', '정통 프렌치 코스 구성', 50000),
+    ('english', '잉글리시 디너', '클래식 영국식 디너 코스', 60000),
+    ('champagne', '샴페인 축제 디너', '샴페인과 함께 하는 축제 디너', 80000)
 ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS menu_serving_style_availability (
@@ -266,48 +271,50 @@ CREATE TABLE IF NOT EXISTS custom_cake_recipes (
 CREATE INDEX IF NOT EXISTS idx_custom_cake_recipes_flavor_size
     ON custom_cake_recipes(flavor, size);
 
-INSERT INTO ingredients (name, unit) VALUES
-    ('premium_steak', 'piece'),
-    ('fresh_shrimp', 'piece'),
-    ('truffle', 'piece'),
-    ('herbs', 'bunch'),
-    ('vegetables', 'kg'),
-    ('olive_oil', 'bottle'),
-    ('cheese', 'piece'),
-    ('champagne', 'bottle'),
-    ('heart_plate', 'piece'),
-    ('cupid_decoration', 'piece'),
-    ('napkin', 'piece'),
-    ('wine', 'bottle'),
-    ('coffee', 'cup'),
-    ('fresh_salad', 'bowl'),
-    ('scrambled_eggs', 'portion'),
-    ('bacon', 'strip'),
-    ('bread', 'piece'),
-    ('champagne_bottle', 'bottle'),
-    ('baguette', 'piece'),
-    ('coffee_pot', 'pot'),
-    ('plastic_plate', 'piece'),
-    ('plastic_cup', 'piece'),
-    ('paper_napkin', 'piece'),
-    ('plastic_tray', 'piece'),
-    ('ceramic_plate', 'piece'),
-    ('ceramic_cup', 'piece'),
-    ('cotton_napkin', 'piece'),
-    ('wooden_tray', 'piece'),
-    ('plastic_wine_glass', 'piece'),
-    ('glass_wine_glass', 'piece'),
-    ('linen_napkin', 'piece'),
-    ('vase_with_flowers', 'piece'),
-    ('cake_base', 'piece'),
-    ('buttercream_frosting', 'portion'),
-    ('fresh_berries', 'bowl'),
-    ('fondant', 'portion'),
-    ('edible_gold_leaf', 'sheet'),
-    ('chocolate_ganache', 'portion'),
-    ('cake_board', 'piece'),
-    ('edible_flowers', 'bunch')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO ingredients (name, display_name, category, unit) VALUES
+    ('premium_steak', '프리미엄 스테이크', 'food', 'piece'),
+    ('fresh_shrimp', '신선한 새우', 'food', 'piece'),
+    ('truffle', '트러플', 'food', 'piece'),
+    ('herbs', '허브', 'food', 'bunch'),
+    ('vegetables', '채소', 'food', 'kg'),
+    ('olive_oil', '올리브 오일', 'food', 'bottle'),
+    ('cheese', '치즈', 'food', 'piece'),
+    ('champagne', '샴페인', 'drink', 'bottle'),
+    ('heart_plate', '하트 모양 접시', 'tableware', 'piece'),
+    ('cupid_decoration', '큐피드 장식', 'tableware', 'piece'),
+    ('napkin', '냅킨', 'tableware', 'piece'),
+    ('wine', '와인', 'drink', 'bottle'),
+    ('coffee', '커피', 'drink', 'cup'),
+    ('fresh_salad', '신선한 샐러드', 'food', 'bowl'),
+    ('scrambled_eggs', '에그 스크램블', 'food', 'portion'),
+    ('bacon', '베이컨', 'food', 'strip'),
+    ('bread', '빵', 'food', 'piece'),
+    ('champagne_bottle', '샴페인', 'drink', 'bottle'),
+    ('baguette', '바게트빵', 'food', 'piece'),
+    ('coffee_pot', '커피 포트', 'tableware', 'pot'),
+    ('plastic_plate', '플라스틱 접시', 'tableware', 'piece'),
+    ('plastic_cup', '플라스틱 컵', 'tableware', 'piece'),
+    ('paper_napkin', '종이 냅킨', 'tableware', 'piece'),
+    ('plastic_tray', '플라스틱 쟁반', 'tableware', 'piece'),
+    ('ceramic_plate', '도자기 접시', 'tableware', 'piece'),
+    ('ceramic_cup', '도자기 컵', 'tableware', 'piece'),
+    ('cotton_napkin', '면 냅킨', 'tableware', 'piece'),
+    ('wooden_tray', '나무 쟁반', 'tableware', 'piece'),
+    ('plastic_wine_glass', '플라스틱 와인잔', 'tableware', 'piece'),
+    ('glass_wine_glass', '유리 와인잔', 'tableware', 'piece'),
+    ('linen_napkin', '린넨 냅킨', 'tableware', 'piece'),
+    ('vase_with_flowers', '꽃병 장식', 'tableware', 'piece'),
+    ('cake_base', '케이크 시트', 'food', 'piece'),
+    ('buttercream_frosting', '버터크림', 'food', 'portion'),
+    ('fresh_berries', '신선한 베리', 'food', 'bowl'),
+    ('fondant', '폰단트', 'food', 'portion'),
+    ('edible_gold_leaf', '식용 금박', 'food', 'sheet'),
+    ('chocolate_ganache', '초콜릿 가나슈', 'food', 'portion'),
+    ('cake_board', '케이크 보드', 'tableware', 'piece'),
+    ('edible_flowers', '식용 꽃', 'food', 'bunch')
+ON CONFLICT (name) DO UPDATE SET
+    display_name = EXCLUDED.display_name,
+    category = EXCLUDED.category;
 
 INSERT INTO ingredient_pricing (ingredient_code, unit_price) VALUES
     ('premium_steak', 18000),
@@ -502,35 +509,7 @@ INSERT INTO menu_base_ingredients (menu_code, style, ingredient_code, base_quant
     ('champagne', 'deluxe', 'baguette', 4),
     ('champagne', 'deluxe', 'coffee_pot', 1),
     ('champagne', 'deluxe', 'wine', 1),
-    ('champagne', 'deluxe', 'premium_steak', 2),
-    ('cake', 'simple', 'cake_base', 1),
-    ('cake', 'simple', 'buttercream_frosting', 1),
-    ('cake', 'simple', 'fresh_berries', 1),
-    ('cake', 'simple', 'cake_board', 1),
-    ('cake', 'simple', 'plastic_plate', 1),
-    ('cake', 'simple', 'plastic_tray', 1),
-    ('cake', 'simple', 'paper_napkin', 1),
-    ('cake', 'grand', 'cake_base', 1),
-    ('cake', 'grand', 'buttercream_frosting', 1),
-    ('cake', 'grand', 'fondant', 1),
-    ('cake', 'grand', 'fresh_berries', 1),
-    ('cake', 'grand', 'cake_board', 1),
-    ('cake', 'grand', 'ceramic_plate', 1),
-    ('cake', 'grand', 'ceramic_cup', 1),
-    ('cake', 'grand', 'cotton_napkin', 1),
-    ('cake', 'grand', 'wooden_tray', 1),
-    ('cake', 'deluxe', 'cake_base', 1),
-    ('cake', 'deluxe', 'buttercream_frosting', 1),
-    ('cake', 'deluxe', 'fondant', 1),
-    ('cake', 'deluxe', 'edible_gold_leaf', 1),
-    ('cake', 'deluxe', 'chocolate_ganache', 1),
-    ('cake', 'deluxe', 'edible_flowers', 1),
-    ('cake', 'deluxe', 'cake_board', 1),
-    ('cake', 'deluxe', 'ceramic_plate', 1),
-    ('cake', 'deluxe', 'ceramic_cup', 1),
-    ('cake', 'deluxe', 'linen_napkin', 1),
-    ('cake', 'deluxe', 'wooden_tray', 1),
-    ('cake', 'deluxe', 'vase_with_flowers', 1)
+    ('champagne', 'deluxe', 'premium_steak', 2)
 ON CONFLICT (menu_code, style, ingredient_code) DO UPDATE SET base_quantity = EXCLUDED.base_quantity;
 
 CREATE TABLE IF NOT EXISTS mock_payments (

@@ -9,7 +9,8 @@ from typing import Any, Iterable, Dict
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .menu_service import MENU_BASE_INGREDIENTS
+# Removed: from .menu_service import MENU_BASE_INGREDIENTS (as per DB grounding plan)
+# Replaced with DB-based lookups via MenuService or direct query if needed
 
 logger = logging.getLogger(__name__)
 
@@ -21,105 +22,48 @@ class SideDishService:
     CUSTOM_CAKE_NAME = "커스터마이징 케이크"
     CUSTOM_CAKE_DESCRIPTION = "맞춤 메시지와 이미지를 지원하는 케이크 옵션"
     DEFAULT_CAKE_STYLE = "simple"
-    CUSTOM_CAKE_FLAVORS: tuple[tuple[str, str], ...] = (
-        ("vanilla", "바닐라"),
-        ("chocolate", "초콜릿"),
-        ("red_velvet", "레드벨벳"),
-        ("green_tea", "녹차"),
-    )
-    CUSTOM_CAKE_SIZES: tuple[tuple[str, str], ...] = (
-        ("size_1", "1호 (2~3인)"),
-        ("size_2", "2호 (3~4인)"),
-        ("size_3", "3호 (4~6인)"),
-    )
-    DEFAULT_CUSTOM_CAKE_RECIPES: Dict[str, Dict[str, Dict[str, Decimal]]] = {
-        "vanilla": {
-            "size_1": {
-                "cake_base": Decimal("1.0"),
-                "buttercream_frosting": Decimal("1.0"),
-                "fresh_berries": Decimal("1.0"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_2": {
-                "cake_base": Decimal("1.5"),
-                "buttercream_frosting": Decimal("1.5"),
-                "fresh_berries": Decimal("1.2"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_3": {
-                "cake_base": Decimal("2.0"),
-                "buttercream_frosting": Decimal("2.0"),
-                "fresh_berries": Decimal("1.5"),
-                "cake_board": Decimal("1.0"),
-            },
-        },
-        "chocolate": {
-            "size_1": {
-                "cake_base": Decimal("1.0"),
-                "chocolate_ganache": Decimal("1.0"),
-                "fondant": Decimal("0.5"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_2": {
-                "cake_base": Decimal("1.5"),
-                "chocolate_ganache": Decimal("1.5"),
-                "fondant": Decimal("0.8"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_3": {
-                "cake_base": Decimal("2.0"),
-                "chocolate_ganache": Decimal("2.0"),
-                "fondant": Decimal("1.0"),
-                "cake_board": Decimal("1.0"),
-            },
-        },
-        "red_velvet": {
-            "size_1": {
-                "cake_base": Decimal("1.0"),
-                "buttercream_frosting": Decimal("1.0"),
-                "edible_flowers": Decimal("0.5"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_2": {
-                "cake_base": Decimal("1.5"),
-                "buttercream_frosting": Decimal("1.5"),
-                "edible_flowers": Decimal("0.8"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_3": {
-                "cake_base": Decimal("2.0"),
-                "buttercream_frosting": Decimal("2.0"),
-                "edible_flowers": Decimal("1.0"),
-                "cake_board": Decimal("1.0"),
-            },
-        },
-        "green_tea": {
-            "size_1": {
-                "cake_base": Decimal("1.0"),
-                "fondant": Decimal("0.6"),
-                "fresh_berries": Decimal("0.8"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_2": {
-                "cake_base": Decimal("1.5"),
-                "fondant": Decimal("0.9"),
-                "fresh_berries": Decimal("1.1"),
-                "cake_board": Decimal("1.0"),
-            },
-            "size_3": {
-                "cake_base": Decimal("2.0"),
-                "fondant": Decimal("1.2"),
-                "fresh_berries": Decimal("1.4"),
-                "cake_board": Decimal("1.0"),
-            },
-        },
-    }
+    
+    # Removed hardcoded dictionaries as they are now in the DB (custom_cake_recipes table)
+    # CUSTOM_CAKE_FLAVORS, CUSTOM_CAKE_SIZES, DEFAULT_CUSTOM_CAKE_RECIPES removed.
+
+    def get_valid_flavors(self, db: Session) -> list[dict[str, str]]:
+        """DB에서 유효한 케이크 맛 목록 조회"""
+        # Since we don't have a separate flavors table, we can extract distinct flavors from recipes
+        # Or simply return a standard list if we want to enforce specific options, but ideally this should be DB driven.
+        # For now, let's query distinct flavors from custom_cake_recipes
+        query = text("SELECT DISTINCT flavor FROM custom_cake_recipes ORDER BY flavor")
+        rows = db.execute(query).fetchall()
+        
+        # Mapping for display names (could also be in DB, but simple map here is safer than hardcoding entire recipes)
+        # Ideally flavor metadata table would be better, but extracting from recipes is a good start for grounding.
+        flavor_names = {
+            "vanilla": "바닐라",
+            "chocolate": "초콜릿",
+            "red_velvet": "레드벨벳",
+            "green_tea": "녹차"
+        }
+        
+        return [{"code": row[0], "name": flavor_names.get(row[0], row[0])} for row in rows]
+
+    def get_valid_sizes(self, db: Session) -> list[dict[str, str]]:
+        """DB에서 유효한 케이크 사이즈 목록 조회"""
+        query = text("SELECT DISTINCT size FROM custom_cake_recipes ORDER BY size")
+        rows = db.execute(query).fetchall()
+        
+        size_names = {
+            "size_1": "1호 (2~3인)",
+            "size_2": "2호 (3~4인)",
+            "size_3": "3호 (4~6인)"
+        }
+        
+        return [{"code": row[0], "name": size_names.get(row[0], row[0])} for row in rows]
 
     def ensure_custom_cake_side_dish(self, db: Session) -> None:
         """Ensure the custom cake side dish exists so it can be selected like other side dishes."""
         self._ensure_side_dish_schema(db)
         self._ensure_custom_cake_recipe_schema(db)
-        self._ensure_default_custom_cake_recipes(db)
+        # self._ensure_default_custom_cake_recipes(db) # Removed as seeding is now in init.sql
+
         try:
             check_query = text(
                 """
@@ -132,18 +76,8 @@ class SideDishService:
             if existing:
                 return
 
-            # Determine base price from cake menu if available
-            cake_menu_query = text(
-                """
-                SELECT menu_item_id::text, base_price
-                FROM menu_items
-                WHERE code = :code
-                """
-            )
-            cake_menu_row = db.execute(cake_menu_query, {"code": "cake"}).fetchone()
+            # Determine base price (default to 42000 if not found)
             base_price_decimal = Decimal("42000.00")
-            if cake_menu_row and cake_menu_row[1] is not None:
-                base_price_decimal = Decimal(str(cake_menu_row[1]))
 
             insert_side_dish = text(
                 """
@@ -173,24 +107,21 @@ class SideDishService:
                     return
                 side_dish_id = existing[0]
 
-            ingredient_rows_query = text(
+            # Get base ingredients for default configuration (vanilla size_1 is a reasonable default base)
+            # Or we can use the 'simple' style ingredients if we want to mimic the old behavior,
+            # but since 'cake' is no longer a menu, we should derive defaults from custom_cake_recipes or similar.
+            # Let's use vanilla size_1 as the "default side dish configuration"
+            
+            recipe_query = text(
                 """
-                SELECT ingredient_code, base_quantity
-                FROM menu_base_ingredients
-                WHERE menu_code = :menu_code AND style = :style
+                SELECT ingredient_code, quantity
+                FROM custom_cake_recipes
+                WHERE flavor = 'vanilla' AND size = 'size_1'
                 """
             )
-            ingredient_rows = db.execute(
-                ingredient_rows_query,
-                {"menu_code": "cake", "style": self.DEFAULT_CAKE_STYLE},
-            ).fetchall()
+            ingredient_rows = db.execute(recipe_query).fetchall()
 
-            if ingredient_rows:
-                base_ingredients = {row[0]: row[1] for row in ingredient_rows if row[0]}
-            else:
-                base_ingredients = (
-                    MENU_BASE_INGREDIENTS.get("cake", {}).get(self.DEFAULT_CAKE_STYLE, {})
-                )
+            base_ingredients = {row[0]: float(row[1]) for row in ingredient_rows}
 
             insert_ingredient = text(
                 """
@@ -679,7 +610,8 @@ class SideDishService:
 
     def get_custom_cake_recipes(self, db: Session) -> dict[str, Any]:
         self._ensure_custom_cake_recipe_schema(db)
-        self._ensure_default_custom_cake_recipes(db)
+        # Default recipe seeding is handled by init.sql now
+        
         query = text(
             """
             SELECT flavor, size, ingredient_code, quantity
@@ -829,17 +761,8 @@ class SideDishService:
             """
         )
         rows = db.execute(query, {"flavor": flavor, "size": size}).fetchall()
-        if not rows:
-            default_map = self.DEFAULT_CUSTOM_CAKE_RECIPES.get(flavor, {}).get(size, {})
-            if not default_map:
-                return []
-            return [
-                {
-                    "ingredient_code": ingredient_code,
-                    "quantity": float(quantity),
-                }
-                for ingredient_code, quantity in default_map.items()
-            ]
+        
+        # Fallback is removed as recipes are DB-grounded
         return [
             {
                 "ingredient_code": row[0],
@@ -868,34 +791,6 @@ class SideDishService:
 
         for statement in ddl_statements:
             db.execute(text(statement))
-        db.commit()
-
-    def _ensure_default_custom_cake_recipes(self, db: Session) -> None:
-        count_query = text("SELECT COUNT(1) FROM custom_cake_recipes")
-        total = db.execute(count_query).scalar() or 0
-        if total > 0:
-            return
-
-        insert_query = text(
-            """
-            INSERT INTO custom_cake_recipes (flavor, size, ingredient_code, quantity)
-            VALUES (:flavor, :size, :ingredient_code, :quantity)
-            ON CONFLICT (flavor, size, ingredient_code)
-            DO NOTHING
-            """
-        )
-        for flavor, size_map in self.DEFAULT_CUSTOM_CAKE_RECIPES.items():
-            for size, ingredient_map in size_map.items():
-                for ingredient_code, quantity in ingredient_map.items():
-                    db.execute(
-                        insert_query,
-                        {
-                            "flavor": flavor,
-                            "size": size,
-                            "ingredient_code": ingredient_code,
-                            "quantity": quantity,
-                        },
-                    )
         db.commit()
 
 

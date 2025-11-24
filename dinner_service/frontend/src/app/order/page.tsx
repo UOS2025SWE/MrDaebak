@@ -9,7 +9,7 @@ import Footer from '../../components/Footer'
 import type { EventMenuDiscount, OrderItem, PaymentModalProps } from '@/types/order'
 import type { MenuStyle } from '@/types/menu'
 import type { DiscountInfo } from '@/types/common'
-import { INGREDIENT_DISPLAY_NAMES, MENU_INGREDIENTS, TABLEWARE_CODES } from '@/utils/ingredients'
+import { INGREDIENT_DISPLAY_NAMES, TABLEWARE_CODES } from '@/utils/ingredients'
 
 const styleEnglishToKorean: Record<string, string> = {
   simple: '심플',
@@ -49,7 +49,7 @@ const calculateCustomizationCostPerSet = (
 }
 
 // 결제 완료 모달 컴포넌트
-function PaymentModal({ isOpen, onClose, orderData, finalPrice }: PaymentModalProps) {
+function PaymentModal({ isOpen, orderData, finalPrice }: PaymentModalProps) {
   const router = useRouter()
 
   if (!isOpen) return null
