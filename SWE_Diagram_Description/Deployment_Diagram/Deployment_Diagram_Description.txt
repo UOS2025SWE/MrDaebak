@@ -2,15 +2,14 @@ Dinner Service System 배치 다이어그램 설명
 
 ================================================================================
 
-Dinner Service 시스템은 여덟 개의 노드에 분산되어 배포된다.
+Dinner Service 시스템은 일곱 개의 노드에 분산되어 배포된다.
     Client Browser 노드
     Frontend Container 노드
     Backend Container 노드
     Database Container 노드
     Reverse Proxy Container 노드
-    Google Gemini API 노드
-    OpenAI API 노드
-    Mock Payment Gateway 노드
+    AI Server Container 노드
+    Redis Container 노드
 
 
 배치 다이어그램 구성 요소
@@ -52,7 +51,7 @@ API Routers 컴포넌트는 Component View에서 정의된 HTTP 요청 라우팅
 
 Domain Services 컴포넌트는 Component View에서 정의된 비즈니스 로직 캡슐화 계층이다. 10개의 Service가 도메인 규칙을 적용하고 비즈니스 기능을 제공하는 Service Layer 프로그램이다.
 
-Integration & Realtime 컴포넌트는 Component View에서 정의된 외부 서비스 통합 및 실시간 통신 계층이다. 4개의 Adapter가 외부 API를 호출하고 내부 도메인 모델로 변환하는 Adapter Layer 프로그램이다.
+Integration & Realtime 컴포넌트는 Component View에서 정의된 AI Server 통신 및 실시간 WebSocket 알림 계층이다. 3개의 Adapter가 Redis를 통해 AI Server와 통신하고 내부 도메인 모델로 변환하는 Adapter Layer 프로그램이다.
 
 Persistence 컴포넌트는 Component View에서 정의된 데이터베이스 연결 및 트랜잭션 관리 계층이다. Database, SessionLocal, Engine 모듈이 SQLAlchemy ORM으로 데이터베이스 작업을 추상화하는 Data Access Layer 프로그램이다.
 
@@ -79,27 +78,32 @@ caddy 아티팩트를 설치한다. HTTP/HTTPS 리버스 프록시로 SSL 종료
 Caddyfile 아티팩트를 설치한다. 라우팅 규칙과 TLS 설정을 정의하는 설정 파일이다. /customer, /admin 경로는 Frontend Container로, /api/*, /ws/* 경로는 Backend Container로 라우팅하며 Reverse Proxy Container를 구현한다.
 
 
-Google Gemini API 노드
+AI Server Container 노드 (dinner_service-ai-server)
 
-LLM, Stable Diffusion 컴포넌트를 배포한다.
+AI Server Container 노드는 Docker 컨테이너로 오픈소스 AI 모델을 실행하는 독립 워커 서비스이다.
 
-LLM 컴포넌트는 Component View에서 정의된 대화형 AI 서비스이다. 음성 주문 분석과 AI 응답 생성 기능을 제공하며 gemini-2.5-flash 모델을 사용한다. Integration & Realtime 컴포넌트의 GeminiService가 HTTPS로 호출한다.
+FastAPI 기반 Worker 프로세스를 실행하며, Redis 큐를 모니터링하고 AI 작업을 처리한다. 포트 8001을 노출하며, Health Check 엔드포인트를 제공한다.
 
-Stable Diffusion 컴포넌트는 Component View에서 정의된 이미지 생성 AI 서비스이다. 케이크 이미지 생성 및 편집 기능을 제공하며 gemini-2.5-flash-image 모델을 사용한다. Integration & Realtime 컴포넌트의 GeminiImageService가 HTTPS로 호출한다.
+구성 요소로는 AIWorker, Whisper STT Service, Qwen LLM Service, Stable Diffusion Image Service가 있다. AIWorker는 Redis 큐 모니터링 및 작업 분배 프로세스이다. Whisper STT Service는 음성을 텍스트로 변환하며 openai/whisper-large-v3 모델을 사용한다. Qwen LLM Service는 자연어 이해 및 대화 분석을 수행하며 Qwen/Qwen3-4B-Instruct-2507 모델을 vLLM 최적화로 실행한다. Stable Diffusion Image Service는 케이크 이미지를 생성하며 stabilityai/stable-diffusion-3.5-medium 모델을 사용한다.
 
+환경 변수로는 REDIS_HOST(기본값: redis), REDIS_PORT(기본값: 6379), MODEL_CACHE_DIR(기본값: /app/models), GPU_MEMORY_UTILIZATION(기본값: 0.9), WORKER_CONCURRENCY(기본값: 3)가 있다.
 
-OpenAI API 노드
+리소스 요구사항으로는 CPU 4 cores 이상 권장, Memory 16GB 이상 권장, GPU NVIDIA GPU (CUDA 11.8+) 권장 (CPU 모드도 지원), Disk 20GB 이상 (AI 모델 저장용)이 필요하다.
 
-STT, TTS 컴포넌트를 배포한다.
-
-STT 컴포넌트는 Component View에서 정의된 음성 인식 서비스이다. 음성을 텍스트로 변환하는 기능을 제공하며 gpt-4o-mini-transcribe 모델을 사용한다. Integration & Realtime 컴포넌트의 OpenAIAudioService가 HTTPS로 호출한다.
-
-TTS 컴포넌트는 Component View에서 정의된 음성 합성 서비스이다. 텍스트를 음성으로 변환하는 기능을 제공하며 gpt-4o-mini-tts 모델을 사용한다. Integration & Realtime 컴포넌트의 OpenAIAudioService가 HTTPS로 호출한다.
+의존성으로는 Redis Container와 연결되어 큐 및 pub/sub 통신을 수행한다.
 
 
-Mock Payment Gateway 노드
+Redis Container 노드 (dinner_service-redis)
 
-Mock Payment Gateway 노드는 외부 서비스로 결제 시뮬레이션을 제공한다. Integration & Realtime 컴포넌트의 PaymentService가 HTTPS로 호출하여 결제를 처리한다. 프로덕션 환경에서는 실제 PG사 API로 대체된다.
+Redis Container 노드는 Docker 컨테이너로 Backend와 AI Server 간의 메시지 큐 및 pub/sub 통신을 담당하는 인메모리 데이터베이스이다.
+
+Redis 7.x 버전을 사용하며, 포트 6379를 노출한다.
+
+구성 요소로는 ai:queue:stt, ai:queue:llm, ai:queue:image, ai:result:* 채널이 있다. ai:queue:stt는 STT 작업 요청 큐이고, ai:queue:llm은 LLM 분석 작업 요청 큐이며, ai:queue:image는 이미지 생성 작업 요청 큐이다. ai:result:* 채널은 작업 결과 pub/sub 채널이다.
+
+환경 변수로는 REDIS_PASSWORD(옵션), REDIS_MAXMEMORY(기본값: 2GB), REDIS_MAXMEMORY_POLICY(기본값: allkeys-lru)가 있다.
+
+리소스 요구사항으로는 Memory 2GB 이상 권장, Persistence AOF (Append Only File) 활성화가 필요하다.
 
 
 물리적 연결 및 통신 경로
@@ -112,16 +116,14 @@ Reverse Proxy Container와 Backend Container는 HTTP 프로토콜로 연결된�
 
 Backend Container와 Database Container는 TCP 프로토콜로 연결된다. 포트 5432를 사용하여 통신하며 PostgreSQL Wire Protocol로 데이터베이스 쿼리가 전송된다.
 
-Backend Container와 Google Gemini API는 HTTPS 프로토콜로 연결된다. Integration & Realtime 컴포넌트가 LLM과 Stable Diffusion 컴포넌트를 호출하여 AI 기능을 제공한다.
+Backend Container와 Redis Container는 TCP 프로토콜로 연결된다. 포트 6379를 사용하여 통신하며 RESP (Redis Serialization Protocol)를 사용한다. Backend의 AIClient는 Redis 큐(ai:queue:stt, ai:queue:llm, ai:queue:image)에 작업 요청을 전송하고, ai:result:{request_id} 채널을 구독하여 결과를 수신한다.
 
-Backend Container와 OpenAI API는 HTTPS 프로토콜로 연결된다. Integration & Realtime 컴포넌트가 STT와 TTS 컴포넌트를 호출하여 음성 처리 기능을 제공한다.
-
-Backend Container와 Mock Payment Gateway는 HTTPS 프로토콜로 연결된다. Integration & Realtime 컴포넌트가 결제 처리를 요청한다.
+Redis Container와 AI Server Container는 TCP 프로토콜로 연결된다. 포트 6379를 사용하여 통신하며 RESP (Redis Serialization Protocol)를 사용한다. AI Server의 Worker는 Redis 큐를 polling 방식으로 모니터링하고, brpop 명령을 사용하여 블로킹 방식으로 작업을 가져온다. 작업 처리 후 결과를 ai:result:{request_id} 채널에 발행하고, publish 명령을 사용하여 pub/sub 패턴으로 결과를 전송한다.
 
 
 배포 관계와 구현 관계
 
-배포 관계는 컴포넌트가 노드에 배포되는 관계를 나타낸다. <<deploy>> 스테레오타입으로 표시되며 논리적 소프트웨어 단위가 물리적 실행 환경에 설치됨을 의미한다. Customer Web App, Admin & Staff Web App, Common Components 컴포넌트는 Client Browser 노드에 배포되고, API Routers, Domain Services, Integration & Realtime, Persistence 컴포넌트는 Backend Container 노드에 배포된다. LLM, Stable Diffusion 컴포넌트는 Google Gemini API 노드에 배포되며, STT, TTS 컴포넌트는 OpenAI API 노드에 배포된다.
+배포 관계는 컴포넌트가 노드에 배포되는 관계를 나타낸다. <<deploy>> 스테레오타입으로 표시되며 논리적 소프트웨어 단위가 물리적 실행 환경에 설치됨을 의미한다. Customer Web App, Admin & Staff Web App, Common Components 컴포넌트는 Client Browser 노드에 배포되고, API Routers, Domain Services, Integration & Realtime, Persistence 컴포넌트는 Backend Container 노드에 배포된다. AIWorker, Whisper STT Service, Qwen LLM Service, Stable Diffusion Image Service 컴포넌트는 AI Server Container 노드에 배포된다.
 
 구현 관계는 아티팩트가 노드를 구현하는 관계를 나타낸다. <<implementation>> 스테레오타입으로 표시되며 물리적 파일이 실행 환경을 실제로 구성함을 의미한다. next-app.js, build/ 아티팩트는 Frontend Container 노드를 구현하고, main.py, uvicorn 아티팩트는 Backend Container 노드를 구현한다. postgres, pgdata/ 아티팩트는 Database Container 노드를 구현하며, caddy, Caddyfile 아티팩트는 Reverse Proxy Container 노드를 구현한다.
 

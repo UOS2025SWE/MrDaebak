@@ -5,7 +5,7 @@ actor Customer
 participant "Mr. Daebak System" as System
 
 == GUI Order Path ==
-Customer -> System: 1. Select menu and customize options\n(menu, style, quantity, customizations,\nside dishes, cake, delivery info, payment)
+Customer -> System: 1. Select menu and customize options\n(menu, style, quantity, customizations,\nside dishes, delivery info, payment)
 activate System
 System --> Customer: 2. Order confirmed\n(order_id, order_number, pricing, payment status)
 deactivate System

@@ -8,8 +8,8 @@ actor Cook as "Cook (Staff)"
 actor Delivery as "Delivery Staff"
 actor Manager as "Manager"
 actor PaymentSystem as "<<External API>>\nMock Payment"
-actor LLM as "<<External API>>\nLLM"
-actor AudioService as "<<External API>>\nSTT & TTS"
+actor LLM as "<<External API>>\nLLM (Qwen)"
+actor AudioService as "<<External API>>\nSTT (Whisper)"
 
 Staff <|-- Cook
 Staff <|-- Delivery

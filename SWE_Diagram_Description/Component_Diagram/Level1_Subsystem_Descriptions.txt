@@ -6,9 +6,7 @@ Dinner Service System Level 1 서브시스템 설명
 - Frontend 시스템
 - Backend 시스템
 - Database System
-- AI Services 시스템
-- Speech Services 시스템
-- Payment Integration 시스템
+- AI Server 시스템
 
 
 Frontend 시스템
@@ -35,28 +33,14 @@ Database System
 - Docker 환경에서 포트 15432를 사용하며 데이터베이스 이름은 dinner_service이다.
 
 
-AI Services 시스템
-- Google Gemini AI를 활용한 대화형 주문 시스템 및 이미지 생성 기능을 제공한다.
-- LLM 구성 요소는 음성 주문 분석, 7단계 주문 플로우 관리, 개인화 추천을 담당한다.
-- Image Generation 구성 요소는 케이크 커스터마이징을 위한 텍스트 기반 이미지 생성 및 편집 기능을 제공한다.
-- Google Gemini API (gemini-2.5-flash, gemini-2.5-flash-image 모델)를 사용한다.
-- google-genai Python SDK로 작성된다.
-
-
-Speech Services 시스템
-- OpenAI API를 활용한 음성 인식(STT) 및 음성 합성(TTS) 기능을 제공한다.
-- STT 구성 요소는 음성 파일을 텍스트로 변환하여 AI 주문 분석에 전달한다.
-- TTS 구성 요소는 AI 응답 텍스트를 음성으로 변환하여 고객에게 전달한다.
-- OpenAI API (gpt-4o-mini-transcribe, gpt-4o-mini-tts 모델)를 사용한다.
-- OpenAI Python SDK v1.x로 작성된다.
-
-
-Payment Integration 시스템
-- Mock Payment Gateway를 통한 결제 시뮬레이션 시스템으로 전체 결제 플로우를 검증한다.
-- 결제 처리, 결제 조회, 사용자 결제 내역 조회 기능을 제공한다.
-- 카드 정보 마스킹, 거래 ID 생성, 결제 상태 관리를 담당한다.
-- 프로덕션 환경에서는 실제 PG사 API로 전환 가능한 인터페이스 구조를 가진다.
-- Python (PaymentService 클래스)으로 작성된다.
+AI Server 시스템
+- Redis 큐를 통해 전달받은 AI 작업을 처리하는 독립 워커 서비스이다.
+- Worker 프로세스가 Redis 큐(ai:queue:stt, ai:queue:llm, ai:queue:image)를 모니터링하고 작업을 분배한다.
+- Whisper STT Service를 통해 음성을 텍스트로 변환한다(openai/whisper-large-v3).
+- Qwen LLM Service를 통해 자연어 이해 및 대화형 주문 분석을 수행한다(Qwen/Qwen3-4B-Instruct-2507).
+- Stable Diffusion Image Service를 통해 커스텀 케이크 이미지를 생성한다(stabilityai/stable-diffusion-3.5-medium).
+- 처리 결과를 Redis pub/sub 패턴으로 발행하여 Backend에 전달한다.
+- FastAPI, Python 3.13, vLLM, Transformers를 사용하여 작성된다.
 
 
 ================================================================================
@@ -80,28 +64,12 @@ Backend → PostgreSQL
 - PostgreSQL Wire Protocol을 사용한다.
 
 
-Backend → LLM
-- Backend의 GeminiService는 Google Gemini LLM API를 호출하여 음성 주문을 분석하고 AI 응답을 생성한다.
-- 과거 주문 이력과 이벤트 정보를 컨텍스트로 주입하여 개인화된 추천을 제공한다.
-- HTTPS 프로토콜과 google-genai SDK를 사용한다.
-
-
-Backend → Stable Diffusion (Image Generation)
-- Backend의 GeminiImageService는 Google Gemini Image API를 호출하여 케이크 이미지를 생성하고 편집한다.
-- 텍스트 기반 이미지 생성과 이미지 편집 기능을 제공한다.
-- HTTPS 프로토콜과 google-genai SDK를 사용한다.
-
-
-Backend → STT
-- Backend의 OpenAIAudioService는 OpenAI STT API를 호출하여 고객의 음성을 텍스트로 변환한다.
-- 변환된 텍스트는 Gemini LLM으로 전달되어 주문 의도를 분석한다.
-- HTTPS 프로토콜과 OpenAI Python SDK를 사용한다.
-
-
-Backend → TTS
-- Backend의 OpenAIAudioService는 OpenAI TTS API를 호출하여 AI 응답 텍스트를 음성으로 변환한다.
-- 생성된 음성은 Frontend로 전달되어 고객에게 재생된다.
-- HTTPS 프로토콜과 OpenAI Python SDK를 사용한다.
+Backend → AI Server
+- Backend의 AIClient는 Redis 큐를 통해 AI Server에 작업을 비동기로 요청한다.
+- STT 요청은 ai:queue:stt 큐로, LLM 요청은 ai:queue:llm 큐로, 이미지 생성 요청은 ai:queue:image 큐로 전송된다.
+- AI Server는 작업 처리 후 결과를 ai:result:{request_id} 채널에 발행한다.
+- Backend의 AIClient는 해당 채널을 구독하여 결과를 수신한다.
+- Redis 프로토콜을 사용한다.
 
 
 Backend → Mock Payment Gateway
@@ -112,4 +80,4 @@ Backend → Mock Payment Gateway
 
 ================================================================================
 
-이상으로 6개의 서브시스템과 의존관계에 대한 설명을 마친다.
+이상으로 4개의 서브시스템과 의존관계에 대한 설명을 마친다.

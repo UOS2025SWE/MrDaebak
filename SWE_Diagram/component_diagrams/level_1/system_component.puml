@@ -18,27 +18,12 @@ package "Database System" as DatabaseSys {
   package "PostgreSQL" as PostgreSQL
 }
 
-package "AI Services" as AISys {
-  package "LLM" as LLM
-  package "Image Generation" as ImageGeneration
-}
-
-package "Speech Services" as SpeechSys {
-  package "STT" as STT
-  package "TTS" as TTS
-}
-
-package "Payment Integration" as PaymentSys {
-  package "Mock Payment Gateway" as MockPayment
+package "AI Server" as AIServer {
 }
 
 Frontend ..> Backend
 
 Backend ..> PostgreSQL
-Backend ..> LLM
-Backend ..> ImageGeneration
-Backend ..> STT
-Backend ..> TTS
-Backend ..> MockPayment
+Backend ..> AIServer
 
 @enduml

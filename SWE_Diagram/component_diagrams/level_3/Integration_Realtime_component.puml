@@ -15,14 +15,12 @@ skinparam rectangle {
 component "Integration & Realtime" as IntegrationRealtimeComp {
 }
 
-rectangle "GeminiService" as GeminiService
-rectangle "GeminiImageService" as GeminiImageService
-rectangle "OpenAIAudioService" as OpenAIAudioService
+rectangle "AIClient" as AIClient
+rectangle "ConversationSession" as ConversationSession
 rectangle "WebSocketManager" as WebSocketManager
 
-GeminiService ..> IntegrationRealtimeComp
-GeminiImageService ..> IntegrationRealtimeComp
-OpenAIAudioService ..> IntegrationRealtimeComp
+AIClient ..> IntegrationRealtimeComp
+ConversationSession ..> IntegrationRealtimeComp
 WebSocketManager ..> IntegrationRealtimeComp
 
 @enduml

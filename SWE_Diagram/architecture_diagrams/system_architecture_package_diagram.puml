@@ -13,19 +13,19 @@ package "Menu & Inventory Domain" as MenuDomain {}
 package "Event & Discount Domain" as EventDomain {}
 package "User & Auth Domain" as UserDomain {}
 package "Staff Management Domain" as StaffMgmt {}
-package "AI & Realtime Domain" as AIDomain {}
+package "Voice & Realtime Domain" as VoiceDomain {}
 package "Database Layer" as DatabaseLayer {}
-package "External Systems" as ExternalSys <<external>> {}
+package "AI Server" as AIServer {}
 
 CustomerApp --> OrderDomain
 CustomerApp --> MenuDomain
 CustomerApp --> EventDomain
 CustomerApp --> UserDomain
-CustomerApp --> AIDomain
+CustomerApp --> VoiceDomain
 
 StaffApp --> OrderDomain
 StaffApp --> UserDomain
-StaffApp --> AIDomain
+StaffApp --> VoiceDomain
 
 AdminApp --> OrderDomain
 AdminApp --> MenuDomain
@@ -36,7 +36,6 @@ AdminApp --> StaffMgmt
 OrderDomain --> MenuDomain
 OrderDomain --> EventDomain
 OrderDomain --> DatabaseLayer
-OrderDomain --> ExternalSys
 
 MenuDomain --> DatabaseLayer
 
@@ -46,9 +45,7 @@ UserDomain --> DatabaseLayer
 
 StaffMgmt --> DatabaseLayer
 
-AIDomain --> DatabaseLayer
-AIDomain --> ExternalSys
-
-CustomerApp ..> ExternalSys
+VoiceDomain --> DatabaseLayer
+VoiceDomain ..> AIServer
 
 @enduml

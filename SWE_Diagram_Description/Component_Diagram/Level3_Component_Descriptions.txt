@@ -133,13 +133,25 @@ StaffService는 직원 계정을 생성 및 관리한다. create_staff 메서드
 
 Integration & Realtime 컴포넌트
 
-Integration & Realtime 컴포넌트는 4개의 Adapter 클래스로 구성되어 있다.
+Integration & Realtime 컴포넌트는 3개의 Adapter 클래스로 구성되어 있다.
 
-GeminiService는 Google Gemini LLM API를 호출한다. analyze_voice_order 메서드는 음성 텍스트를 받아 주문 의도를 분석하고, intent(order/inquiry/other), confidence(0.0-1.0), response, order_state를 반환한다. manage_conversation_session 메서드는 ConversationSession 객체를 관리하고, 대화 히스토리를 최근 3개 메시지로 제한한다. inject_order_history 메서드는 사용자의 과거 주문 이력을 컨텍스트에 주입하고, inject_active_events 메서드는 진행 중인 이벤트 정보를 주입한다. generate_personalized_recommendation 메서드는 과거 주문 패턴을 분석하여 개인화 추천을 생성한다. ConversationSession 클래스는 session_id, messages, context, order_state, created_at 속성을 가진다.
+AIClient는 Redis를 통해 AI Server와 비동기 통신을 수행한다.
 
-GeminiImageService는 Google Gemini Image API를 호출한다. generate_image 메서드는 텍스트 프롬프트와 가로세로 비율을 받아 이미지를 생성하고, 케이크 전용 가드레일을 자동으로 추가한다. edit_image 메서드는 원본 이미지를 Base64로 인코딩하여 API에 전송하고, 편집 프롬프트를 적용하여 수정된 이미지를 생성한다. save_image 메서드는 생성된 이미지를 backend/uploads/cakes/ 경로에 UUID 파일명으로 저장하고, 이미지 경로를 반환한다. validate_aspect_ratio 메서드는 가로세로 비율이 지원되는 값인지 검증한다(1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9).
+send_stt_request(audio_bytes, filename, mime_type, language) 메서드는 STT 작업 요청을 처리한다. 고유한 request_id를 UUID로 생성하고, 요청 데이터를 JSON 형태로 직렬화한다. 요청 JSON은 {"request_id": "...", "audio_bytes": base64_encoded, "filename": "...", "mime_type": "...", "language": "ko"} 형태이다. Redis의 lpush 명령을 사용하여 ai:queue:stt 큐의 왼쪽에 요청을 추가한다. wait_for_response(request_id, 30) 메서드를 호출하여 30초 동안 결과를 대기한다. AI Server의 Whisper STT Service가 처리한 트랜스크립트 텍스트를 반환한다.
 
-OpenAIAudioService는 OpenAI Audio API를 호출한다. transcribe_audio 메서드는 음성 파일을 받아 텍스트로 변환하고, MIME 타입을 자동으로 감지한다(audio/webm, audio/mp3, audio/wav). BytesIO 버퍼로 변환하여 API에 전송하고, language="ko"로 한국어 인식을 최적화한다. synthesize_speech 메서드는 텍스트를 받아 음성으로 변환하고, voice 파라미터로 음성 옵션을 선택한다(nova, alloy, echo, fable, onyx, shimmer). response_format="mp3"로 MP3 출력을 생성하고, to_bytes() 또는 read() 또는 data 속성으로 바이너리를 추출한다. handle_api_error 메서드는 API 오류를 처리하고, exponential backoff로 재시도를 수행한다.
+send_llm_request(transcript, user_id, session_id, context, db) 메서드는 LLM 분석 작업 요청을 처리한다. get_user_order_history(user_id, db) 메서드로 사용자의 과거 주문 이력을 조회한다. 자주 주문한 메뉴, 선호 스타일, 평균 주문 금액 등의 정보를 추출한다. get_active_events(db) 메서드로 현재 진행 중인 이벤트 목록을 조회한다. 이벤트 정보를 LLM 프롬프트에 포함하여 할인 혜택을 안내한다. 고유한 request_id를 생성하고, 요청 데이터를 JSON 형태로 직렬화한다. 요청 JSON은 {"request_id": "...", "transcript": "...", "user_id": "...", "session_id": "...", "context": {...}, "user_history": {...}, "events": [...]} 형태이다. Redis의 lpush 명령을 사용하여 ai:queue:llm 큐의 왼쪽에 요청을 추가한다. wait_for_response(request_id, 60) 메서드를 호출하여 60초 동안 결과를 대기한다. AI Server의 Qwen LLM Service가 처리한 분석 결과를 VoiceAnalysisResponse 객체로 파싱하여 반환한다.
+
+send_image_request(prompt, aspect_ratio) 메서드는 이미지 생성 작업 요청을 처리한다. 고유한 request_id를 생성하고, 요청 데이터를 JSON 형태로 직렬화한다. 요청 JSON은 {"request_id": "...", "prompt": "...", "aspect_ratio": "1:1"} 형태이다. Redis의 lpush 명령을 사용하여 ai:queue:image 큐의 왼쪽에 요청을 추가한다. wait_for_response(request_id, 120) 메서드를 호출하여 120초 동안 결과를 대기한다. AI Server의 Stable Diffusion Image Service가 처리한 이미지 바이트 데이터를 base64 디코딩하여 반환한다.
+
+wait_for_response(request_id, timeout) 메서드는 Redis pub/sub 패턴을 사용하여 결과를 대기한다. ai:result:{request_id} 채널을 구독하고, timeout 시간 동안 메시지를 polling한다. 결과 메시지를 수신하면 JSON을 파싱하여 반환한다. 결과 JSON은 {"status": "success", "data": {...}} 또는 {"status": "error", "error": "..."} 형태이다. timeout이 발생하면 TimeoutError 예외를 발생시킨다. 에러 결과를 수신하면 해당 에러 메시지를 포함한 예외를 발생시킨다.
+
+Redis Client 인터페이스에 의존하여 Redis 서버와 통신한다. lpush(queue_name, message) 함수로 큐에 메시지를 추가한다. subscribe(channel_name) 함수로 채널을 구독한다. get_message(timeout) 함수로 메시지를 수신한다.
+
+ConversationSession은 음성 주문 대화 세션을 로컬에서 관리한다. session_id, user_id, messages, context, order_state, created_at, last_activity 속성을 가진다. session_id는 UUID로 생성되고, user_id는 주문자의 사용자 ID이다. messages는 대화 히스토리를 저장하는 리스트로 {"role": "user/assistant", "content": "..."} 형태의 딕셔너리를 포함한다. context는 현재 대화 컨텍스트를 저장하는 딕셔너리이다. order_state는 주문 상태를 저장하는 딕셔너리로 {"stage": "initial/menu_selected/style_selected/...", "menu_code": "...", "style": "...", "quantity": 1, ...} 형태이다. created_at은 세션 생성 시간이고, last_activity는 마지막 활동 시간이다.
+
+add_message(role, content) 메서드는 대화 메시지를 messages 리스트에 추가하고, last_activity를 현재 시간으로 업데이트한다. get_context_summary() 메서드는 context 딕셔너리를 문자열로 요약하여 반환한다. update_order_state(**kwargs) 메서드는 order_state 딕셔너리를 업데이트하고, last_activity를 현재 시간으로 업데이트한다. advance_stage(new_stage) 메서드는 order_state의 stage를 new_stage로 전환하고, OrderStage Enum으로 유효성을 검증한다. is_expired(timeout_minutes) 메서드는 last_activity와 현재 시간의 차이가 timeout_minutes를 초과하면 True를 반환한다. to_dict() 메서드는 세션 정보를 딕셔너리로 직렬화하여 반환한다.
+
+세션은 메모리에 저장되며, sessions = {} 딕셔너리로 관리된다. get_or_create_session(session_id, user_id) 함수는 session_id로 세션을 조회하고, 없으면 새로 생성한다. cleanup_expired_sessions(timeout_minutes) 함수는 만료된 세션을 정기적으로 삭제한다.
 
 WebSocketManager는 WebSocket 연결을 관리한다. accept_connection 메서드는 WebSocket 연결을 수락하고, JWT 토큰으로 인증을 수행한다. 연결을 connection pool에 추가하고, 사용자 ID와 역할을 매핑한다. broadcast_order_update 메서드는 주문 상태 변경 메시지를 모든 연결에 브로드캐스트하고, 역할별 필터링을 적용한다(Cook에게는 조리 관련 알림만, Delivery에게는 배달 관련 알림만, Customer에게는 본인 주문만). send_message 메서드는 특정 연결에 메시지를 전송하고, close_connection 메서드는 연결을 종료하고 connection pool에서 제거한다. handle_disconnect 메서드는 연결 끊김을 감지하고, 재연결 로직을 수행한다.
 

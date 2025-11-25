@@ -27,10 +27,10 @@ component "Domain Services\n(from Component View)" as DomainServices
 component "Integration & Realtime\n(from Component View)" as IntegrationRealtime
 component "Persistence\n(from Component View)" as Persistence
 
-component "LLM\n(from Component View)" as LLM
-component "Stable Diffusion\n(from Component View)" as StableDiffusion
-component "STT\n(from Component View)" as STT
-component "TTS\n(from Component View)" as TTS
+component "AIWorker\n(from Component View)" as AIWorker
+component "Whisper STT Service\n(from Component View)" as WhisperSTT
+component "Qwen LLM Service\n(from Component View)" as QwenLLM
+component "Stable Diffusion Image Service\n(from Component View)" as StableDiffusion
 
 
 ' ==========================================
@@ -62,11 +62,9 @@ node "Database Container\n(dinner_service_db)" as DatabaseContainer
 
 node "Reverse Proxy Container\n(dinner_service_caddy)" as ReverseProxyContainer
 
-node "Google Gemini API\n(External SaaS)" as GeminiAPI
+node "AI Server Container\n(dinner_service-ai-server)" as AIServerContainer
 
-node "OpenAI API\n(External SaaS)" as OpenAIAPI
-
-node "Mock Payment Gateway\n(External Service)" as PaymentGW
+node "Redis Container\n(dinner_service-redis)" as RedisContainer
 
 
 ' ==========================================
@@ -76,9 +74,8 @@ ClientBrowser -- ReverseProxyContainer : HTTP/HTTPS\n(80, 443)
 ReverseProxyContainer -- FrontendContainer : HTTP\n(3000)
 ReverseProxyContainer -- BackendContainer : HTTP\n(8000)
 BackendContainer -- DatabaseContainer : TCP\n(5432)
-BackendContainer -- GeminiAPI : HTTPS
-BackendContainer -- OpenAIAPI : HTTPS
-BackendContainer -- PaymentGW : HTTPS
+BackendContainer -- RedisContainer : TCP\n(6379, RESP)
+RedisContainer -- AIServerContainer : TCP\n(6379, RESP)
 
 
 ' ==========================================
@@ -93,11 +90,10 @@ DomainServices ..> BackendContainer : <<deploy>>
 IntegrationRealtime ..> BackendContainer : <<deploy>>
 Persistence ..> BackendContainer : <<deploy>>
 
-LLM ..> GeminiAPI : <<deploy>>
-StableDiffusion ..> GeminiAPI : <<deploy>>
-
-STT ..> OpenAIAPI : <<deploy>>
-TTS ..> OpenAIAPI : <<deploy>>
+AIWorker ..> AIServerContainer : <<deploy>>
+WhisperSTT ..> AIServerContainer : <<deploy>>
+QwenLLM ..> AIServerContainer : <<deploy>>
+StableDiffusion ..> AIServerContainer : <<deploy>>
 
 
 ' ==========================================
@@ -126,8 +122,9 @@ ApiRouters -[hidden]right- DomainServices
 DomainServices -[hidden]right- IntegrationRealtime
 IntegrationRealtime -[hidden]right- Persistence
 
-LLM -[hidden]right- StableDiffusion
-STT -[hidden]right- TTS
+AIWorker -[hidden]right- WhisperSTT
+WhisperSTT -[hidden]right- QwenLLM
+QwenLLM -[hidden]right- StableDiffusion
 
 NextServer -[hidden]right- BuildDir
 MainPy -[hidden]right- Uvicorn
@@ -139,12 +136,12 @@ ApiRouters -[hidden]down- BackendContainer
 NextServer -[hidden]down- FrontendContainer
 PostgresExe -[hidden]down- DatabaseContainer
 CaddyExe -[hidden]down- ReverseProxyContainer
-LLM -[hidden]down- GeminiAPI
-STT -[hidden]down- OpenAIAPI
+AIWorker -[hidden]down- AIServerContainer
 
 ClientBrowser -[hidden]right- ReverseProxyContainer
 FrontendContainer -[hidden]right- BackendContainer
 BackendContainer -[hidden]right- DatabaseContainer
-GeminiAPI -[hidden]right- OpenAIAPI
+DatabaseContainer -[hidden]right- RedisContainer
+RedisContainer -[hidden]right- AIServerContainer
 
 @enduml

@@ -1,0 +1,106 @@
+11 "AI Server" 서브시스템 세부 설계
+
+"AI Server" 시스템은 Redis 큐를 통해 전달받은 AI 작업을 처리하는 독립 워커 서비스이다.
+
+음성을 텍스트로 변환하는 STT(Speech-to-Text) 기능을 제공한다.
+자연어 이해 및 대화형 주문 분석을 수행하는 LLM 기능을 제공한다.
+커스텀 케이크 이미지를 생성하는 이미지 생성 기능을 제공한다.
+Worker 프로세스가 Redis 큐를 모니터링하고, 작업 타입에 따라 적절한 서비스로 분배한다.
+처리 결과를 Redis pub/sub 패턴으로 발행하여 Voice & Realtime Domain에 전달한다.
+오픈소스 AI 모델(Whisper, Qwen, Stable Diffusion)을 로컬에서 실행한다.
+vLLM을 사용하여 LLM 추론 성능을 최적화한다.
+
+"AI Server" 시스템은 아래와 같은 중요한 워커와 서비스들로 구성되어 있다.
+
+AIWorker
+Redis 큐를 모니터링하고 작업을 분배하는 메인 워커 프로세스이다.
+monitor_queue() 함수는 ai:queue:stt, ai:queue:llm, ai:queue:image 큐를 모니터링한다.
+각 큐에서 작업을 polling 방식으로 가져오며, brpop 명령을 사용하여 블로킹 방식으로 대기한다.
+작업을 수신하면 task_type을 확인하여 WhisperSTTService, QwenLLMService, StableDiffusionImageService 중 적절한 서비스로 분배한다.
+dispatch_task(task_type, payload) 함수는 작업 타입에 따라 적절한 서비스로 작업을 전달한다.
+task_type이 "stt"인 경우 WhisperSTTService.transcribe()를 호출한다.
+task_type이 "llm"인 경우 QwenLLMService.analyze_voice_order()를 호출한다.
+task_type이 "image"인 경우 StableDiffusionImageService.generate_cake_image()를 호출한다.
+처리 결과를 publish_result() 함수로 전달하여 Redis에 발행한다.
+publish_result(request_id, result) 함수는 처리 결과를 Redis pub/sub 패턴으로 발행한다.
+ai:result:{request_id} 채널에 결과를 JSON 형태로 발행한다.
+Voice & Realtime Domain의 AIClient가 이 채널을 구독하여 결과를 수신한다.
+에러 발생 시 에러 정보를 포함한 결과를 발행하여 클라이언트가 에러를 처리할 수 있도록 한다.
+start() 함수는 워커 프로세스를 시작하고, monitor_queue()를 무한 루프로 실행한다.
+stop() 함수는 워커 프로세스를 종료하고, 진행 중인 작업을 완료한 후 안전하게 종료한다.
+
+
+11.1 메인 클래스도
+
+WhisperSTTService (services/whisper_stt_service.py)
+
+WhisperSTTService는 Whisper 모델을 사용하여 음성을 텍스트로 변환하는 서비스 클래스이다.
+model 변수에 로드된 Whisper 모델을 저장하며, openai/whisper-large-v3 모델을 사용한다.
+processor 변수에 Whisper 프로세서를 저장하며, 음성 데이터를 모델 입력 형태로 변환한다.
+device 변수에 실행 디바이스를 저장하며, "cuda" 또는 "cpu"를 사용한다.
+transcribe(audio_bytes, filename, mime_type, language) 함수는 음성 파일을 텍스트로 변환한다.
+audio_bytes를 디코딩하여 numpy 배열로 변환하고, 샘플링 레이트를 16kHz로 리샘플링한다.
+processor를 사용하여 음성 데이터를 모델 입력 형태로 변환한다.
+Whisper 모델을 실행하여 음성을 텍스트로 변환하고, 디코딩된 텍스트를 반환한다.
+language 파라미터가 제공되면 해당 언어로 강제 인식하고, null인 경우 자동 감지한다.
+한국어 음성 인식에 최적화되어 있으며, 영어, 일본어 등 다국어도 지원한다.
+load_model() 함수는 Whisper 모델을 로드하고 초기화한다.
+transformers 라이브러리의 AutoModelForSpeechSeq2Seq를 사용하여 모델을 로드한다.
+모델을 GPU로 로드하거나, GPU가 없는 경우 CPU로 로드한다.
+float16 정밀도로 모델을 로드하여 메모리 사용량을 최적화한다.
+unload_model() 함수는 메모리에서 모델을 해제한다.
+
+QwenLLMService (services/qwen_llm_service.py)
+
+QwenLLMService는 Qwen 모델을 사용하여 자연어 이해 및 대화형 주문 분석을 수행하는 서비스 클래스이다.
+model 변수에 로드된 Qwen 모델을 저장하며, Qwen/Qwen3-4B-Instruct-2507 모델을 사용한다.
+tokenizer 변수에 Qwen 토크나이저를 저장하며, 텍스트를 토큰으로 변환한다.
+llm 변수에 vLLM 엔진을 저장하며, 추론 성능을 최적화한다.
+analyze_voice_order(transcript, context, user_history, events) 함수는 음성 텍스트를 분석하여 주문 의도를 파악한다.
+사용자의 음성 트랜스크립트, 대화 컨텍스트, 과거 주문 이력, 진행 중인 이벤트를 프롬프트에 포함한다.
+Qwen 모델을 사용하여 사용자 의도를 분석하고, "order"(주문), "inquiry"(문의), "recommendation"(추천 요청) 등으로 분류한다.
+의도 분석 신뢰도를 0.0~1.0 범위로 계산하고, AI 응답 메시지를 생성한다.
+추천 메뉴, 대안 메뉴, 추가 질문, 주문 상태 정보를 포함한 분석 결과를 반환한다.
+대화 진행 상태(greeting, menu_selection, style_selection, customization, confirmation)를 판단하고, 다음 단계로 전환 여부를 결정한다.
+generate_personalized_recommendation(user_history, events) 함수는 과거 주문 이력과 이벤트 정보를 기반으로 개인화된 메뉴 추천을 생성한다.
+사용자가 자주 주문한 메뉴, 선호 스타일, 평균 주문 금액을 분석하여 추천 메뉴를 선정한다.
+진행 중인 이벤트 정보를 포함하여 할인 혜택을 안내한다.
+추천 이유를 자연어로 생성하여 사용자에게 설명한다.
+build_prompt(transcript, context, user_history, events) 함수는 Qwen 모델에 전달할 프롬프트를 구성한다.
+시스템 메시지에 주문 시스템의 역할과 목표를 설명한다.
+사용자 정보, 과거 주문 이력, 진행 중인 이벤트, 이전 대화 내용, 현재 주문 상태를 컨텍스트로 포함한다.
+JSON 형식의 응답을 요청하며, intent, confidence, response, analysis, recommended_menu, alternatives, additional_questions, order_state, state를 포함하도록 지시한다.
+load_model() 함수는 Qwen 모델과 vLLM 엔진을 로드하고 초기화한다.
+vLLM 라이브러리의 LLM 클래스를 사용하여 모델을 로드한다.
+tensor_parallel_size, gpu_memory_utilization 등의 파라미터로 성능을 최적화한다.
+float16 정밀도로 모델을 로드하여 메모리 사용량을 최적화한다.
+unload_model() 함수는 메모리에서 모델을 해제한다.
+
+StableDiffusionImageService (services/stable_diffusion_image_service.py)
+
+StableDiffusionImageService는 Stable Diffusion 모델을 사용하여 커스텀 케이크 이미지를 생성하는 서비스 클래스이다.
+pipeline 변수에 로드된 Stable Diffusion 파이프라인을 저장하며, stabilityai/stable-diffusion-3.5-medium 모델을 사용한다.
+device 변수에 실행 디바이스를 저장하며, "cuda" 또는 "cpu"를 사용한다.
+generate_cake_image(prompt) 함수는 프롬프트를 기반으로 케이크 이미지를 생성한다.
+프롬프트에 케이크 관련 키워드를 자동으로 추가하여 생성 결과를 최적화한다.
+예: "초콜릿 케이크" → "A beautiful chocolate cake with elegant decoration, professional food photography, high quality, 4k"
+negative_prompt를 사용하여 원하지 않는 요소를 배제한다.
+예: "blurry, low quality, distorted, ugly, bad anatomy"
+이미지 크기를 512x512로 고정하고, guidance_scale=7.5, num_inference_steps=50으로 설정한다.
+생성된 이미지를 PIL Image 객체로 반환하고, BytesIO를 사용하여 바이트 데이터로 변환한다.
+이미지를 PNG 형식으로 저장하고, MIME 타입 "image/png"와 함께 반환한다.
+enhance_prompt(prompt) 함수는 사용자 프롬프트를 확장하여 이미지 생성 품질을 향상시킨다.
+케이크 관련 키워드, 스타일 키워드, 품질 키워드를 추가한다.
+부적절한 키워드를 필터링하고, 안전한 프롬프트로 변환한다.
+load_pipeline() 함수는 Stable Diffusion 파이프라인을 로드하고 초기화한다.
+diffusers 라이브러리의 StableDiffusionPipeline을 사용하여 파이프라인을 로드한다.
+파이프라인을 GPU로 로드하거나, GPU가 없는 경우 CPU로 로드한다.
+float16 정밀도로 파이프라인을 로드하여 메모리 사용량을 최적화한다.
+unload_pipeline() 함수는 메모리에서 파이프라인을 해제한다.
+
+Redis Client (인터페이스)
+
+"AI Server" 시스템의 모든 컴포넌트는 Redis Client 인터페이스를 통해 Redis 서버와 통신한다.
+AIWorker는 brpop(queue_name, timeout) 함수를 사용하여 Redis 큐에서 작업을 블로킹 방식으로 가져온다.
+AIWorker는 publish(channel_name, message) 함수를 사용하여 처리 결과를 Redis pub/sub 채널에 발행한다.
+이 인터페이스는 Redis 라이브러리(redis-py)를 통해 구현된다.

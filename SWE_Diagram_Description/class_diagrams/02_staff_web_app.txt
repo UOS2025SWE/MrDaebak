@@ -80,4 +80,4 @@ render(children) 함수는 인증된 직원에게만 자식 컴포넌트를 렌�
 Backend API (인터페이스)
 
 "Staff Web App" 시스템의 모든 페이지는 Backend API 인터페이스를 통해 백엔드 시스템과 통신한다.
-이 인터페이스는 실제로는 "Order & Checkout Domain", "User & Auth Domain", "AI & Realtime Domain" 등의 백엔드 시스템에 구현되어 있다.
+이 인터페이스는 실제로는 "Order & Checkout Domain", "User & Auth Domain", "Voice & Realtime Domain" 등의 백엔드 시스템에 구현되어 있다.

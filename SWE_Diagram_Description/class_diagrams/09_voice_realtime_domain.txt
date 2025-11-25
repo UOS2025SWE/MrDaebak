@@ -1,0 +1,149 @@
+9 "Voice & Realtime Domain" 서브시스템 세부 설계
+
+"Voice & Realtime Domain" 시스템은 음성 주문 API 엔드포인트와 실시간 WebSocket 알림을 처리하는 백엔드 시스템이다.
+
+음성 주문 요청을 받아 Redis 큐를 통해 AI Server 시스템에 비동기로 전달하는 역할을 수행한다.
+AI 작업(STT, LLM, 이미지 생성)은 Redis Request-Response 패턴을 통해 AI Server에 요청하고 결과를 수신한다.
+WebSocket 연결을 통해 실시간 주문 상태 변경 알림을 고객 및 직원에게 전송한다.
+직원에게 새로운 주문 배정 알림을 실시간으로 전송한다.
+대화 세션을 로컬에서 관리하여 음성 주문의 다단계 프로세스를 지원한다.
+Pydantic 모델을 활용하여 요청/응답 데이터 유효성을 검증한다.
+
+"Voice & Realtime Domain" 시스템은 아래와 같은 중요한 라우터와 서비스들로 구성되어 있다.
+
+VoiceRouter
+음성 주문 관련 모든 엔드포인트를 제공하는 라우터이다.
+POST /api/voice/analyze 엔드포인트는 음성 텍스트를 분석하며, VoiceInputRequest 모델을 통해 트랜스크립트, 사용자 ID, 세션 ID를 검증한다.
+AIClient를 통해 Redis 큐에 LLM 분석 요청을 전송하고, AI Server로부터 분석 결과를 비동기로 수신한다.
+VoiceAnalysisResponse 모델을 반환하며, 의도, 신뢰도, 응답 메시지, 추천 메뉴, 대안 메뉴, 추가 질문, 주문 상태 정보를 포함한다.
+대화 세션을 조회하거나 새로 생성하고, 이전 대화 내용을 컨텍스트로 활용한다.
+POST /api/voice/stt 엔드포인트는 음성 파일을 텍스트로 변환하며, AIClient를 통해 Redis 큐에 STT 요청을 전송한다.
+AI Server의 Whisper STT Service가 처리한 결과를 수신하여 반환한다.
+POST /api/customizations/generate-ai-image 엔드포인트는 커스텀 케이크 이미지 생성을 요청하며, AIClient를 통해 Redis 큐에 이미지 생성 요청을 전송한다.
+AI Server의 Stable Diffusion Image Service가 처리한 이미지를 수신하여 저장하고, 이미지 경로를 반환한다.
+
+WebSocketRouter
+실시간 WebSocket 연결 관련 엔드포인트를 제공하는 라우터이다.
+WS /api/ws 엔드포인트는 WebSocket 연결을 설정하고, 실시간 메시지를 송수신한다.
+고객은 주문 상태 변경 알림을 수신하고, 직원은 새로운 주문 배정 알림을 수신한다.
+연결 시 사용자 ID 및 사용자 타입(고객, 직원, 매니저)을 전송하여 인증을 수행한다.
+heartbeat 메시지를 주기적으로 전송하여 연결 상태를 유지한다.
+GET /api/ws/stats 엔드포인트는 현재 활성화된 WebSocket 연결 통계를 조회한다.
+
+
+9.1 메인 클래스도
+
+VoiceInputRequest (Pydantic 모델)
+
+VoiceInputRequest는 음성 분석 시 사용되는 요청 데이터 모델이다.
+transcript 변수에 음성 인식 결과 텍스트를 저장한다.
+user_id 변수에 사용자 ID를 저장하며, null인 경우 비회원 음성 주문으로 처리된다.
+session_id 변수에 대화 세션 ID를 저장하며, null인 경우 새로운 세션을 생성한다.
+
+VoiceAnalysisResponse (Pydantic 모델)
+
+VoiceAnalysisResponse는 음성 분석 결과를 나타내는 응답 데이터 모델이다.
+intent 변수에 사용자 의도를 저장하며, "order"(주문), "inquiry"(문의), "recommendation"(추천 요청) 등의 값을 가진다.
+confidence 변수에 의도 분석 신뢰도를 0.0~1.0 범위로 저장한다.
+response 변수에 AI 응답 메시지를 저장하며, 사용자에게 표시된다.
+analysis 변수에 상세 분석 결과를 딕셔너리 형태로 저장한다.
+recommended_menu 변수에 추천 메뉴 정보를 저장하며, 메뉴 코드, 이름, 설명, 가격, 추천 이유를 포함한다.
+alternatives 변수에 대안 메뉴 목록을 저장하며, 추천 메뉴가 마음에 들지 않을 경우 선택할 수 있는 메뉴들을 제공한다.
+additional_questions 변수에 AI가 주문을 완성하기 위해 추가로 물어볼 질문 목록을 저장한다.
+order_state 변수에 현재 주문 상태 정보를 저장하며, 선택된 메뉴, 스타일, 수량, 커스터마이징 정보를 포함한다.
+state 변수에 대화 진행 상태를 저장하며, "greeting", "menu_selection", "style_selection", "customization", "confirmation" 등의 값을 가진다.
+state_decision 변수에 상태 전환 결정 코드를 저장한다.
+menu_selection 변수에 선택된 메뉴 인덱스를 저장한다.
+style_selection 변수에 선택된 스타일 인덱스를 저장한다.
+quantity 변수에 주문 수량을 저장한다.
+customization_overrides 변수에 재료 커스터마이징 덮어쓰기 정보를 저장한다.
+
+STTRequest (Pydantic 모델)
+
+STTRequest는 음성을 텍스트로 변환하는 요청 데이터 모델이다.
+audio_bytes 변수에 음성 파일의 바이트 데이터를 저장한다.
+filename 변수에 음성 파일명을 저장한다.
+mime_type 변수에 음성 파일의 MIME 타입을 저장하며, "audio/webm", "audio/mp3", "audio/wav" 등의 값을 가진다.
+language 변수에 음성 언어 코드를 저장하며, "ko"(한국어), "en"(영어) 등의 값을 가진다. null인 경우 자동 감지한다.
+
+ImageGenerationRequest (Pydantic 모델)
+
+ImageGenerationRequest는 AI 이미지 생성 요청 데이터 모델이다.
+prompt 변수에 이미지 생성 프롬프트를 저장하며, "초콜릿 케이크에 딸기 장식" 등의 자연어 설명을 사용한다.
+aspect_ratio 변수에 이미지 비율을 저장하며, 현재는 "1:1"로 고정되어 있다.
+
+AIClient (services/ai_client.py)
+
+AIClient는 Redis를 통해 AI Server와 비동기 통신을 수행하는 서비스 클래스이다.
+send_stt_request(audio_bytes, filename, mime_type, language) 함수는 STT 작업 요청을 Redis 큐에 전송한다.
+고유한 request_id를 생성하고, 요청 데이터를 JSON 형태로 직렬화하여 Redis 큐(ai:queue:stt)에 push한다.
+wait_for_response(request_id, timeout) 함수를 호출하여 AI Server의 처리 결과를 대기하고, 트랜스크립트 텍스트를 반환한다.
+send_llm_request(transcript, user_id, session_id, context, db) 함수는 LLM 분석 작업 요청을 Redis 큐에 전송한다.
+사용자의 과거 주문 이력 및 현재 진행 중인 이벤트 정보를 조회하여 컨텍스트에 포함한다.
+고유한 request_id를 생성하고, 요청 데이터를 JSON 형태로 직렬화하여 Redis 큐(ai:queue:llm)에 push한다.
+wait_for_response(request_id, timeout) 함수를 호출하여 AI Server의 분석 결과를 대기하고, VoiceAnalysisResponse 객체로 파싱하여 반환한다.
+send_image_request(prompt, aspect_ratio) 함수는 이미지 생성 작업 요청을 Redis 큐에 전송한다.
+고유한 request_id를 생성하고, 요청 데이터를 JSON 형태로 직렬화하여 Redis 큐(ai:queue:image)에 push한다.
+wait_for_response(request_id, timeout) 함수를 호출하여 AI Server의 생성된 이미지 바이트 데이터를 대기하고 반환한다.
+wait_for_response(request_id, timeout) 함수는 Redis pub/sub 패턴을 사용하여 AI Server의 처리 결과를 대기한다.
+ai:result:{request_id} 키를 구독하고, timeout 시간 동안 결과 메시지를 대기한다.
+결과를 수신하면 JSON을 파싱하여 반환하고, timeout이 발생하면 예외를 발생시킨다.
+get_user_order_history(user_id, db) 함수는 특정 사용자의 과거 주문 이력을 조회하고, 자주 주문한 메뉴, 선호 스타일, 평균 주문 금액 등의 정보를 추출한다.
+get_active_events(db) 함수는 현재 진행 중인 이벤트 목록을 조회하고, 이벤트 정보를 LLM 컨텍스트에 포함하여 할인 혜택을 안내한다.
+Redis Client 인터페이스와 Database 인터페이스에 의존하여 Redis 및 데이터베이스와 통신한다.
+
+ConversationSession (services/conversation_session.py)
+
+ConversationSession은 음성 주문 대화 세션을 나타내는 클래스이다.
+session_id 변수에 세션 고유 ID를 저장한다.
+user_id 변수에 사용자 ID를 저장한다.
+messages 변수에 대화 메시지 목록을 저장하며, 각 메시지는 role(user 또는 assistant)과 content를 포함한다.
+context 변수에 세션 컨텍스트 정보를 저장하며, 사용자 선호도, 이전 선택 사항 등을 기록한다.
+order_state 변수에 현재 주문 상태를 저장하며, 선택된 메뉴, 스타일, 수량, 커스터마이징 정보를 포함한다.
+created_at 변수에 세션 생성 시각을 저장한다.
+last_activity 변수에 마지막 활동 시각을 저장하며, 세션 만료 여부를 판단하는 데 사용된다.
+add_message(role, content) 함수는 새로운 대화 메시지를 추가하며, role은 "user" 또는 "assistant" 값을 가진다.
+메시지를 추가할 때 last_activity를 현재 시각으로 업데이트한다.
+get_context_summary() 함수는 세션 컨텍스트 요약을 문자열 형태로 반환하며, LLM 프롬프트에 포함된다.
+get_order_state_summary() 함수는 현재 주문 상태 요약을 문자열 형태로 반환한다.
+update_context(key, value) 함수는 세션 컨텍스트를 업데이트한다.
+update_order_state(**kwargs) 함수는 주문 상태를 업데이트하며, 메뉴, 스타일, 수량, 커스터마이징 정보를 수정할 수 있다.
+advance_stage(new_stage) 함수는 대화 진행 단계를 전환하며, "greeting" → "menu_selection" → "style_selection" → "customization" → "confirmation" 순서로 진행한다.
+is_expired(timeout_minutes) 함수는 세션이 만료되었는지 확인하며, last_activity로부터 timeout_minutes 이상 경과한 경우 true를 반환한다.
+to_dict() 함수는 세션 정보를 딕셔너리 형태로 직렬화하여 반환하며, Redis 또는 데이터베이스에 저장할 때 사용된다.
+
+WebSocketManager (services/websocket_manager.py)
+
+WebSocketManager는 실시간 WebSocket 연결 관리 관련 비즈니스 로직을 처리하는 서비스 클래스이다.
+active_connections 변수에 현재 활성화된 WebSocket 연결 목록을 딕셔너리 형태로 저장하며, 키는 user_id, 값은 WebSocket 객체이다.
+user_types 변수에 사용자 타입 매핑을 저장하며, 키는 user_id, 값은 "customer", "cook", "delivery", "manager" 등의 사용자 타입이다.
+connect(user_id, user_type, websocket) 함수는 새로운 WebSocket 연결을 설정하고, active_connections에 추가한다.
+사용자 타입에 따라 고객, 직원, 매니저로 분류하여 user_types에 저장한다.
+연결 성공 메시지를 클라이언트에게 전송한다.
+disconnect(user_id) 함수는 WebSocket 연결을 종료하고, active_connections 및 user_types에서 제거한다.
+broadcast_to_staff(message) 함수는 모든 직원에게 메시지를 브로드캐스트한다.
+user_types에서 "cook", "delivery", "manager" 타입의 사용자를 필터링하여 메시지를 전송한다.
+새로운 주문이 생성되면 모든 직원에게 알림을 전송하며, 주문 배정 시 해당 직원에게만 알림을 전송한다.
+broadcast_to_role(role, message) 함수는 특정 역할(cook, delivery, manager)의 사용자들에게만 메시지를 브로드캐스트한다.
+send_to_user(user_id, message) 함수는 특정 사용자에게 메시지를 전송한다.
+주문 상태가 변경되면 해당 주문의 고객에게 알림을 전송한다.
+user_id가 active_connections에 없는 경우 무시하며, 에러를 발생시키지 않는다.
+send_heartbeat(user_id) 함수는 특정 사용자에게 heartbeat 메시지를 전송하여 연결 상태를 확인한다.
+get_connection_count() 함수는 현재 활성화된 WebSocket 연결 수를 반환한다.
+get_connection_stats() 함수는 연결 통계를 반환하며, 전체 연결 수, 역할별 연결 수 등을 포함한다.
+Database 인터페이스에 의존하여 사용자 정보 및 주문 정보를 조회한다.
+
+Database (인터페이스)
+
+"Voice & Realtime Domain" 시스템의 모든 서비스는 Database 인터페이스를 통해 PostgreSQL 데이터베이스와 통신한다.
+이 인터페이스는 실제로는 "Database Layer" 시스템에 구현되어 있으며, SQLAlchemy ORM을 통해 데이터베이스 작업을 수행한다.
+
+Redis Client (인터페이스)
+
+AIClient는 Redis Client 인터페이스를 통해 Redis 서버와 통신한다.
+이 인터페이스는 Redis 큐에 메시지를 push하고, pub/sub 패턴으로 결과를 구독하는 기능을 제공한다.
+lpush(queue_name, message) 함수는 Redis 리스트의 왼쪽에 메시지를 추가하여 큐에 작업을 전송한다.
+subscribe(channel_name) 함수는 특정 채널을 구독하여 메시지를 수신한다.
+publish(channel_name, message) 함수는 특정 채널에 메시지를 발행한다.
+get(key) 함수는 Redis 키의 값을 조회한다.
+set(key, value, expiry) 함수는 Redis 키에 값을 저장하고, 선택적으로 만료 시간을 설정한다.

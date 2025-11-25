@@ -96,107 +96,158 @@
 - 고객이 '음성 주문' 버튼을 누르고 마이크에 대고 주문 내용을 말함
 - 예: "치킨 디너 2인분, 매운 맛으로, 감자튀김 추가해주세요"
 
-2) CustomerWebApp (fe) -> STT & TTS API (audioAPI)
-- CustomerWebApp이 녹음된 오디오 데이터(Blob)를 STT API로 전송
+2) CustomerWebApp (fe) -> VoiceRouter (voiceR)
+- CustomerWebApp이 POST /api/voice/stt 엔드포인트로 음성 변환 요청을 전송
+- 요청 바디: 오디오 바이트 데이터, 파일명, MIME 타입 (audio/webm, audio/mp3 등)
 - 오디오 형식: WAV 또는 WebM, 샘플링 레이트: 16kHz 권장
 
-3) STT & TTS API (audioAPI) -> AudioService (audioSvc)
-- STT API가 transcribe_audio() 메서드를 호출하여 음성을 텍스트로 변환
+3) VoiceRouter (voiceR) -> AIClient (aiClient)
+- VoiceRouter가 send_stt_request(audio_bytes, filename, mime_type, language) 메서드를 호출하여 STT 작업 요청
 
-4) AudioService (audioSvc) -> STT & TTS API (audioAPI)
-- AudioService가 STT API의 음성 인식 엔진을 호출
-- API가 오디오를 분석하여 텍스트로 변환
+4) AIClient (aiClient) -> Redis
+- AIClient가 고유한 request_id를 생성하고 요청 데이터를 JSON 형태로 직렬화
+- Redis 큐(ai:queue:stt)에 LPUSH 명령으로 작업 추가
+- 요청 데이터: request_id, audio_bytes (base64 인코딩), filename, mime_type, language
 
-5) 교류 분기 (Alternative Flow):
+5) Redis -> AIWorker (aiWorker)
+- AIWorker가 BRPOP 명령으로 ai:queue:stt 큐를 모니터링
+- 새로운 STT 작업을 감지하고 큐에서 작업을 가져옴
+
+6) AIWorker (aiWorker) -> WhisperSTTService (whisperSvc)
+- AIWorker가 작업을 WhisperSTTService로 분배
+- transcribe(audio_bytes, filename, mime_type, language) 메서드 호출
+
+7) WhisperSTTService (whisperSvc) -> AIWorker (aiWorker)
+- Whisper 모델(openai/whisper-large-v3)을 사용하여 음성을 텍스트로 변환
+- 오디오를 16kHz로 리샘플링하고 numpy 배열로 변환
+- 한국어 최적화, 다국어 지원 (language 파라미터로 제어)
+- 변환된 텍스트를 반환
+- 예: "치킨 디너 2인분, 매운 맛으로, 감자튀김 추가해주세요"
+
+8) 교류 분기 (Alternative Flow):
 - (부 흐름 4a) 음성 인식 실패 시:
-- STT API가 오디오 품질이 낮거나 음성이 불명확하여 변환 실패
-- AudioService가 오류 응답을 반환 (예: "음성을 인식할 수 없습니다")
+- WhisperSTTService가 오디오 품질이 낮거나 음성이 불명확하여 변환 실패
+- AIWorker가 오류 정보를 포함한 결과를 Redis에 발행
+- AIClient가 오류를 수신하고 VoiceRouter로 전달
 - CustomerWebApp이 고객에게 "음성을 인식할 수 없습니다. 다시 시도해 주세요." 메시지를 표시
 - 흐름 (1)로 복귀
 
 - (주 흐름) 음성 인식 성공 시:
-- STT API가 변환된 텍스트를 반환
+- WhisperSTTService가 변환된 텍스트를 반환
 - 다음 단계로 진행
 
-6) STT & TTS API (audioAPI) -> AudioService (audioSvc)
-- STT API가 변환된 텍스트(transcript)를 반환
-- 예: "치킨 디너 2인분, 매운 맛으로, 감자튀김 추가해주세요"
+9) AIWorker (aiWorker) -> Redis
+- AIWorker가 처리 결과를 JSON 형태로 직렬화
+- Redis pub/sub 패턴으로 ai:result:{request_id} 채널에 PUBLISH
+- 결과 데이터: transcript (변환된 텍스트)
 
-7) AudioService (audioSvc) -> CustomerWebApp (fe)
-- AudioService가 변환된 텍스트를 CustomerWebApp으로 반환
+10) Redis -> AIClient (aiClient)
+- AIClient가 ai:result:{request_id} 채널을 구독하여 결과 수신
+- wait_for_response(request_id, timeout) 메서드로 대기 (timeout: 기본 30초)
 
-8) CustomerWebApp (fe) -> VoiceRouter (voiceR)
+11) AIClient (aiClient) -> VoiceRouter (voiceR)
+- AIClient가 수신한 트랜스크립트를 VoiceRouter로 반환
+
+12) VoiceRouter (voiceR) -> CustomerWebApp (fe)
+- VoiceRouter가 변환된 텍스트를 CustomerWebApp으로 반환
+
+13) CustomerWebApp (fe) -> VoiceRouter (voiceR)
 - CustomerWebApp이 POST /api/voice/analyze 엔드포인트로 음성 분석 요청을 전송
 - 요청 바디: 변환된 텍스트(transcript), 세션 ID, 사용자 ID
 
-9) VoiceRouter (voiceR) -> LLMService (llmSvc)
-- VoiceRouter가 analyze_voice_input(...) 메서드를 호출하여 AI 기반 주문 분석 요청
+14) VoiceRouter (voiceR) -> AIClient (aiClient)
+- VoiceRouter가 send_llm_request(transcript, user_id, session_id, context, db) 메서드를 호출하여 LLM 분석 작업 요청
 
-10) LLMService (llmSvc) -> PostgreSQL
-- LLMService가 get_user_order_history(user_id, db) 메서드를 호출하여 고객의 과거 주문 이력을 조회
+15) AIClient (aiClient) -> PostgreSQL
+- AIClient가 get_user_order_history(user_id, db) 메서드를 호출하여 고객의 과거 주문 이력을 조회
 - 조회된 데이터를 바탕으로 고객 선호도 파악 (예: 자주 주문하는 메뉴, 선호 스타일)
 
-11) LLMService (llmSvc) -> PostgreSQL
-- LLMService가 get_active_events(db) 메서드를 호출하여 현재 진행 중인 이벤트 및 프로모션 정보를 조회
+16) AIClient (aiClient) -> PostgreSQL
+- AIClient가 get_active_events(db) 메서드를 호출하여 현재 진행 중인 이벤트 및 프로모션 정보를 조회
 - 조회된 데이터: 이벤트 제목, 할인율, 적용 메뉴, 유효 기간
 
-12) LLMService (llmSvc) -> LLM API
-- LLMService가 generate_content(model, prompt) 메서드를 호출하여 LLM API에 분석 요청
-- 프롬프트 구성: 변환된 텍스트 + 고객 주문 이력 + 진행 중인 이벤트 정보 + 메뉴 데이터베이스
-- 요청 형식: JSON with structured output schema
+17) AIClient (aiClient) -> Redis
+- AIClient가 고유한 request_id를 생성하고 요청 데이터를 JSON 형태로 직렬화
+- Redis 큐(ai:queue:llm)에 LPUSH 명령으로 작업 추가
+- 요청 데이터: request_id, transcript, context (대화 세션 정보), user_history (주문 이력), events (진행 중인 이벤트)
 
-13) LLM API -> LLMService (llmSvc)
-- LLM API가 주문 의도를 분석하여 구조화된 JSON 형식으로 반환
-- 반환 데이터 구조: {intent: string, menu: string, style: string, quantity: number, customizations: array, side_dishes: array, confidence: number}
-- 예: {intent: "order", menu: "치킨 디너", style: "매운 맛", quantity: 2, customizations: [], side_dishes: ["감자튀김"], confidence: 0.95}
+18) Redis -> AIWorker (aiWorker)
+- AIWorker가 BRPOP 명령으로 ai:queue:llm 큐를 모니터링
+- 새로운 LLM 작업을 감지하고 큐에서 작업을 가져옴
 
-14) 교류 분기 (Alternative Flow):
+19) AIWorker (aiWorker) -> QwenLLMService (qwenSvc)
+- AIWorker가 작업을 QwenLLMService로 분배
+- analyze_voice_order(transcript, context, user_history, events) 메서드 호출
+
+20) QwenLLMService (qwenSvc) -> QwenLLMService (qwenSvc)
+- build_prompt(transcript, context, user_history, events) 메서드로 프롬프트 구성
+- 프롬프트 구성: 변환된 텍스트 + 고객 주문 이력 + 진행 중인 이벤트 정보 + 메뉴 데이터베이스 + 시스템 역할 정의
+- Qwen 모델(Qwen/Qwen3-4B-Instruct-2507)과 vLLM 엔진을 사용하여 추론 실행
+- JSON 형식의 응답 생성 요청
+
+21) QwenLLMService (qwenSvc) -> AIWorker (aiWorker)
+- Qwen 모델이 주문 의도를 분석하여 구조화된 JSON 형식으로 반환
+- 반환 데이터 구조: {intent: string, menu: string, style: string, quantity: number, customizations: array, side_dishes: array, confidence: number, response: string, recommended_menu: object, alternatives: array, additional_questions: array, order_state: object, state: string}
+- 예: {intent: "order", menu: "치킨 디너", style: "매운 맛", quantity: 2, customizations: [], side_dishes: ["감자튀김"], confidence: 0.95, response: "치킨 디너 매운 맛 2인분과 감자튀김을 주문하시는 것이 맞나요?"}
+
+22) 교류 분기 (Alternative Flow):
 - (부 흐름 4b) AI 분석 실패 시:
-- LLM API가 고객 의도를 명확히 파악하지 못함 (confidence < 0.7)
-- LLMService가 VoiceRouter로 분석 실패 오류를 반환
+- QwenLLMService가 고객 의도를 명확히 파악하지 못함 (confidence < 0.7)
+- AIWorker가 오류 정보를 포함한 결과를 Redis에 발행
+- AIClient가 오류를 수신하고 VoiceRouter로 전달
 - CustomerWebApp이 고객에게 "주문 내용을 이해할 수 없습니다. 다시 말씀해 주세요." 메시지를 표시
 - 고객에게 재입력을 요청하거나 GUI 주문으로 전환 옵션 제공
 - 흐름 (1)로 복귀
 
 - (주 흐름) AI 분석 성공 시:
-- LLM API가 주문 의도를 명확히 파악 (confidence >= 0.7)
+- QwenLLMService가 주문 의도를 명확히 파악 (confidence >= 0.7)
 - 다음 단계로 진행
 
-15) LLMService (llmSvc) -> VoiceRouter (voiceR)
-- LLMService가 분석 결과 및 제안된 주문 내용을 반환
-- 응답 데이터: AI가 분석한 주문 정보 + 추천 메뉴 + 적용 가능한 할인 정보
+23) AIWorker (aiWorker) -> Redis
+- AIWorker가 처리 결과를 JSON 형태로 직렬화
+- Redis pub/sub 패턴으로 ai:result:{request_id} 채널에 PUBLISH
+- 결과 데이터: 분석 결과 전체 (intent, menu, style, quantity, customizations, confidence, response, recommended_menu, alternatives, additional_questions, order_state, state)
 
-16) VoiceRouter (voiceR) -> CustomerWebApp (fe)
+24) Redis -> AIClient (aiClient)
+- AIClient가 ai:result:{request_id} 채널을 구독하여 결과 수신
+- wait_for_response(request_id, timeout) 메서드로 대기 (timeout: 기본 30초)
+
+25) AIClient (aiClient) -> VoiceRouter (voiceR)
+- AIClient가 수신한 분석 결과를 VoiceAnalysisResponse 객체로 파싱
+- 분석 결과 및 제안된 주문 내용을 VoiceRouter로 반환
+- 응답 데이터: AI가 분석한 주문 정보 + 추천 메뉴 + 대안 메뉴 + 추가 질문 + 적용 가능한 할인 정보
+
+26) VoiceRouter (voiceR) -> CustomerWebApp (fe)
 - VoiceRouter가 AI 분석 결과 및 주문 미리보기를 반환
-- 응답 바디: 제안된 메뉴, 스타일, 수량, 커스터마이징, 사이드 디시, 예상 가격
+- 응답 바디: 제안된 메뉴, 스타일, 수량, 커스터마이징, 사이드 디시, 예상 가격, AI 응답 메시지
 
-17) CustomerWebApp (fe) -> 고객 (Customer)
+27) CustomerWebApp (fe) -> 고객 (Customer)
 - CustomerWebApp이 AI가 제안한 주문 내용을 화면에 표시
-- 표시 정보: 메뉴명, 스타일, 수량, 추가 옵션, 예상 가격
+- 표시 정보: 메뉴명, 스타일, 수량, 추가 옵션, 예상 가격, AI 응답 메시지
 - 고객에게 확인 버튼("주문하기") 또는 수정 옵션 제공
 
-18) 고객 (Customer) -> CustomerWebApp (fe)
+28) 고객 (Customer) -> CustomerWebApp (fe)
 - 고객이 AI가 제안한 주문 내용을 확인하고 '주문하기' 버튼을 클릭
 
-19) CustomerWebApp (fe) -> OrderRouter (orderR)
+29) CustomerWebApp (fe) -> OrderRouter (orderR)
 - CustomerWebApp이 POST /api/orders 엔드포인트로 주문 생성 요청을 전송
 - 요청 바디: 메뉴 코드, 스타일, 수량, 커스터마이징, 사이드 디시, 케이크 커스터마이징
 
-20) OrderRouter (orderR) -> OrderService (orderSvc)
+30) OrderRouter (orderR) -> OrderService (orderSvc)
 - OrderRouter가 create_order(...) 메서드를 호출하여 주문 생성, 재고 예약, 가격 계산 수행
 - OrderService가 주문 데이터를 데이터베이스에 저장하고 재고 예약 처리
 
-21) OrderService (orderSvc) -> PostgreSQL
+31) OrderService (orderSvc) -> PostgreSQL
 - OrderService가 orders, order_items, order_inventory_reservations 테이블에 데이터를 INSERT
 - 음성 주문의 경우 결제는 나중에 처리되므로 payment_status는 'pending'으로 설정
 
-22) OrderService (orderSvc) -> OrderRouter (orderR)
+32) OrderService (orderSvc) -> OrderRouter (orderR)
 - 주문 생성 성공 응답 반환
 - 응답 데이터: 주문 ID, 가격 정보
 
-23) OrderRouter (orderR) -> CustomerWebApp (fe)
+33) OrderRouter (orderR) -> CustomerWebApp (fe)
 - 200 OK 상태 코드와 함께 주문 생성 완료 정보를 반환
 
-24) CustomerWebApp (fe) -> 고객 (Customer)
+34) CustomerWebApp (fe) -> 고객 (Customer)
 - CustomerWebApp이 "주문이 생성되었습니다" 메시지를 표시하고 주문 확인 페이지로 이동
 - 고객에게 결제 페이지로 이동하여 결제 진행 안내

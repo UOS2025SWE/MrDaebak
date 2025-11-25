@@ -10,11 +10,12 @@ participant "voiceR:VoiceRouter" as voiceR
 participant "orderSvc:OrderService" as orderSvc
 participant "paySvc:PaymentService" as paySvc
 participant "discSvc:DiscountService" as discSvc
-participant "llmSvc:LLMService" as llmSvc
-participant "audioSvc:AudioService" as audioSvc
+participant "aiClient:AIClient" as aiClient
+participant "redis:Redis" as redis
+participant "aiWorker:AIWorker\n(AI Server)" as aiWorker
+participant "whisperSvc:WhisperSTTService\n(AI Server)" as whisperSvc
+participant "qwenSvc:QwenLLMService\n(AI Server)" as qwenSvc
 actor paymentSystem as "Mock Payment"
-actor llmAPI as "LLM"
-actor audioAPI as "STT & TTS"
 
 == GUI Order Path ==
 activate customer
@@ -50,38 +51,57 @@ fe --> customer: Show order confirmation
 deactivate fe
 
 == Voice Order Path ==
-group Capture & Transcribe
+group Capture & Transcribe (STT via AI Worker)
   activate customer
   customer -> fe: Press "Voice Order" & speak
   deactivate customer
   activate fe
-  fe -> audioAPI: send audio blob
+  fe -> voiceR: POST /api/voice/stt\n(audio_bytes, filename, mime_type)
   deactivate fe
-  activate audioAPI
-  audioAPI -> audioSvc: transcribe_audio()
-  activate audioSvc
-  audioSvc -> audioAPI: call STT API
-  audioAPI --> audioSvc: transcript
-  deactivate audioAPI
-  audioSvc --> fe: transcript text
-  deactivate audioSvc
+  activate voiceR
+  voiceR -> aiClient: send_stt_request(audio_bytes, ...)
+  activate aiClient
+  aiClient -> redis: LPUSH ai:queue:stt\n(request_id, audio_data)
+  activate redis
+  redis -> aiWorker: BRPOP (monitor queue)
+  activate aiWorker
+  aiWorker -> whisperSvc: transcribe(audio_bytes, ...)
+  activate whisperSvc
+  whisperSvc --> aiWorker: transcript text
+  deactivate whisperSvc
+  aiWorker -> redis: PUBLISH ai:result:{request_id}\n(transcript)
+  deactivate aiWorker
+  redis --> aiClient: subscribe result
+  deactivate redis
+  aiClient --> voiceR: transcript text
+  deactivate aiClient
+  voiceR --> fe: transcript text
+  deactivate voiceR
 end
 
-group Analyze & Recommend (LLM)
+group Analyze & Recommend (LLM via AI Worker)
   activate fe
   fe -> voiceR: POST /api/voice/analyze\n(transcript, session_id, user_id)
   deactivate fe
   activate voiceR
-  voiceR -> llmSvc: analyze_voice_input(...)
-  activate llmSvc
-  llmSvc -> llmSvc: get_user_order_history(user_id, db)
-  llmSvc -> llmSvc: get_active_events(db)
-  llmSvc -> llmAPI: generate_content(model, prompt)
-  activate llmAPI
-  llmAPI --> llmSvc: structured JSON\n(intent, menu, style, qty, customizations)
-  deactivate llmAPI
-  llmSvc --> voiceR: analysis + proposed order
-  deactivate llmSvc
+  voiceR -> aiClient: send_llm_request(transcript, user_id, ...)
+  activate aiClient
+  aiClient -> aiClient: get_user_order_history(user_id, db)\nget_active_events(db)
+  aiClient -> redis: LPUSH ai:queue:llm\n(request_id, transcript, context, history, events)
+  activate redis
+  redis -> aiWorker: BRPOP (monitor queue)
+  activate aiWorker
+  aiWorker -> qwenSvc: analyze_voice_order(transcript,\ncontext, user_history, events)
+  activate qwenSvc
+  qwenSvc -> qwenSvc: build_prompt(...)\ngenerate with vLLM
+  qwenSvc --> aiWorker: structured JSON\n(intent, menu, style, qty,\ncustomizations, confidence)
+  deactivate qwenSvc
+  aiWorker -> redis: PUBLISH ai:result:{request_id}\n(analysis result)
+  deactivate aiWorker
+  redis --> aiClient: subscribe result
+  deactivate redis
+  aiClient --> voiceR: analysis + proposed order
+  deactivate aiClient
   voiceR --> fe: AI response + order preview
   deactivate voiceR
   activate fe

@@ -1,0 +1,54 @@
+@startuml
+title "ConversationSession State Diagram (OrderStage)"
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #E8F5E9
+  BorderColor #555
+  RoundCorner 10
+}
+
+' --- States ---
+state "Initial\n(INITIAL)" as Initial
+state "Menu Selected\n(MENU_SELECTED)" as MenuSelected
+state "Style Selected\n(STYLE_SELECTED)" as StyleSelected
+state "Quantity Selected\n(QUANTITY_SELECTED)" as QuantitySelected
+state "Customizing\n(CUSTOMIZING)" as Customizing
+state "Checkout Ready\n(CHECKOUT_READY)" as CheckoutReady
+state "Session Expired\n(EXPIRED)" as Expired
+
+' --- Transitions ---
+
+' Entry Point
+' VoiceAnalysisService creates session with INITIAL stage
+[*] --> Initial : VoiceAnalysisService.get_or_create_session()\n(voice_analysis_service.py:188)\nOrderStage.INITIAL
+
+' Main Flow: Sequential progression through order stages
+Initial --> MenuSelected : _handle_menu_conversation()\n(voice_analysis_service.py:369)\nMenu confirmed by customer\nupdate_order_state(stage=MENU_SELECTED)
+
+MenuSelected --> StyleSelected : _handle_menu_conversation()\n(voice_analysis_service.py:369)\nStyle selected\nupdate_order_state(stage=STYLE_SELECTED)
+
+StyleSelected --> QuantitySelected : _handle_quantity_selection()\n(voice_analysis_service.py:597)\nQuantity confirmed\nupdate_order_state(stage=QUANTITY_SELECTED)
+
+QuantitySelected --> Customizing : _handle_ingredient_customization()\nCustomization started\nupdate_order_state(stage=CUSTOMIZING)
+
+Customizing --> CheckoutReady : _handle_checkout_ready()\n(voice_analysis_service.py:1014)\nCustomization complete or skipped\nupdate_order_state(stage=CHECKOUT_READY)
+
+' Alternative: Skip customization
+QuantitySelected --> CheckoutReady : Customer declines customization\ndirect to checkout
+
+' Checkout completion
+CheckoutReady --> [*] : Order finalized\nCheckout completed
+
+' Session expiration (can happen from any state)
+Initial --> Expired : Session timeout\n(SESSION_EXPIRY_HOURS exceeded)\ncleanup_expired_sessions()\n(voice_analysis_service.py:195)
+MenuSelected --> Expired : Session timeout
+StyleSelected --> Expired : Session timeout
+QuantitySelected --> Expired : Session timeout
+Customizing --> Expired : Session timeout
+CheckoutReady --> Expired : Session timeout
+
+' End State
+Expired --> [*]
+
+@enduml

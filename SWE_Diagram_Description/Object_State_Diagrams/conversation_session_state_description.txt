@@ -1,0 +1,21 @@
+5.6 대화 세션 (ConversationSession) 객체 상태도
+
+주요 상태 (States):
+- 초기 상태 (INITIAL): 고객이 음성 주문을 시작하여 대화 세션이 생성된 초기 상태로, 메뉴 선택을 대기 중인 상태
+- 메뉴 선택됨 (MENU_SELECTED): 고객이 원하는 메뉴를 선택하고 확정한 상태로, 스타일 선택으로 진행 가능한 상태
+- 스타일 선택됨 (STYLE_SELECTED): 메뉴의 스타일(맛, 조리 방식 등)을 선택하고 확정한 상태로, 수량 선택으로 진행 가능한 상태
+- 수량 선택됨 (QUANTITY_SELECTED): 주문 수량을 확정한 상태로, 커스터마이징 단계로 진행하거나 바로 체크아웃 가능한 상태
+- 커스터마이징 중 (CUSTOMIZING): 재료 추가, 제거, 수량 조정 등 커스터마이징을 진행 중인 상태
+- 체크아웃 준비됨 (CHECKOUT_READY): 모든 선택이 완료되어 실제 주문 생성 및 결제가 가능한 최종 상태
+- 세션 만료됨 (EXPIRED): 세션이 일정 시간(기본 1시간) 동안 비활성 상태로 자동 만료되어 메모리에서 제거된 상태
+
+주요 이벤트 (Triggers / Events):
+- VoiceAnalysisService.get_or_create_session() 실행: 고객이 음성 주문 시작 시 INITIAL 상태로 세션 생성
+- _handle_menu_conversation() 호출 및 메뉴 확정: 고객이 메뉴를 선택하면 INITIAL에서 MENU_SELECTED로 전이
+- _handle_menu_conversation() 호출 및 스타일 확정: 고객이 스타일을 선택하면 MENU_SELECTED에서 STYLE_SELECTED로 전이
+- _handle_quantity_selection() 호출 및 수량 확정: 고객이 수량을 확정하면 STYLE_SELECTED에서 QUANTITY_SELECTED로 전이
+- _handle_ingredient_customization() 호출: 고객이 커스터마이징을 원하면 QUANTITY_SELECTED에서 CUSTOMIZING으로 전이
+- _handle_checkout_ready() 호출: 커스터마이징 완료 시 CUSTOMIZING에서 CHECKOUT_READY로 전이
+- 고객이 커스터마이징 건너뛰기: QUANTITY_SELECTED에서 CHECKOUT_READY로 직접 전이
+- 주문 생성 완료: CHECKOUT_READY 상태에서 OrderRouter의 POST /api/orders 호출로 실제 주문이 생성되면 세션 종료
+- cleanup_expired_sessions() 실행: SESSION_EXPIRY_HOURS(기본 1시간) 초과 시 모든 상태에서 EXPIRED로 전이하여 메모리에서 제거

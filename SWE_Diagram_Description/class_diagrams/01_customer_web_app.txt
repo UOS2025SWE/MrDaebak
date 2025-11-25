@@ -38,7 +38,7 @@ loadOrder() 함수로 주문 상세 정보를 로드하고, listenOrderStatus() 
 
 VoiceOrderPage
 음성 인식을 통해 주문을 진행한다.
-"AI & Realtime Domain" 시스템과 연동하여 STT(Speech-to-Text) 및 TTS(Text-to-Speech) 기능을 활용한다.
+"Voice & Realtime Domain" 시스템과 연동하여 STT(Speech-to-Text) 기능을 활용한다.
 startRecording() 함수로 녹음을 시작하고, stopRecording() 함수로 녹음을 중지한다.
 sendTranscript() 함수로 음성 텍스트를 AI 분석 API로 전송하고, confirmOrder() 함수로 주문을 확정한다.
 
@@ -155,4 +155,4 @@ ToastContext로부터 toasts 배열을 가져와서 각 알림 메시지를 렌�
 Backend API (인터페이스)
 
 "Customer Web App" 시스템의 모든 페이지는 Backend API 인터페이스를 통해 백엔드 시스템과 통신한다.
-이 인터페이스는 실제로는 "Order & Checkout Domain", "Menu & Inventory Domain", "Event & Discount Domain", "User & Auth Domain", "AI & Realtime Domain" 등의 백엔드 시스템에 구현되어 있다.
+이 인터페이스는 실제로는 "Order & Checkout Domain", "Menu & Inventory Domain", "Event & Discount Domain", "User & Auth Domain", "Voice & Realtime Domain" 등의 백엔드 시스템에 구현되어 있다.

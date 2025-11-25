@@ -1,5 +1,5 @@
 @startuml
-title "AI & Realtime Domain"
+title "Voice & Realtime Domain"
 
 skinparam classAttributeIconSize 0
 skinparam defaultFontName Arial
@@ -7,13 +7,12 @@ skinparam shadowing false
 skinparam linetype ortho
 
 interface "Database" as IDatabase
-interface "Gemini LLM API" as ILLMApi
-interface "OpenAI Audio API" as IAudioApi
+interface "Redis Client" as IRedis
 
 class "VoiceRouter\n(routers/voice.py)" as VoiceRouter {
   + POST /api/voice/analyze
-  + POST /api/voice/tts
   + POST /api/voice/stt
+  + POST /api/customizations/generate-ai-image
 }
 
 class "VoiceInputRequest" as VoiceInputRequest <<Pydantic>> {
@@ -39,10 +38,16 @@ class "VoiceAnalysisResponse" as VoiceAnalysisResponse <<Pydantic>> {
   customization_overrides: dict
 }
 
-class "TextToSpeechRequest" as TextToSpeechRequest <<Pydantic>> {
-  text: str
-  voice: str | None
-  format: str | None
+class "STTRequest" as STTRequest <<Pydantic>> {
+  audio_bytes: bytes
+  filename: str
+  mime_type: str
+  language: str | None
+}
+
+class "ImageGenerationRequest" as ImageGenerationRequest <<Pydantic>> {
+  prompt: str
+  aspect_ratio: str
 }
 
 class "WebSocketRouter\n(routers/websocket.py)" as WebSocketRouter {
@@ -50,18 +55,23 @@ class "WebSocketRouter\n(routers/websocket.py)" as WebSocketRouter {
   + GET /api/ws/stats
 }
 
-class "GeminiService\n(services/gemini_service.py)" as GeminiService {
-  + analyze_voice_input(transcript, user_id, session_id, db): dict
-  + get_user_order_history(user_id, db): dict
-  + get_active_events(db): dict
-  - build_conversation_context(...): str
+class "AIClient\n(services/ai_client.py)" as AIClient {
+  + send_stt_request(audio_bytes, filename, mime_type, language): str
+  + send_llm_request(transcript, user_id, session_id, context, db): dict
+  + send_image_request(prompt, aspect_ratio): bytes
+  - wait_for_response(request_id, timeout): dict
+  - get_user_order_history(user_id, db): dict
+  - get_active_events(db): list
 }
 
-class "ConversationSession\n(services/gemini_service.py)" as ConversationSession {
+class "ConversationSession\n(services/conversation_session.py)" as ConversationSession {
   - session_id: str
+  - user_id: str
   - messages: list
   - context: dict
   - order_state: dict
+  - created_at: datetime
+  - last_activity: datetime
   ---
   + add_message(role, content): void
   + get_context_summary(): str
@@ -69,56 +79,47 @@ class "ConversationSession\n(services/gemini_service.py)" as ConversationSession
   + update_context(key, value): void
   + update_order_state(**kwargs): void
   + advance_stage(new_stage): void
-}
-
-class "OpenAIAudioService\n(services/openai_audio_service.py)" as OpenAIAudioService {
-  + transcribe_audio(audio_bytes, filename, mime_type, language): str
-  + synthesize_speech(text, voice, audio_format): (bytes, str)
-}
-
-class "GeminiImageService\n(services/gemini_image_service.py)" as GeminiImageService {
-  + generate_image(prompt, aspect_ratio): (bytes, str)
-  + edit_image(base_image_bytes, base_mime_type, prompt, aspect_ratio): (bytes, str)
+  + is_expired(timeout_minutes): bool
+  + to_dict(): dict
 }
 
 class "WebSocketManager\n(services/websocket_manager.py)" as WebSocketManager {
   - active_connections: dict[user_id, WebSocket]
+  - user_types: dict[user_id, str]
   ---
   + connect(user_id, user_type, websocket): void
   + disconnect(user_id): void
   + broadcast_to_staff(message): void
+  + broadcast_to_role(role, message): void
   + send_to_user(user_id, message): void
   + send_heartbeat(user_id): void
+  + get_connection_count(): int
+  + get_connection_stats(): dict
 }
 
-IDatabase -[hidden]down- ILLMApi
-ILLMApi -[hidden]down- IAudioApi
+IDatabase -[hidden]down- IRedis
 
 VoiceRouter -[hidden]down- VoiceInputRequest
 VoiceInputRequest -[hidden]down- VoiceAnalysisResponse
-VoiceAnalysisResponse -[hidden]down- TextToSpeechRequest
+VoiceAnalysisResponse -[hidden]down- STTRequest
+STTRequest -[hidden]down- ImageGenerationRequest
 
-GeminiService -[hidden]down- ConversationSession
-ConversationSession -[hidden]down- OpenAIAudioService
-OpenAIAudioService -[hidden]down- GeminiImageService
+AIClient -[hidden]down- ConversationSession
 
 WebSocketRouter -[hidden]down- WebSocketManager
 
 VoiceRouter ..> VoiceInputRequest
 VoiceRouter ..> VoiceAnalysisResponse
-VoiceRouter ..> TextToSpeechRequest
-VoiceRouter ..> GeminiService
-VoiceRouter ..> OpenAIAudioService
+VoiceRouter ..> STTRequest
+VoiceRouter ..> ImageGenerationRequest
+VoiceRouter ..> AIClient
+VoiceRouter ..> ConversationSession
 
 WebSocketRouter ..> WebSocketManager
 
-GeminiService ..> ILLMApi
-GeminiService ..> IDatabase
-GeminiService ..> ConversationSession
-
-OpenAIAudioService ..> IAudioApi
-
-GeminiImageService ..> ILLMApi
+AIClient ..> IRedis
+AIClient ..> IDatabase
+AIClient ..> ConversationSession
 
 WebSocketManager ..> IDatabase
 

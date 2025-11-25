@@ -1,0 +1,62 @@
+@startuml
+title "AI Server"
+
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam linetype ortho
+
+interface "Redis Client" as IRedis
+
+class "AIWorker\n(worker/ai_worker.py)" as AIWorker {
+  + monitor_queue(): void
+  + dispatch_task(task_type, payload): void
+  + publish_result(request_id, result): void
+  + start(): void
+  + stop(): void
+}
+
+class "WhisperSTTService\n(services/whisper_stt_service.py)" as WhisperSTTService {
+  - model: WhisperModel
+  - processor: WhisperProcessor
+  - device: str
+  ---
+  + transcribe(audio_bytes, filename, mime_type, language): str
+  - load_model(): void
+  - unload_model(): void
+}
+
+class "QwenLLMService\n(services/qwen_llm_service.py)" as QwenLLMService {
+  - model: QwenModel
+  - tokenizer: QwenTokenizer
+  - llm: vLLM
+  ---
+  + analyze_voice_order(transcript, context, user_history, events): dict
+  + generate_personalized_recommendation(user_history, events): dict
+  - build_prompt(transcript, context, user_history, events): str
+  - load_model(): void
+  - unload_model(): void
+}
+
+class "StableDiffusionImageService\n(services/stable_diffusion_image_service.py)" as StableDiffusionImageService {
+  - pipeline: StableDiffusionPipeline
+  - device: str
+  ---
+  + generate_cake_image(prompt): (bytes, str)
+  - enhance_prompt(prompt): str
+  - load_pipeline(): void
+  - unload_pipeline(): void
+}
+
+IRedis -[hidden]down- AIWorker
+
+AIWorker -[hidden]down- WhisperSTTService
+WhisperSTTService -[hidden]down- QwenLLMService
+QwenLLMService -[hidden]down- StableDiffusionImageService
+
+AIWorker ..> IRedis
+AIWorker ..> WhisperSTTService
+AIWorker ..> QwenLLMService
+AIWorker ..> StableDiffusionImageService
+
+@enduml

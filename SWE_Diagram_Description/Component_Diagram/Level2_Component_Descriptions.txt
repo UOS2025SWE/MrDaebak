@@ -65,17 +65,17 @@ InquiryService는 고객 문의를 접수하고 문의 답변을 작성한다. �
 
 Integration & Realtime 컴포넌트
 
-Integration & Realtime 컴포넌트는 외부 서비스 통합과 실시간 통신을 담당하는 Adapter Layer이다. 외부 API 호출을 캡슐화하고 내부 도메인 모델로 변환한다. Integration Service 인터페이스를 제공하고, Data Access 인터페이스를 필요로 한다.
+Integration & Realtime 컴포넌트는 AI Server와의 비동기 통신 및 실시간 WebSocket 알림을 담당하는 Adapter Layer이다. Redis를 통해 AI Server와 통신하고, 내부 도메인 모델로 변환한다. Integration Service 인터페이스를 제공하고, Data Access 인터페이스를 필요로 한다.
 
-4개의 Adapter로 구성되어 있다. GeminiService는 Google Gemini LLM API를 호출하여 음성 주문 텍스트를 분석하고 의도를 파악한다. 7단계 주문 플로우를 PROMOTION_GREETING부터 CHECKOUT_READY까지 관리하고 ConversationSession으로 대화 컨텍스트를 유지한다. 과거 주문 이력을 기반으로 개인화 추천을 제공하며 활성 이벤트 정보를 주입한다.
+3개의 Adapter로 구성되어 있다.
 
-GeminiImageService는 Google Gemini Image API를 호출하여 텍스트 기반 케이크 이미지를 생성한다. Text-to-Image 방식으로 이미지를 생성하고 Image-to-Image 방식으로 이미지를 편집한다. 케이크 전용 가드레일을 적용하며 생성된 이미지를 backend/uploads/cakes/ 경로에 저장한다.
+AIClient는 Redis를 통해 AI Server와 비동기 통신을 수행한다. send_stt_request(audio_bytes, filename, mime_type, language) 메서드는 음성 파일을 Redis 큐(ai:queue:stt)에 전송하고, AI Server의 Whisper STT Service가 처리한 결과를 대기한다. send_llm_request(transcript, user_id, session_id, context, db) 메서드는 음성 텍스트 분석 요청을 Redis 큐(ai:queue:llm)에 전송하고, AI Server의 Qwen LLM Service가 처리한 결과를 대기한다. 사용자의 과거 주문 이력 및 현재 진행 중인 이벤트 정보를 조회하여 컨텍스트에 포함한다. send_image_request(prompt, aspect_ratio) 메서드는 이미지 생성 요청을 Redis 큐(ai:queue:image)에 전송하고, AI Server의 Stable Diffusion Image Service가 처리한 결과를 대기한다. wait_for_response(request_id, timeout) 메서드는 Redis pub/sub 패턴을 사용하여 ai:result:{request_id} 채널을 구독하고 결과를 대기한다. timeout 시간 내에 결과를 수신하지 못하면 예외를 발생시킨다.
 
-OpenAIAudioService는 OpenAI Audio API를 호출하여 STT와 TTS 기능을 제공한다. STT는 음성 파일을 텍스트로 변환하며 WebM, MP3, WAV 등의 포맷을 지원한다. TTS는 텍스트를 음성으로 변환하여 MP3로 출력한다. 한국어 음성 인식을 최적화하고 nova, alloy, echo 등 다양한 음성 옵션을 지원한다.
+ConversationSession은 음성 주문 대화 세션을 로컬에서 관리한다. session_id, user_id, messages, context, order_state, created_at, last_activity 속성을 가진다. add_message(role, content) 메서드로 대화 메시지를 추가하고, get_context_summary() 메서드로 컨텍스트 요약을 반환한다. update_order_state(**kwargs) 메서드로 주문 상태를 업데이트하고, advance_stage(new_stage) 메서드로 대화 단계를 전환한다. is_expired(timeout_minutes) 메서드로 세션 만료 여부를 확인하고, to_dict() 메서드로 세션 정보를 직렬화한다.
 
-WebSocketManager는 WebSocket 연결을 connection pool로 관리하고 클라이언트별 세션을 관리한다. 주문 상태 변경 시 실시간 브로드캐스트를 수행하며 Cook, Delivery, Customer 역할별로 선택적 메시지를 전송한다. 연결 끊김을 감지하고 재연결을 처리한다.
+WebSocketManager는 WebSocket 연결을 관리한다. connection pool로 연결을 관리하고, 클라이언트별 세션을 관리한다. 주문 상태 변경 시 실시간 브로드캐스트를 수행하며, Cook, Delivery, Customer 역할별로 선택적 메시지를 전송한다. 연결 끊김을 감지하고 재연결을 처리한다.
 
-기술적 특징으로는 Adapter 패턴으로 외부 의존성을 격리하고 exponential backoff 방식의 재시도 로직을 적용한다. 에러 핸들링 및 fallback 처리를 수행하며 API 응답 캐싱 기능은 향후 확장 예정이다.
+기술적 특징으로는 Adapter 패턴으로 외부 의존성(Redis, WebSocket)을 격리하고 exponential backoff 방식의 재시도 로직을 적용한다. 에러 핸들링 및 fallback 처리를 수행한다.
 
 
 Persistence 컴포넌트
